@@ -1,0 +1,253 @@
+// Database Connection
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  // TAMBAHKAN BARIS INI:
+  binaryTargets = ["native", "linux-musl"]
+}
+
+// ==========================================
+// 1. MASTER DATA (REFERENCE)
+// ==========================================
+
+model PatternMaster {
+  id         String   @id @default(uuid())
+  styleCode  String   @unique
+  patterns   Json
+
+  // NEW: Set Images (Global/Full View)
+  imgSetGood String?
+  imgSetNg   String?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("pattern_masters")
+}
+
+
+// ==========================================
+// 2. ORGANIZATION & IDENTITY
+// ==========================================
+
+model Department {
+  id    String @id @default(uuid())
+  code  String @unique
+  name  String
+  users User[]
+
+  @@map("departments")
+}
+
+model JobTitle {
+  id    String @id @default(uuid())
+  name  String @unique
+  level Int    @default(0) 
+  users User[]
+
+  @@map("job_titles")
+}
+
+model User {
+  id           String      @id @default(uuid())
+  username     String      @unique
+  password     String
+  fullName     String
+  email        String?     @unique
+  
+  roleId       String
+  role         Role        @relation(fields: [roleId], references: [id])
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  jobTitleId   String?
+  jobTitle     JobTitle?   @relation(fields: [jobTitleId], references: [id])
+
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  // Relations
+  logsCreated    StationLog[]
+  mrRequested    MaterialRequest[]
+  
+  // Hubungan ke OpReplacement:
+  opReqCreated   OpReplacement[]  @relation("OpRequester") // User yang request
+  qcInspectorFor OpReplacement[]  @relation("QCInspector") // User yang jadi QC
+
+  @@map("users")
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+// ==========================================
+// 3. ACCESS CONTROL (RBAC)
+// ==========================================
+
+model Feature {
+  id    String           @id
+  label String
+  group String
+  roles RolePermission[]
+
+  @@map("features")
+}
+
+model RolePermission {
+  roleId    String
+  featureId String
+  role      Role    @relation(fields: [roleId], references: [id])
+  feature   Feature @relation(fields: [featureId], references: [id])
+  
+  canCreate Boolean @default(false)
+  canRead   Boolean @default(true)
+  canUpdate Boolean @default(false)
+  canDelete Boolean @default(false)
+
+  @@id([roleId, featureId])
+  @@map("role_permissions")
+}
+
+// ==========================================
+// 4. CORE PRODUCTION (THE FLOW)
+// ==========================================
+
+model ProductionOrder {
+  id             String   @id @default(uuid())
+  opNumber       String   @unique
+  styleCode      String
+  buyer          String?
+  
+  targetQty      Int
+  completedQty   Int      @default(0)
+  status         String   @default("SCHEDULED") 
+  currentStation String   @default("CUTTING")
+  qrCode         String?  @unique
+  
+  cutQty         Int      @default(0)
+  cpGoodQty      Int      @default(0)
+  sewingInQty    Int      @default(0)
+  sewingOutQty   Int      @default(0)
+  qcGoodQty      Int      @default(0)
+  packedQty      Int      @default(0)
+
+  logs             StationLog[]
+  materialRequests MaterialRequest[]
+  replacements     OpReplacement[]   @relation("OriginalOp")
+  bundles          Bundle[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@map("production_orders")
+}
+
+model StationLog {
+  id          String   @id @default(uuid())
+  opId        String
+  op          ProductionOrder @relation(fields: [opId], references: [id])
+  
+  station     String
+  actionType  String
+  qtyGood     Int      @default(0)
+  qtyNG       Int      @default(0)
+  ngReason    String?  
+  patternName String?
+  
+  timestamp   DateTime @default(now())
+  operatorId  String?
+  operator    User?    @relation(fields: [operatorId], references: [id])
+  
+  @@map("station_logs")
+}
+
+model Bundle {
+  id          String   @id @default(uuid())
+  code        String   @unique 
+  opId        String
+  op          ProductionOrder @relation(fields: [opId], references: [id])
+  qty         Int
+  status      String   
+  createdAt   DateTime @default(now())
+  
+  @@map("bundles")
+}
+
+// ==========================================
+// 5. SUPPORTING FLOW (NG HANDLERS)
+// ==========================================
+
+model MaterialRequest {
+  id          String   @id @default(uuid())
+  reqNo       String   @unique 
+  
+  opId        String
+  op          ProductionOrder @relation(fields: [opId], references: [id])
+  opNumber    String   
+  
+  partName    String
+  qtyNeeded   Int
+  reason      String
+  status      String   @default("PENDING")
+  
+  requesterId String?
+  requester   User?     @relation(fields: [requesterId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("material_requests")
+}
+
+model OpReplacement {
+  id              String   @id @default(uuid())
+  reqNo           String   @unique 
+  
+  originalOpId    String
+  originalOpRel   ProductionOrder @relation("OriginalOp", fields: [originalOpId], references: [id])
+  originalOp      String   
+  
+  newOpIdentity   String   
+  qty             Int
+  reasonNG        String
+  status          String   @default("DRAFT")
+  
+  // FIX: Menambahkan Relasi Requester (Pembuat Request)
+  requesterId     String?
+  requester       User?    @relation("OpRequester", fields: [requesterId], references: [id])
+
+  // Relasi QC Inspector (Yang Approve/Release)
+  qcInspectorId   String?
+  qcInspector     User?    @relation("QCInspector", fields: [qcInspectorId], references: [id])
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("op_replacements")
+}
+
+// ==========================================
+// 6. INVENTORY (FG)
+// ==========================================
+
+model FinishedGoodStock {
+  id             String   @id @default(uuid())
+  styleCode      String
+  customerPartNo String   @unique
+  totalStock     Int      @default(0)
+  totalBoxes     Int      @default(0)
+  lastUpdated    DateTime @updatedAt
+
+  @@map("fg_stocks")
+}

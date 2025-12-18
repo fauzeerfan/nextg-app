@@ -1,0 +1,59 @@
+services:
+  # 1. Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: nextg_db_container
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123
+      POSTGRES_DB: nextg_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # 2. Backend (NestJS)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nextg_backend_container
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      # Koneksi internal Docker (host: postgres)
+      DATABASE_URL: "postgresql://postgres:123@postgres:5432/nextg_db?schema=public"
+      NODE_ENV: development
+    # FIX: Jalankan generate dulu, baru start dev server
+    command: /bin/sh -c "npx prisma generate && npm run start:dev"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+
+  # 3. Frontend (Vite React)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nextg_frontend_container
+    restart: always
+    ports:
+      - "5173:5173"
+    environment:
+      # PENTING: URL Backend yang bisa diakses dari BROWSER (Laptop Host), bukan dari dalam container.
+      # Jangan gunakan 'http://backend:3000' karena browser tidak kenal nama service docker.
+      - VITE_API_URL=http://localhost:3000
+    # Command standar Vite
+    command: npm run dev -- --host
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
