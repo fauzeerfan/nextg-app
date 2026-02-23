@@ -65,6 +65,8 @@ async function resetProduction() {
       await tx.productionOrder.deleteMany({});
 
       // 9. Opsional: jika ada tabel material request, op replacement, dll. (tidak ada di schema saat ini)
+      console.log('  - Menghapus CheckPanelInspection...');
+      await tx.checkPanelInspection.deleteMany({});
     });
 
     console.log('✅ Semua data produksi berhasil direset!');

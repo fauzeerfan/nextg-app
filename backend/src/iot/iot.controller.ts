@@ -1,3 +1,4 @@
+// backend/src/iot/iot.controller.ts
 import {
   Controller,
   Get,
@@ -43,46 +44,38 @@ export class IotController {
     return this.productionEngine.handlePondButton(body.deviceId, body.button);
   }
 
-// backend/src/iot/iot.controller.ts
-
-@Post('sewing/start')
-async sewingStart(@Body() body: { deviceId: string; opId: string }) {
-  const device = await this.prisma.iotDevice.findUnique({
-    where: { deviceId: body.deviceId },
-  });
-  if (!device) throw new NotFoundException('Device not found');
-  return this.productionEngine.sewingStart(body.deviceId, body.opId, 1);
-}
-
-@Post('sewing/finish')
-async sewingFinish(@Body() body: { deviceId: string; opId: string }) {
-  const device = await this.prisma.iotDevice.findUnique({
-    where: { deviceId: body.deviceId },
-  });
-  if (!device) throw new NotFoundException('Device not found');
-  return this.productionEngine.sewingFinish(body.deviceId, body.opId, 1);
-}
-
-@Post('scanner/scan')
-async scannerScan(@Body() body: { deviceId: string; qrCode: string; qty: number }) {
-  const device = await this.prisma.iotDevice.findUnique({
-    where: { deviceId: body.deviceId },
-  });
-  if (!device) throw new NotFoundException('Device not registered');
-
-  if (device.station === 'CP') {
-    return this.productionEngine.cpScan(body.qrCode, body.qty || 1);
-  } else if (device.station === 'SEWING') {
-    const parts = body.qrCode.split('-');
-    if (parts.length < 2) throw new NotFoundException('Invalid QR code format');
-    const opNumber = parts[1];
-    const op = await this.prisma.productionOrder.findUnique({
-      where: { opNumber },
+  @Post('sewing/start')
+  async sewingStart(@Body() body: { deviceId: string; opId: string }) {
+    const device = await this.prisma.iotDevice.findUnique({
+      where: { deviceId: body.deviceId },
     });
-    if (!op) throw new NotFoundException('OP not found');
-    return this.productionEngine.sewingStart(device.deviceId, op.id, body.qty || 1);
-  } else {
-    throw new NotFoundException('Unsupported station for scanner');
+    if (!device) throw new NotFoundException('Device not found');
+    return this.productionEngine.sewingStart(body.deviceId, body.opId, 1);
   }
-}
+
+  @Post('sewing/finish')
+  async sewingFinish(@Body() body: { deviceId: string; opId: string }) {
+    const device = await this.prisma.iotDevice.findUnique({
+      where: { deviceId: body.deviceId },
+    });
+    if (!device) throw new NotFoundException('Device not found');
+    return this.productionEngine.sewingFinish(body.deviceId, body.opId, 1);
+  }
+
+  @Post('scanner/scan')
+  async scannerScan(@Body() body: { deviceId: string; qrCode: string; qty: number }) {
+    const device = await this.prisma.iotDevice.findUnique({
+      where: { deviceId: body.deviceId },
+    });
+    if (!device) throw new NotFoundException('Device not registered');
+
+    if (device.station === 'CP') {
+      return this.productionEngine.cpScan(body.qrCode, body.qty || 1);
+    } else if (device.station === 'SEWING') {
+      // Panggil sewingReceive, bukan sewingStart
+      return this.productionEngine.sewingReceive(body.qrCode, body.qty || 1);
+    } else {
+      throw new NotFoundException('Unsupported station for scanner');
+    }
+  }
 }

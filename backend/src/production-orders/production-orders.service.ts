@@ -95,6 +95,31 @@ export class ProductionOrdersService {
   }
 
   // ======================================================
+  // CHECK PANEL INSPECTIONS (ADDED)
+  // ======================================================
+  async getCheckPanelInspections(opId: string) {
+    return this.prisma.checkPanelInspection.findMany({
+      where: { opId },
+      orderBy: { patternIndex: 'asc' },
+    });
+  }
+
+  // ======================================================
+  // SEWING PROGRESS (ADDED)
+  // ======================================================
+  async getSewingProgress(opId: string) {
+    const startProgress = await this.prisma.sewingStartProgress.findMany({
+      where: { opId },
+      orderBy: { startIndex: 'asc' }
+    });
+    const finishProgress = await this.prisma.sewingFinishProgress.findMany({
+      where: { opId },
+      orderBy: { finishIndex: 'asc' }
+    });
+    return { sewingStartProgress: startProgress, sewingFinishProgress: finishProgress };
+  }
+
+  // ======================================================
   // DASHBOARD STATS
   // ======================================================
   async getDashboardStats() {

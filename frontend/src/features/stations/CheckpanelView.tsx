@@ -177,26 +177,27 @@ export const CheckPanelView = ({
     }
   };
 
-const fetchProg = async (opId: string) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/production-orders/${opId}/pattern-progress`, {
-      headers: getAuthHeaders(),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const m: Record<number, { good: number; ng: number; completed: boolean }> = {};
-      data.forEach((p: any) => {
-        m[p.patternIndex] = { good: p.good, ng: p.ng, completed: p.completed };
+  // 🔥 Ubah endpoint dari pattern-progress menjadi check-panel-inspections
+  const fetchProg = async (opId: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/production-orders/${opId}/check-panel-inspections`, {
+        headers: getAuthHeaders(),
       });
-      setProg(m);
-    } else {
-      // Jika gagal (misal 404), set prog kosong
+      if (res.ok) {
+        const data = await res.json();
+        const m: Record<number, { good: number; ng: number; completed: boolean }> = {};
+        data.forEach((p: any) => {
+          m[p.patternIndex] = { good: p.good, ng: p.ng, completed: p.completed };
+        });
+        setProg(m);
+      } else {
+        // Jika gagal (misal 404), set prog kosong
+        setProg({});
+      }
+    } catch {
       setProg({});
     }
-  } catch {
-    setProg({});
-  }
-};
+  };
 
   const fetchCategories = async (lineCode: string) => {
     try {

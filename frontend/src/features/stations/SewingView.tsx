@@ -300,14 +300,6 @@ export const SewingView = () => {
           </div>
         )}
       </div>
-
-      {/* Detail Panel (opsional) */}
-      {selectedOp && (
-        <div className="mt-8 bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl p-6">
-          <h3 className="text-xl font-bold mb-4">Detail OP {selectedOp.opNumber}</h3>
-          <pre className="text-xs overflow-auto">{JSON.stringify(selectedOp, null, 2)}</pre>
-        </div>
-      )}
     </div>
   );
 };

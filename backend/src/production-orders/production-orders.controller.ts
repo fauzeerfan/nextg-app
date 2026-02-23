@@ -74,4 +74,20 @@ export class ProductionOrdersController {
   async getPatternProgress(@Param('id') id: string) {
     return this.productionOrdersService.getPatternProgress(id);
   }
+
+  // =========================================================
+  // 5. CHECK PANEL INSPECTIONS ENDPOINT (ADDED)
+  // =========================================================
+  @Get(':id/check-panel-inspections')
+  async getCheckPanelInspections(@Param('id') id: string) {
+    return this.productionOrdersService.getCheckPanelInspections(id);
+  }
+
+  // =========================================================
+  // 6. SEWING PROGRESS ENDPOINT (ADDED)
+  // =========================================================
+  @Get(':id/sewing-progress')
+  async getSewingProgress(@Param('id') id: string) {
+    return this.productionOrdersService.getSewingProgress(id);
+  }
 }

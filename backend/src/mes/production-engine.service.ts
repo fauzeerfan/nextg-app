@@ -1,3 +1,4 @@
+// backend/src/mes/production-engine.service.ts
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { IotDeviceService, PondOp, PondPattern } from '../iot/iot-device.service';
@@ -67,10 +68,61 @@ export class ProductionEngineService {
     return { success: true };
   }
 
+  // ================= SEWING RECEIVE (SCAN FROM CHECK PANEL) =================
+  async sewingReceive(qrCode: string, qty: number) {
+    // Parse qrCode untuk mendapatkan opNumber
+    const parts = qrCode.split('-');
+    // Asumsi format QR: "item-opNumber" atau langsung opNumber
+    const opNumber = parts.length > 1 ? parts[1] : qrCode;
+
+    const op = await this.prisma.productionOrder.findUnique({
+      where: { opNumber },
+    });
+    if (!op) throw new NotFoundException('OP not found');
+
+    // Pastikan OP berada di Check Panel
+    if (op.currentStation !== StationCode.CP) {
+      throw new BadRequestException('OP is not at Check Panel');
+    }
+
+    // Pindahkan ke Sewing
+    await this.prisma.productionOrder.update({
+      where: { id: op.id },
+      data: { currentStation: StationCode.SEWING },
+    });
+
+    // Catat log penerimaan
+    await this.prisma.productionLog.create({
+      data: {
+        opId: op.id,
+        station: StationCode.SEWING,
+        type: 'RECEIVED',
+        qty: qty,
+        note: `Received from Check Panel via scan`,
+      },
+    });
+
+    return { success: true, opNumber: op.opNumber, qty };
+  }
+
   // ================= SEWING START =================
   async sewingStart(deviceId: string, opId: string, qty: number) {
     const device = await this.prisma.iotDevice.findUnique({ where: { deviceId } });
     if (!device) throw new NotFoundException('Device not found');
+
+    const op = await this.prisma.productionOrder.findUnique({
+      where: { id: opId },
+      select: { setsReadyForSewing: true, qtySewingIn: true, currentStation: true }
+    });
+    if (!op) throw new NotFoundException('OP not found');
+    if (op.currentStation !== StationCode.SEWING) {
+      throw new BadRequestException('OP is not at Sewing station');
+    }
+
+    const remaining = op.setsReadyForSewing - op.qtySewingIn;
+    if (qty > remaining) {
+      throw new BadRequestException(`Cannot start more than remaining ${remaining} sets`);
+    }
 
     const line = await this.prisma.lineMaster.findUnique({ where: { code: device.lineCode } });
     const sewingConfig = line?.sewingConfig as any;
@@ -100,70 +152,70 @@ export class ProductionEngineService {
 
   // ================= SEWING FINISH =================
   async sewingFinish(deviceId: string, opId: string, qty: number) {
-  return this.prisma.$transaction(async (tx) => {
-    const device = await tx.iotDevice.findUnique({ where: { deviceId } });
-    if (!device) throw new NotFoundException('Device not found');
+    return this.prisma.$transaction(async (tx) => {
+      const device = await tx.iotDevice.findUnique({ where: { deviceId } });
+      if (!device) throw new NotFoundException('Device not found');
 
-    const line = await tx.lineMaster.findUnique({ where: { code: device.lineCode } });
-    const sewingConfig = line?.sewingConfig as any;
+      const line = await tx.lineMaster.findUnique({ where: { code: device.lineCode } });
+      const sewingConfig = line?.sewingConfig as any;
 
-    let finishIndex = this.extractIndexFromDevice(device, 'finish');
+      let finishIndex = this.extractIndexFromDevice(device, 'finish');
 
-    // Cari konfigurasi finish, jika tidak ada gunakan default (misal untuk K1YH)
-    let finishConfig = sewingConfig?.finishes?.find((f: any) => f.index === finishIndex);
-    if (!finishConfig && line?.code === 'K1YH') {
-      finishConfig = { inputStarts: [1, 2] }; // default untuk K1YH
-    }
-    if (!finishConfig) {
-      throw new BadRequestException(`No configuration for finish index ${finishIndex} on line ${line?.code}`);
-    }
-    const inputStartIndices = finishConfig.inputStarts;
+      // Cari konfigurasi finish, jika tidak ada gunakan default (misal untuk K1YH)
+      let finishConfig = sewingConfig?.finishes?.find((f: any) => f.index === finishIndex);
+      if (!finishConfig && line?.code === 'K1YH') {
+        finishConfig = { inputStarts: [1, 2] }; // default untuk K1YH
+      }
+      if (!finishConfig) {
+        throw new BadRequestException(`No configuration for finish index ${finishIndex} on line ${line?.code}`);
+      }
+      const inputStartIndices = finishConfig.inputStarts;
 
-    const startProgresses = await tx.sewingStartProgress.findMany({
-      where: { opId, startIndex: { in: inputStartIndices } }
-    });
-
-    if (startProgresses.length === 0) {
-      throw new BadRequestException('No start progress found for this finish');
-    }
-
-    const possibleSets = Math.min(...startProgresses.map(p => p.qty), qty);
-
-    if (possibleSets > 0) {
-      await tx.sewingFinishProgress.upsert({
-        where: { opId_finishIndex: { opId, finishIndex } },
-        update: { qty: { increment: possibleSets } },
-        create: { opId, finishIndex, qty: possibleSets }
+      const startProgresses = await tx.sewingStartProgress.findMany({
+        where: { opId, startIndex: { in: inputStartIndices } }
       });
 
-      for (const sp of startProgresses) {
-        await tx.sewingStartProgress.update({
-          where: { id: sp.id },
-          data: { qty: { decrement: possibleSets } }
+      if (startProgresses.length === 0) {
+        throw new BadRequestException('No start progress found for this finish');
+      }
+
+      const possibleSets = Math.min(...startProgresses.map(p => p.qty), qty);
+
+      if (possibleSets > 0) {
+        await tx.sewingFinishProgress.upsert({
+          where: { opId_finishIndex: { opId, finishIndex } },
+          update: { qty: { increment: possibleSets } },
+          create: { opId, finishIndex, qty: possibleSets }
+        });
+
+        for (const sp of startProgresses) {
+          await tx.sewingStartProgress.update({
+            where: { id: sp.id },
+            data: { qty: { decrement: possibleSets } }
+          });
+        }
+
+        await tx.productionOrder.update({
+          where: { id: opId },
+          data: { qtySewingOut: { increment: possibleSets } }
         });
       }
 
-      await tx.productionOrder.update({
+      // Cek apakah OP selesai
+      const op = await tx.productionOrder.findUnique({
         where: { id: opId },
-        data: { qtySewingOut: { increment: possibleSets } }
+        select: { setsReadyForSewing: true, qtySewingOut: true }
       });
-    }
+      if (op && op.qtySewingOut >= op.setsReadyForSewing) {
+        await tx.productionOrder.update({
+          where: { id: opId },
+          data: { currentStation: StationCode.QC }
+        });
+      }
 
-    // Cek apakah OP selesai
-    const op = await tx.productionOrder.findUnique({
-      where: { id: opId },
-      select: { setsReadyForSewing: true, qtySewingOut: true }
+      return { success: true, setsProduced: possibleSets };
     });
-    if (op && op.qtySewingOut >= op.setsReadyForSewing) {
-      await tx.productionOrder.update({
-        where: { id: opId },
-        data: { currentStation: StationCode.QC }
-      });
-    }
-
-    return { success: true, setsProduced: possibleSets };
-  });
-}
+  }
 
   // ================= QC PROCESS =================
   async qcProcess(opId: string, good: number, ng: number) {
@@ -267,6 +319,26 @@ export class ProductionEngineService {
         line: device.lineCode,
       };
       this.iotDeviceService.setSession(deviceId, session);
+    }
+
+
+      // 🔄 Refresh daftar OP setiap 10 detik
+    const now = Date.now();
+    if (!session.lastRefresh || now - session.lastRefresh > 10000) {
+      // Ambil ulang daftar OP dari database
+      const freshOps = await this.getPondOps(device.lineCode);
+      session.pondOps = freshOps;
+      session.lastRefresh = now;
+
+      // Jika masih ada OP yang sedang dipilih, pertahankan indeksnya
+      if (session.pondOps && session.pondOps.length > 0) {
+        const currentOpId = session.pondOps[session.pondOpIndex ?? 0]?.id;
+        const newIndex = session.pondOps.findIndex(op => op.id === currentOpId);
+        session.pondOpIndex = newIndex >= 0 ? newIndex : 0;
+      } else {
+        session.pondOps = undefined;
+        session.pondOpIndex = undefined;
+      }
     }
 
     // Ambil daftar OP jika belum ada

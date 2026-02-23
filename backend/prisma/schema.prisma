@@ -170,7 +170,8 @@ model ProductionOrder {
   fgItems       FGStockItem[]
   shipmentItems ShipmentItem[]
   cuttingBatches CuttingBatch[]
-  patternProgress PatternProgress[]  // <-- TAMBAHKAN INI
+  patternProgress PatternProgress[]
+  checkPanelInspections CheckPanelInspection[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -366,4 +367,20 @@ model SewingFinishProgress {
   op          ProductionOrder @relation(fields: [opId], references: [id], onDelete: Cascade)
 
   @@unique([opId, finishIndex])
+}
+
+model CheckPanelInspection {
+  id           String @id @default(uuid())
+  opId         String
+  patternIndex Int
+  patternName  String
+  good         Int @default(0)
+  ng           Int @default(0)
+  ngReasons    Json?  // array of reasons
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  op ProductionOrder @relation(fields: [opId], references: [id], onDelete: Cascade)
+
+  @@unique([opId, patternIndex])
 }

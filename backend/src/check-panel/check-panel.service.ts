@@ -14,40 +14,29 @@ export class CheckPanelService {
     ng: number;
     ngReasons?: string[];
   }) {
-    console.log('CheckPanel inspect dto:', JSON.stringify(dto, null, 2));
-
     const { opId, patternIndex, patternName, good, ng, ngReasons } = dto;
 
-    // Validasi input
-    if (good < 0 || ng < 0) {
-      throw new BadRequestException('good and ng must be non-negative');
-    }
-    if (good + ng === 0) {
-      throw new BadRequestException('No quantity to process');
-    }
+    if (good < 0 || ng < 0) throw new BadRequestException('good and ng must be non-negative');
+    if (good + ng === 0) throw new BadRequestException('No quantity to process');
 
     const op = await this.prisma.productionOrder.findUnique({
       where: { id: opId },
-      include: { line: true, patternProgress: true },
+      include: { line: true },
     });
     if (!op) throw new NotFoundException('OP not found');
     if (op.currentStation !== StationCode.CP) {
-      throw new BadRequestException(`OP not at Check Panel station (current: ${op.currentStation})`);
+      throw new BadRequestException(`OP not at Check Panel (current: ${op.currentStation})`);
     }
 
-    // Target per pola = qtyEntan (sesuai kebutuhan K1YH)
-    const targetPerPattern = op.qtyEntan;
-
     return this.prisma.$transaction(async (tx) => {
-      // 1. Update ProductionTracking
+      // 1. Update ProductionTracking (opsional, untuk riwayat)
       await tx.productionTracking.upsert({
         where: { opId_station: { opId, station: StationCode.CP } },
         update: { goodQty: { increment: good }, ngQty: { increment: ng } },
         create: { opId, station: StationCode.CP, goodQty: good, ngQty: ng },
       });
-      console.log(`ProductionTracking for OP ${opId} at CP updated: good+${good}, ng+${ng}`);
 
-      // 2. Update ProductionOrder
+      // 2. Update ProductionOrder (akumulasi inspeksi)
       await tx.productionOrder.update({
         where: { id: opId },
         data: {
@@ -56,44 +45,39 @@ export class CheckPanelService {
           cpNgQty: { increment: ng },
         },
       });
-      console.log(`ProductionOrder ${opId} updated: qtyCP+${good+ng}, cpGood+${good}, cpNg+${ng}`);
 
-      // 3. Ambil progress yang sudah ada (jika ada)
-      const existingProgress = await tx.patternProgress.findUnique({
-        where: { opId_patternIndex: { opId, patternIndex } }
+      // 3. Upsert ke CheckPanelInspection (bukan PatternProgress)
+      const existing = await tx.checkPanelInspection.findUnique({
+        where: { opId_patternIndex: { opId, patternIndex } },
       });
 
-      // Validasi: pola sudah completed tidak boleh diinspect lagi
-      if (existingProgress && existingProgress.completed) {
-        throw new BadRequestException('Pattern already completed');
+      if (existing && (existing.good + existing.ng) >= op.qtyEntan) {
+        throw new BadRequestException('Pattern already fully inspected');
       }
 
-      const newGood = (existingProgress?.good || 0) + good;
-      const newNg = (existingProgress?.ng || 0) + ng;
-      const completed = newGood + newNg >= targetPerPattern;
+      const newGood = (existing?.good || 0) + good;
+      const newNg = (existing?.ng || 0) + ng;
+      const completed = newGood + newNg >= op.qtyEntan;
 
-      // 4. Update atau buat PatternProgress
-      await tx.patternProgress.upsert({
+      await tx.checkPanelInspection.upsert({
         where: { opId_patternIndex: { opId, patternIndex } },
         update: {
           good: { increment: good },
           ng: { increment: ng },
-          completed: completed,
+          ngReasons: ngReasons ? { push: ngReasons } : undefined,
+          updatedAt: new Date(),
         },
         create: {
           opId,
           patternIndex,
           patternName,
-          target: targetPerPattern,
           good,
           ng,
-          completed,
+          ngReasons: ngReasons || [],
         },
       });
-      // 🔥 Log untuk memastikan data tersimpan
-      console.log(`PatternProgress for ${opId}:${patternIndex} upserted`);
 
-      // 5. Buat ProductionLog
+      // 4. Buat ProductionLog
       await tx.productionLog.create({
         data: {
           opId,
@@ -103,14 +87,15 @@ export class CheckPanelService {
           note: ngReasons?.join(', ') || null,
         },
       });
-      console.log(`ProductionLog created for OP ${opId}: qty ${good+ng}`);
 
-      // 6. Hitung setsReadyForSewing
-      const allProgress = await tx.patternProgress.findMany({ where: { opId } });
-      if (allProgress.length > 0) {
-        const allCompleted = allProgress.every(p => p.completed);
+      // 5. Hitung setsReadyForSewing berdasarkan hasil inspeksi
+      const allInspections = await tx.checkPanelInspection.findMany({
+        where: { opId },
+      });
+      if (allInspections.length > 0) {
+        const allCompleted = allInspections.every(i => (i.good + i.ng) >= op.qtyEntan);
         if (allCompleted) {
-          const setsReady = Math.min(...allProgress.map(p => p.good));
+          const setsReady = Math.min(...allInspections.map(i => i.good));
           await tx.productionOrder.update({
             where: { id: opId },
             data: { setsReadyForSewing: setsReady },

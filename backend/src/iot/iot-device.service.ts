@@ -31,6 +31,7 @@ export interface DeviceSession {
   pondOpIndex?: number;
   pondPatternIndex?: number;
   pondConfirmChoice?: 'YES' | 'BACK';
+  lastRefresh?: number;
   // Sewing specific (can be extended)
   sewingOps?: any[];
   sewingOpIndex?: number;
