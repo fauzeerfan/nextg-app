@@ -1,9 +1,12 @@
 import { Module } from '@nestjs/common';
-import { StationLogsService } from './station-logs.service';
-import { StationLogsController } from './station-logs.controller';
+import { PrismaService } from '../prisma/prisma.service';
+import { ProductionEngineService } from '../mes/production-engine.service';
+import { StationLogsController } from './entities/station-logs.controller';
+import { IotModule } from '../iot/iot.module';
 
 @Module({
+  imports: [IotModule],
   controllers: [StationLogsController],
-  providers: [StationLogsService],
+  providers: [PrismaService, ProductionEngineService],
 })
 export class StationLogsModule {}

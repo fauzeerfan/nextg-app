@@ -1,32 +1,77 @@
-import { Controller, Get, Param, Query, Post, Body, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Query } from '@nestjs/common';
 import { ProductionOrdersService } from './production-orders.service';
 
 @Controller('production-orders')
 export class ProductionOrdersController {
-  constructor(private readonly service: ProductionOrdersService) {}
+  constructor(private readonly productionOrdersService: ProductionOrdersService) {}
 
-  @Get('dashboard-stats')
-  getDashboardStats() { return this.service.getDashboardStats(); }
+  // =========================================================
+  // 1. ACTION ENDPOINTS
+  // =========================================================
 
-  @Get()
-  findAll(@Query('station') station: string, @Query('view') view?: string) {
-    if (view === 'history') return this.service.findHistoryForStation(station);
-    if (station) return this.service.findActiveForStation(station);
-    return [];
+  @Post('sync')
+  syncData() {
+    return this.productionOrdersService.syncExternalData();
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) { return this.service.findOne(id); }
-
-  // --- NEW ENDPOINTS ---
-  
   @Post('simulate')
   createSimulation(@Body() dto: any) {
-      return this.service.createSimulation(dto);
+    return this.productionOrdersService.createSimulation(dto);
   }
 
   @Delete('reset-all-data')
-  resetSystem() {
-      return this.service.resetSystemData();
+  resetData() {
+    return this.productionOrdersService.resetSystemData();
+  }
+
+  // =========================================================
+  // 2. CUTTING QUEUE ENDPOINTS (NEW)
+  // =========================================================
+
+  @Get('cutting-entan/queue')
+  async getCuttingEntanQueue() {
+    return this.productionOrdersService.findActiveForStation('CUTTING_ENTAN');
+  }
+
+  @Get('cutting-pond/queue')
+  async getCuttingPondQueue() {
+    return this.productionOrdersService.findActiveForStation('CUTTING_POND');
+  }
+
+  // =========================================================
+  // 3. STATS & QUERY
+  // =========================================================
+
+  @Get('dashboard-stats')
+  getDashboardStats() {
+    return this.productionOrdersService.getDashboardStats();
+  }
+
+  @Get()
+  findAll(
+    @Query('station') station?: string,
+    @Query('view') view?: string
+  ) {
+    if (station) {
+      if (view === 'history') {
+        return this.productionOrdersService.findHistoryForStation(station);
+      }
+      return this.productionOrdersService.findActiveForStation(station);
+    }
+
+    return this.productionOrdersService.findAll();
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.productionOrdersService.findOne(id);
+  }
+
+  // =========================================================
+  // 4. PATTERN PROGRESS ENDPOINT (NEW)
+  // =========================================================
+  @Get(':id/pattern-progress')
+  async getPatternProgress(@Param('id') id: string) {
+    return this.productionOrdersService.getPatternProgress(id);
   }
 }

@@ -1,253 +1,369 @@
-// Database Connection
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider      = "prisma-client-js"
-  // TAMBAHKAN BARIS INI:
-  binaryTargets = ["native", "linux-musl"]
+//////////////////////////////////////////////////////
+// ENUM
+//////////////////////////////////////////////////////
+
+enum StationCode {
+  CUTTING_ENTAN
+  CUTTING_POND
+  CP
+  SEWING
+  QC
+  PACKING
+  FG
 }
 
-// ==========================================
-// 1. MASTER DATA (REFERENCE)
-// ==========================================
+enum ProductionStatus {
+  WIP
+  DONE
+  HOLD
+}
+
+//////////////////////////////////////////////////////
+// USER
+//////////////////////////////////////////////////////
+
+model User {
+  id              String   @id @default(uuid())
+  username        String   @unique
+  password        String
+  fullName        String
+  role            String
+  station         String?                     // legacy
+  allowedStations Json?                       // JSON array
+  department      String?                     // dept code
+  jobTitle        String?                     // job title
+  lineCode        String?                     // line
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+
+//////////////////////////////////////////////////////
+// LINE MASTER
+//////////////////////////////////////////////////////
+
+model LineMaster {
+  id                String  @id @default(uuid())
+  code              String  @unique
+  name              String
+  description       String?
+  patternMultiplier Int     @default(1)
+  ngCategories      Json?   // existing
+  sewingConfig      Json?   // <-- NEW: menyimpan konfigurasi sewing start/finish
+
+  stations         LineStation[]
+  patterns         PatternMaster[]
+  productionOrders ProductionOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LineStation {
+  id       String      @id @default(uuid())
+  lineId   String
+  station  StationCode
+  required Boolean     @default(true)
+  order    Int
+
+  line LineMaster @relation(fields: [lineId], references: [id], onDelete: Cascade)
+
+  @@unique([lineId, station])
+}
+
+//////////////////////////////////////////////////////
+// PATTERN MASTER
+//////////////////////////////////////////////////////
 
 model PatternMaster {
-  id         String   @id @default(uuid())
-  styleCode  String   @unique
-  patterns   Json
+  id        String @id @default(uuid())
+  styleCode String
+  lineId    String
 
-  // NEW: Set Images (Global/Full View)
   imgSetGood String?
   imgSetNg   String?
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  line  LineMaster    @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  parts PatternPart[]
 
-  @@map("pattern_masters")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([styleCode, lineId])
 }
 
+model PatternPart {
+  id        String  @id @default(uuid())
+  patternId String
+  name      String
+  imgGood   String?
+  imgNg     String?
 
-// ==========================================
-// 2. ORGANIZATION & IDENTITY
-// ==========================================
-
-model Department {
-  id    String @id @default(uuid())
-  code  String @unique
-  name  String
-  users User[]
-
-  @@map("departments")
+  pattern PatternMaster @relation(fields: [patternId], references: [id], onDelete: Cascade)
 }
 
-model JobTitle {
-  id    String @id @default(uuid())
-  name  String @unique
-  level Int    @default(0) 
-  users User[]
-
-  @@map("job_titles")
-}
-
-model User {
-  id           String      @id @default(uuid())
-  username     String      @unique
-  password     String
-  fullName     String
-  email        String?     @unique
-  
-  roleId       String
-  role         Role        @relation(fields: [roleId], references: [id])
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id])
-  jobTitleId   String?
-  jobTitle     JobTitle?   @relation(fields: [jobTitleId], references: [id])
-
-  isActive     Boolean     @default(true)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-
-  // Relations
-  logsCreated    StationLog[]
-  mrRequested    MaterialRequest[]
-  
-  // Hubungan ke OpReplacement:
-  opReqCreated   OpReplacement[]  @relation("OpRequester") // User yang request
-  qcInspectorFor OpReplacement[]  @relation("QCInspector") // User yang jadi QC
-
-  @@map("users")
-}
-
-model Role {
-  id          String           @id @default(uuid())
-  name        String           @unique
-  description String?
-  users       User[]
-  permissions RolePermission[]
-
-  @@map("roles")
-}
-
-// ==========================================
-// 3. ACCESS CONTROL (RBAC)
-// ==========================================
-
-model Feature {
-  id    String           @id
-  label String
-  group String
-  roles RolePermission[]
-
-  @@map("features")
-}
-
-model RolePermission {
-  roleId    String
-  featureId String
-  role      Role    @relation(fields: [roleId], references: [id])
-  feature   Feature @relation(fields: [featureId], references: [id])
-  
-  canCreate Boolean @default(false)
-  canRead   Boolean @default(true)
-  canUpdate Boolean @default(false)
-  canDelete Boolean @default(false)
-
-  @@id([roleId, featureId])
-  @@map("role_permissions")
-}
-
-// ==========================================
-// 4. CORE PRODUCTION (THE FLOW)
-// ==========================================
+//////////////////////////////////////////////////////
+// PRODUCTION ORDER (CORE BRAIN)
+//////////////////////////////////////////////////////
 
 model ProductionOrder {
-  id             String   @id @default(uuid())
-  opNumber       String   @unique
-  styleCode      String
-  buyer          String?
-  
-  targetQty      Int
-  completedQty   Int      @default(0)
-  status         String   @default("SCHEDULED") 
-  currentStation String   @default("CUTTING")
-  qrCode         String?  @unique
-  
-  cutQty         Int      @default(0)
-  cpGoodQty      Int      @default(0)
-  sewingInQty    Int      @default(0)
-  sewingOutQty   Int      @default(0)
-  qcGoodQty      Int      @default(0)
-  packedQty      Int      @default(0)
+  id        String @id @default(uuid())
+  opNumber  String @unique
+  lineId    String
+  styleCode String
 
-  logs             StationLog[]
-  materialRequests MaterialRequest[]
-  replacements     OpReplacement[]   @relation("OriginalOp")
-  bundles          Bundle[]
+  itemNumberFG String
+  itemNameFG   String?
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  
-  @@map("production_orders")
+  qtyOp Int
+
+  // Cutting quantities
+  qtyEntan       Int @default(0)
+  qtySentToPond  Int @default(0)
+
+  // Pond quantities
+  qtyPond  Int @default(0)
+  qtyPondNg Int @default(0)
+
+
+  // Check Panel
+  qtyCP    Int @default(0)
+  cpGoodQty  Int @default(0)
+  cpNgQty    Int @default(0)
+  readyForCP   Boolean @default(false)
+  setsReadyForSewing Int @default(0)
+
+  // Sewing
+  qtySewingIn  Int @default(0)
+  qtySewingOut Int @default(0)
+
+  sewingStartProgress SewingStartProgress[]
+  sewingFinishProgress SewingFinishProgress[]
+
+  // Quality Control
+  qtyQC      Int @default(0)
+  qcNgQty    Int @default(0)
+
+  // Packing  
+  qtyPacking Int @default(0)
+  qtyFG      Int @default(0)
+
+  status         ProductionStatus @default(WIP)
+  currentStation StationCode?
+
+  line LineMaster @relation(fields: [lineId], references: [id])
+
+  // Relations
+  trackings     ProductionTracking[]
+  logs          ProductionLog[]
+  packingItems  PackingItem[]
+  fgItems       FGStockItem[]
+  shipmentItems ShipmentItem[]
+  cuttingBatches CuttingBatch[]
+  patternProgress PatternProgress[]  // <-- TAMBAHKAN INI
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model StationLog {
-  id          String   @id @default(uuid())
+model PatternProgress {
+  id           String   @id @default(uuid())
+  opId         String
+  patternIndex Int
+  patternName  String
+  target       Int
+  good         Int      @default(0)
+  ng           Int      @default(0)
+  completed    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  op ProductionOrder @relation(fields: [opId], references: [id], onDelete: Cascade)
+
+  @@unique([opId, patternIndex])
+}
+
+// New model
+model CuttingBatch {
+  id        String   @id @default(uuid())
+  opId      String
+  batchNumber Int      // sequential per OP, starting at 1
+  qty       Int
+  qrCode    String   @unique
+  createdAt DateTime @default(now())
+  printed   Boolean  @default(false) // optional, for tracking reprints
+
+  op ProductionOrder @relation(fields: [opId], references: [id], onDelete: Cascade)
+
+  @@unique([opId, batchNumber])
+}
+
+//////////////////////////////////////////////////////
+// TRACKING PER STATION
+//////////////////////////////////////////////////////
+
+model ProductionTracking {
+  id      String      @id @default(uuid())
+  opId    String
+  station StationCode
+
+  goodQty Int @default(0)
+  ngQty   Int @default(0)
+
+  op ProductionOrder @relation(fields: [opId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([opId, station])
+}
+
+//////////////////////////////////////////////////////
+// PRODUCTION LOG (HISTORY)
+//////////////////////////////////////////////////////
+
+model ProductionLog {
+  id      String      @id @default(uuid())
+  opId    String
+  station StationCode
+  type    String // IN OUT NG MOVE
+  qty     Int
+  note    String?
+
+  op ProductionOrder @relation(fields: [opId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+//////////////////////////////////////////////////////
+// PACKING SESSION
+//////////////////////////////////////////////////////
+
+model PackingSession {
+  id       String @id @default(uuid())
+  fgNumber String
+  totalQty Int    @default(0)
+  status   String @default("OPEN")
+
+  items PackingItem[]
+
+  createdAt DateTime @default(now())
+}
+
+model PackingItem {
+  id        String @id @default(uuid())
+  sessionId String
+  opId      String
+  qty       Int
+
+  session PackingSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  op      ProductionOrder @relation(fields: [opId], references: [id], onDelete: Cascade)
+}
+
+//////////////////////////////////////////////////////
+// FG STOCK (FIFO)
+//////////////////////////////////////////////////////
+
+model FGStock {
+  id       String @id @default(uuid())
+  fgNumber String @unique
+  totalQty Int    @default(0)
+
+  items FGStockItem[]
+
+  updatedAt DateTime @updatedAt
+}
+
+model FGStockItem {
+  id   String @id @default(uuid())
+  fgId String
+  opId String
+  qty  Int
+
+  fg FGStock         @relation(fields: [fgId], references: [id], onDelete: Cascade)
+  op ProductionOrder @relation(fields: [opId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+//////////////////////////////////////////////////////
+// SHIPPING
+//////////////////////////////////////////////////////
+
+model Shipment {
+  id         String @id @default(uuid())
+  suratJalan String
+  fgNumber   String
+  totalQty   Int
+
+  items ShipmentItem[]
+
+  createdAt DateTime @default(now())
+}
+
+model ShipmentItem {
+  id         String @id @default(uuid())
+  shipmentId String
+  opId       String
+  qty        Int
+
+  shipment Shipment        @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  op       ProductionOrder @relation(fields: [opId], references: [id], onDelete: Cascade)
+}
+
+//////////////////////////////////////////////////////
+// CUTTING SYNC LOG
+//////////////////////////////////////////////////////
+
+model CuttingSyncLog {
+  id       String @id @default(uuid())
+  opNumber String
+  qty      Int
+  status   String
+  rawData  Json?
+
+  createdAt DateTime @default(now())
+}
+
+model IotDevice {
+  id        String @id @default(uuid())
+  deviceId  String @unique
+  name      String?
+  mode      String
+  station   StationCode
+  lineCode  String
+  config    Json?   // NEW: menyimpan info seperti { sewingIndex: 1, type: "start", patterns: [0,1] }
+  lastSeen  DateTime?
+  isActive  Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SewingStartProgress {
+  id          String @id @default(uuid())
   opId        String
-  op          ProductionOrder @relation(fields: [opId], references: [id])
-  
-  station     String
-  actionType  String
-  qtyGood     Int      @default(0)
-  qtyNG       Int      @default(0)
-  ngReason    String?  
-  patternName String?
-  
-  timestamp   DateTime @default(now())
-  operatorId  String?
-  operator    User?    @relation(fields: [operatorId], references: [id])
-  
-  @@map("station_logs")
+  startIndex  Int
+  qty         Int @default(0)
+  op          ProductionOrder @relation(fields: [opId], references: [id], onDelete: Cascade)
+
+  @@unique([opId, startIndex])
 }
 
-model Bundle {
-  id          String   @id @default(uuid())
-  code        String   @unique 
+model SewingFinishProgress {
+  id          String @id @default(uuid())
   opId        String
-  op          ProductionOrder @relation(fields: [opId], references: [id])
-  qty         Int
-  status      String   
-  createdAt   DateTime @default(now())
-  
-  @@map("bundles")
-}
+  finishIndex Int
+  qty         Int @default(0)
+  op          ProductionOrder @relation(fields: [opId], references: [id], onDelete: Cascade)
 
-// ==========================================
-// 5. SUPPORTING FLOW (NG HANDLERS)
-// ==========================================
-
-model MaterialRequest {
-  id          String   @id @default(uuid())
-  reqNo       String   @unique 
-  
-  opId        String
-  op          ProductionOrder @relation(fields: [opId], references: [id])
-  opNumber    String   
-  
-  partName    String
-  qtyNeeded   Int
-  reason      String
-  status      String   @default("PENDING")
-  
-  requesterId String?
-  requester   User?     @relation(fields: [requesterId], references: [id])
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("material_requests")
-}
-
-model OpReplacement {
-  id              String   @id @default(uuid())
-  reqNo           String   @unique 
-  
-  originalOpId    String
-  originalOpRel   ProductionOrder @relation("OriginalOp", fields: [originalOpId], references: [id])
-  originalOp      String   
-  
-  newOpIdentity   String   
-  qty             Int
-  reasonNG        String
-  status          String   @default("DRAFT")
-  
-  // FIX: Menambahkan Relasi Requester (Pembuat Request)
-  requesterId     String?
-  requester       User?    @relation("OpRequester", fields: [requesterId], references: [id])
-
-  // Relasi QC Inspector (Yang Approve/Release)
-  qcInspectorId   String?
-  qcInspector     User?    @relation("QCInspector", fields: [qcInspectorId], references: [id])
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@map("op_replacements")
-}
-
-// ==========================================
-// 6. INVENTORY (FG)
-// ==========================================
-
-model FinishedGoodStock {
-  id             String   @id @default(uuid())
-  styleCode      String
-  customerPartNo String   @unique
-  totalStock     Int      @default(0)
-  totalBoxes     Int      @default(0)
-  lastUpdated    DateTime @updatedAt
-
-  @@map("fg_stocks")
+  @@unique([opId, finishIndex])
 }

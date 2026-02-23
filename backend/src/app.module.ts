@@ -1,20 +1,35 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
-import { RolesModule } from './roles/roles.module';
-import { DepartmentsModule } from './departments/departments.module';
-import { JobTitlesModule } from './job-titles/job-titles.module';
 import { ProductionOrdersModule } from './production-orders/production-orders.module';
 import { StationLogsModule } from './station-logs/station-logs.module';
-import { MaterialRequestsModule } from './material-requests/material-requests.module';
-import { OpReplacementsModule } from './op-replacements/op-replacements.module';
 import { PatternMastersModule } from './pattern-masters/pattern-masters.module';
+import { LineMastersModule } from './line-masters/line-masters.module';
+import { ProductionSyncModule } from './production-sync/production-sync.module';
+import { MesModule } from './mes/mes.module';
+import { CuttingEntanModule } from './cutting-entan/cutting-entan.module';
+import { IotModule } from './iot/iot.module';
+import { CheckPanelModule } from './check-panel/check-panel.module';
+import { PackingModule } from './packing/packing.module';
+import { FinishedGoodsModule } from './finished-goods/finished-goods.module';
 
 @Module({
-  imports: [AuthModule, UsersModule, RolesModule, DepartmentsModule, JobTitlesModule, ProductionOrdersModule, StationLogsModule, MaterialRequestsModule, OpReplacementsModule, PatternMastersModule],
+  imports: [
+    AuthModule,
+    UsersModule,
+    ProductionOrdersModule,
+    StationLogsModule,
+    PatternMastersModule,
+    LineMastersModule,
+    ProductionSyncModule,
+    MesModule,
+    CuttingEntanModule,
+    IotModule,
+    CheckPanelModule,
+    PackingModule,
+    FinishedGoodsModule,
+  ],
   controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}

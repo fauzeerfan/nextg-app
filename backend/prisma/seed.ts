@@ -1,127 +1,308 @@
-import { PrismaClient } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import { PrismaClient, StationCode } from '@prisma/client'
+import * as bcrypt from 'bcrypt'
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient()
 
 async function main() {
-  console.log('🌱 Starting Seeding for NextG App...');
+  console.log('🌱 INDUSTRIAL SEED START...')
 
-  // --- 1. MASTER DATA (DEPT & JOB) ---
-  const departments = [
-    { code: 'SDC', name: 'Management System Development and Control' },
-    { code: 'SLS', name: 'Sales' },
-    { code: 'AUT', name: 'Production Automotive' },
-    { code: 'CP',  name: 'Check Panel Dept' },
-    { code: 'QC',  name: 'Quality Control Dept' },
-  ];
+  // ================================
+  // PASSWORD HASHES
+  // ================================
+  const adminPass = await bcrypt.hash('admin123', 10)
+  const entanPass = await bcrypt.hash('entan123', 10)
+  const pondPass = await bcrypt.hash('pond123', 10)
+  const panelPass = await bcrypt.hash('panel123', 10)
+  const sewingPass = await bcrypt.hash('sewing123', 10)
+  const qualityPass = await bcrypt.hash('quality123', 10)
+  const packingPass = await bcrypt.hash('packing123', 10)
+  const goodsPass = await bcrypt.hash('goods123', 10)
 
-  for (const dept of departments) {
-    await prisma.department.upsert({
-      where: { code: dept.code },
-      update: { name: dept.name },
-      create: dept,
-    });
-  }
-
-  const jobTitles = ['Director', 'Manager', 'Staff', 'Operator', 'Leader', 'Admin'];
-  for (const title of jobTitles) {
-    await prisma.jobTitle.upsert({ where: { name: title }, update: {}, create: { name: title } });
-  }
-
-  // --- 2. FEATURES & ROLES ---
-  const features = [
-    { id: 'dashboard', label: 'Dashboard', group: 'OVERVIEW' },
-    { id: 'CUTTING', label: 'Cutting Station', group: 'PRODUCTION' },
-    { id: 'CP', label: 'Check Panel', group: 'PRODUCTION' },
-    { id: 'SEWING', label: 'Sewing Line', group: 'PRODUCTION' },
-    { id: 'QC', label: 'Quality Control', group: 'PRODUCTION' },
-    { id: 'PACKING', label: 'Packing', group: 'PRODUCTION' },
-    { id: 'FG', label: 'Finished Goods', group: 'PRODUCTION' },
-    { id: 'MR', label: 'Material Request', group: 'SUPPORTING' },
-    { id: 'OPREQ', label: 'OP Pergantian', group: 'SUPPORTING' },
-    { id: 'USER_MGMT', label: 'User Management', group: 'SYSTEM' },
-    { id: 'ROLE_MGMT', label: 'Role Management', group: 'SYSTEM' },
-  ];
-
-  for (const f of features) {
-    await prisma.feature.upsert({ where: { id: f.id }, update: { label: f.label, group: f.group }, create: f });
-  }
-
-  const adminRole = await prisma.role.upsert({
-    where: { name: 'SUPER_ADMIN' },
-    update: {},
-    create: { name: 'SUPER_ADMIN', description: 'Full Access' },
-  });
-
-  await prisma.rolePermission.deleteMany({ where: { roleId: adminRole.id } });
-  await prisma.rolePermission.createMany({
-    data: features.map(f => ({ roleId: adminRole.id, featureId: f.id }))
-  });
-
-  // --- 3. SUPER USER ---
-  const hashedPassword = await bcrypt.hash('password123', 10);
+  // ================================
+  // USERS
+  // ================================
+  // Administrator (all access)
   await prisma.user.upsert({
-    where: { username: 'irfan.fauzi' },
-    update: { roleId: adminRole.id },
-    create: {
-      username: 'irfan.fauzi',
-      password: hashedPassword,
-      fullName: 'Irfan Fauzi',
-      email: 'irfan@seikou.co.id',
-      roleId: adminRole.id,
+    where: { username: 'admin' },
+    update: {
+      allowedStations: ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'],
+      department: 'SDC',
+      jobTitle: 'MGR',
+      lineCode: 'ALL',
       isActive: true
     },
-  });
+    create: {
+      username: 'admin',
+      password: adminPass,
+      fullName: 'Administrator',
+      role: 'ADMINISTRATOR',
+      allowedStations: ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'],
+      department: 'SDC',
+      jobTitle: 'MGR',
+      lineCode: 'ALL',
+      isActive: true
+    }
+  })
+  console.log('👤 Admin created/updated')
 
-  // --- 4. PRODUCTION DATA (MOCK) ---
-  console.log('🏭 Seeding Production Orders...');
-  
-  // REVISED MOCK DATA: Menambahkan sewingOutQty agar valid untuk QC
-  const ops = [
-    // OP di Sewing (Sedang jalan)
-    { 
-        opNumber: 'OP-2025-001', style: 'TYT-SC-MOD-X', target: 1000, station: 'SEWING', 
-        cut: 1000, cp: 950, sewIn: 200, sewOut: 50, qc: 0, packed: 0 
+  // Manager (all production menus, no master data)
+  await prisma.user.upsert({
+    where: { username: 'manager' },
+    update: {
+      allowedStations: ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'],
+      department: 'PROD',
+      jobTitle: 'MGR',
+      lineCode: 'ALL',
+      isActive: true
     },
-    // OP Baru Mulai (Cutting)
-    { 
-        opNumber: 'OP-2025-002', style: 'HND-CV-ARM', target: 500, station: 'CUTTING', 
-        cut: 100, cp: 0, sewIn: 0, sewOut: 0, qc: 0, packed: 0
+    create: {
+      username: 'manager',
+      password: adminPass,
+      fullName: 'Production Manager',
+      role: 'MANAGER',
+      allowedStations: ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'],
+      department: 'PROD',
+      jobTitle: 'MGR',
+      lineCode: 'ALL',
+      isActive: true
+    }
+  })
+  console.log('👤 Manager created')
+
+  // Operator Entan
+  await prisma.user.upsert({
+    where: { username: 'entan' },
+    update: {
+      allowedStations: ['CUTTING_ENTAN'],
+      department: 'PROD',
+      jobTitle: 'OPR',
+      lineCode: 'K1YH',
+      isActive: true
     },
-    // OP di QC (Sudah ada output sewing)
-    { 
-        opNumber: 'OP-2025-003', style: 'SUZ-ERT-GL', target: 2000, station: 'QC', 
-        cut: 2000, cp: 2000, sewIn: 2000, sewOut: 2000, qc: 500, packed: 0
+    create: {
+      username: 'entan',
+      password: entanPass,
+      fullName: 'Operator Entan',
+      role: 'OPERATOR',
+      allowedStations: ['CUTTING_ENTAN'],
+      department: 'PROD',
+      jobTitle: 'OPR',
+      lineCode: 'K1YH',
+      isActive: true
+    }
+  })
+  console.log('👤 User entan created')
+
+  // Operator Pond
+  await prisma.user.upsert({
+    where: { username: 'pond' },
+    update: {
+      allowedStations: ['CUTTING_POND'],
+      department: 'PROD',
+      jobTitle: 'OPR',
+      lineCode: 'K1YH',
+      isActive: true
     },
+    create: {
+      username: 'pond',
+      password: pondPass,
+      fullName: 'Operator Pond',
+      role: 'OPERATOR',
+      allowedStations: ['CUTTING_POND'],
+      department: 'PROD',
+      jobTitle: 'OPR',
+      lineCode: 'K1YH',
+      isActive: true
+    }
+  })
+  console.log('👤 User pond created')
+
+  // Operator Check Panel
+  await prisma.user.upsert({
+    where: { username: 'panel' },
+    update: {
+      allowedStations: ['CP'],
+      department: 'PROD',
+      jobTitle: 'OPR',
+      lineCode: 'K1YH',
+      isActive: true
+    },
+    create: {
+      username: 'panel',
+      password: panelPass,
+      fullName: 'Operator Check Panel',
+      role: 'OPERATOR',
+      allowedStations: ['CP'],
+      department: 'PROD',
+      jobTitle: 'OPR',
+      lineCode: 'K1YH',
+      isActive: true
+    }
+  })
+  console.log('👤 User panel created')
+
+  // Operator Sewing
+  await prisma.user.upsert({
+    where: { username: 'sewing' },
+    update: {
+      allowedStations: ['SEWING'],
+      department: 'PROD',
+      jobTitle: 'OPR',
+      lineCode: 'K1YH',
+      isActive: true
+    },
+    create: {
+      username: 'sewing',
+      password: sewingPass,
+      fullName: 'Operator Sewing',
+      role: 'OPERATOR',
+      allowedStations: ['SEWING'],
+      department: 'PROD',
+      jobTitle: 'OPR',
+      lineCode: 'K1YH',
+      isActive: true
+    }
+  })
+  console.log('👤 User sewing created')
+
+  // Operator Quality Control
+  await prisma.user.upsert({
+    where: { username: 'quality' },
+    update: {
+      allowedStations: ['QC'],
+      department: 'QC',
+      jobTitle: 'OPR',
+      lineCode: 'K1YH',
+      isActive: true
+    },
+    create: {
+      username: 'quality',
+      password: qualityPass,
+      fullName: 'Operator QC',
+      role: 'OPERATOR',
+      allowedStations: ['QC'],
+      department: 'QC',
+      jobTitle: 'OPR',
+      lineCode: 'K1YH',
+      isActive: true
+    }
+  })
+  console.log('👤 User quality created')
+
+  // Operator Packing
+  await prisma.user.upsert({
+    where: { username: 'packing' },
+    update: {
+      allowedStations: ['PACKING'],
+      department: 'PROD',
+      jobTitle: 'OPR',
+      lineCode: 'K1YH',
+      isActive: true
+    },
+    create: {
+      username: 'packing',
+      password: packingPass,
+      fullName: 'Operator Packing',
+      role: 'OPERATOR',
+      allowedStations: ['PACKING'],
+      department: 'PROD',
+      jobTitle: 'OPR',
+      lineCode: 'K1YH',
+      isActive: true
+    }
+  })
+  console.log('👤 User packing created')
+
+  // Operator Finished Goods
+  await prisma.user.upsert({
+    where: { username: 'goods' },
+    update: {
+      allowedStations: ['FG'],
+      department: 'PROD',
+      jobTitle: 'OPR',
+      lineCode: 'K1YH',
+      isActive: true
+    },
+    create: {
+      username: 'goods',
+      password: goodsPass,
+      fullName: 'Operator Finished Goods',
+      role: 'OPERATOR',
+      allowedStations: ['FG'],
+      department: 'PROD',
+      jobTitle: 'OPR',
+      lineCode: 'K1YH',
+      isActive: true
+    }
+  })
+  console.log('👤 User goods created')
+
+  // ================================
+  // IoT DEVICES
+  // ================================
+  const devices = [
+    { deviceId: 'sparsha_pond_k1yh_001', mode: 'COUNTER', station: StationCode.CUTTING_POND, lineCode: 'K1YH' },
+    { deviceId: 'dhristi_panel_k1yh_001', mode: 'SCANNER', station: StationCode.CP, lineCode: 'K1YH' },
+    { deviceId: 'dhristi_sewing_k1yh_001', mode: 'SCANNER', station: StationCode.SEWING, lineCode: 'K1YH' },
+    { deviceId: 'sparsha_sewingstart_k1yh_001', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
+    { deviceId: 'sparsha_sewingstart_k1yh_002', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
+    { deviceId: 'sparsha_sewingfinish_k1yh_001', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
+    { deviceId: 'sparsha_sewingfinish_k1yh_002', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
   ];
-
-  for (const op of ops) {
-    await prisma.productionOrder.upsert({
-      where: { opNumber: op.opNumber },
-      update: {
-        // Pastikan update data jika sudah ada
-        sewingOutQty: op.sewOut,
-        currentStation: op.station
-      },
+  for (const d of devices) {
+    await prisma.iotDevice.upsert({
+      where: { deviceId: d.deviceId },
+      update: {},
       create: {
-        opNumber: op.opNumber,
-        styleCode: op.style,
-        targetQty: op.target,
-        currentStation: op.station,
-        cutQty: op.cut,
-        cpGoodQty: op.cp,
-        sewingInQty: op.sewIn,
-        sewingOutQty: op.sewOut, // FIX: Data ini wajib > 0 agar muncul di QC
-        qcGoodQty: op.qc || 0,
-        packedQty: op.packed || 0,
-        status: 'WIP'
-      }
+        deviceId: d.deviceId,
+        name: d.deviceId,
+        mode: d.mode,
+        station: d.station,
+        lineCode: d.lineCode,
+      },
     });
   }
+  console.log('📱 IoT Devices seeded')
 
-  console.log('✅ Seeding Completed! Database is ready.');
+  // ======================================================
+  // LINE K1YH (4 POLA - FULL FLOW) - HANYA LINE, TANPA PATTERN
+  // ======================================================
+  const lineK1YH = await prisma.lineMaster.upsert({
+    where: { code: 'K1YH' },
+    update: {},
+    create: {
+      code: 'K1YH',
+      name: 'LINE K1YH',
+      description: 'Line K1YH - Cover Sewing',
+      patternMultiplier: 4,
+      stations: {
+        create: [
+          { station: StationCode.CUTTING_ENTAN, order: 1 },
+          { station: StationCode.CUTTING_POND, order: 2 },
+          { station: StationCode.CP, order: 3 },
+          { station: StationCode.SEWING, order: 4 },
+          { station: StationCode.QC, order: 5 },
+          { station: StationCode.PACKING, order: 6 },
+          { station: StationCode.FG, order: 7 },
+        ]
+      }
+    }
+  })
+  console.log('🏭 Line K1YH created')
+
+  // Tidak membuat pattern master untuk K1YH (akan dibuat manual via UI)
+  // ======================================================
+  // LINE K0WL dihilangkan
+  // ======================================================
+
+  console.log('✅ INDUSTRIAL SEED DONE')
 }
 
 main()
-  .catch((e) => { console.error(e); process.exit(1); })
-  .finally(async () => { await prisma.$disconnect(); });
+  .catch(e => {
+    console.error(e)
+    process.exit(1)
+  })
+  .finally(async () => {
+    await prisma.$disconnect()
+  })

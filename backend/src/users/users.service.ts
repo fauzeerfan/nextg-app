@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 
@@ -6,120 +6,77 @@ import * as bcrypt from 'bcrypt';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  // --- HELPER: Bersihkan Input Data ---
-  // Mengubah string kosong "" menjadi null agar Prisma tidak error Foreign Key
-  private cleanInputData(dto: any) {
-    return {
-      ...dto,
-      departmentId: dto.departmentId === "" ? null : dto.departmentId,
-      jobTitleId: dto.jobTitleId === "" ? null : dto.jobTitleId,
-    };
-  }
-
-  // --- HELPER: Validasi Foreign Keys ---
-  // Memastikan ID department dan job title benar-benar ada di DB sebelum dipakai
-  private async validateForeignKeys(departmentId: string | null, jobTitleId: string | null) {
-    if (departmentId) {
-      const dept = await this.prisma.department.findUnique({ where: { id: departmentId } });
-      if (!dept) throw new BadRequestException(`Department with ID '${departmentId}' not found.`);
+  // ===============================
+  // CREATE USER (ADMIN)
+  // ===============================
+  async create(dto: any) {
+  const hashedPassword = await bcrypt.hash(dto.password || '123456', 10);
+  try {
+    return await this.prisma.user.create({
+      data: {
+        username: dto.username,
+        password: hashedPassword,
+        fullName: dto.fullName,
+        role: dto.role || 'OPERATOR',
+        allowedStations: dto.allowedStations || [], // added
+      },
+    });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      throw new ConflictException('Username already exists');
     }
-    if (jobTitleId) {
-      const job = await this.prisma.jobTitle.findUnique({ where: { id: jobTitleId } });
-      if (!job) throw new BadRequestException(`Job Title with ID '${jobTitleId}' not found.`);
-    }
+    throw error;
   }
+}
 
-  async create(createUserDto: any) {
-    // 1. Bersihkan Data Input (Handle empty string -> null)
-    const cleanData = this.cleanInputData(createUserDto);
-
-    // 2. Validasi Keberadaan Data Referensi
-    await this.validateForeignKeys(cleanData.departmentId, cleanData.jobTitleId);
-
-    // 3. Hash Password
-    const hashedPassword = await bcrypt.hash(cleanData.password, 10);
-
-    // 4. Simpan ke DB
-    try {
-      return await this.prisma.user.create({
-        data: {
-          username: cleanData.username,
-          password: hashedPassword,
-          fullName: cleanData.fullName,
-          email: cleanData.email,
-          roleId: cleanData.roleId,
-          departmentId: cleanData.departmentId || null, 
-          jobTitleId: cleanData.jobTitleId || null,     
-          isActive: true,
-        },
-      });
-    } catch (error) {
-      if (error.code === 'P2002') {
-        throw new ConflictException('Username or Email already exists');
-      }
-      throw error;
-    }
-  }
-
+  // ===============================
+  // GET ALL USERS
+  // ===============================
   async findAll() {
     return this.prisma.user.findMany({
-      include: {
-        role: { select: { name: true } },
-        department: { select: { code: true, name: true } },
-        jobTitle: { select: { name: true } }
-      },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
+  // ===============================
+  // GET ONE USER
+  // ===============================
   async findOne(id: string) {
-    return this.prisma.user.findUnique({ where: { id } });
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('User not found');
+    return user;
   }
 
-  // FIX: Sanitasi Data sebelum Update
-  async update(id: string, updateUserDto: any) {
-    // 1. Pisahkan field yang valid untuk DB vs field sampah dari UI
-    const {
-      id: _id,          
-      role,             
-      department,       
-      jobTitle,         
-      status,           
-      lastLogin,        
-      avatarSeed,       
-      password,         
-      ...rawData      
-    } = updateUserDto;
-    
-    // 2. Bersihkan Data (Empty string -> null)
-    const cleanData = this.cleanInputData(rawData);
+  // ===============================
+  // UPDATE USER
+  // ===============================
+  async update(id: string, dto: any) {
+    const existing = await this.prisma.user.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('User not found');
 
-    // 3. Validasi Keberadaan Data Referensi (Penting untuk update)
-    await this.validateForeignKeys(cleanData.departmentId, cleanData.jobTitleId);
+    const data: any = {
+      username: dto.username ?? existing.username,
+      fullName: dto.fullName ?? existing.fullName,
+      role: dto.role ?? existing.role,
+    };
 
-    // 4. Handle Password Hashing
-    if (password && password.trim() !== '') {
-      cleanData.password = await bcrypt.hash(password, 10);
-    } else {
-      delete cleanData.password;
+    // 🔥 reset password optional
+    if (dto.password && dto.password.trim() !== '') {
+      data.password = await bcrypt.hash(dto.password, 10);
     }
 
-    // 5. Eksekusi Update
-    try {
-      return await this.prisma.user.update({
-        where: { id },
-        data: cleanData,
-      });
-    } catch (error) {
-        // Handle Unique Constraint (misal ganti username ke yang sudah ada)
-        if (error.code === 'P2002') {
-            throw new ConflictException('Username or Email already exists');
-        }
-        throw error;
-    }
+    return this.prisma.user.update({
+      where: { id },
+      data,
+    });
   }
 
+  // ===============================
+  // DELETE USER
+  // ===============================
   async remove(id: string) {
-    return this.prisma.user.delete({ where: { id } });
+    return this.prisma.user.delete({
+      where: { id },
+    });
   }
 }

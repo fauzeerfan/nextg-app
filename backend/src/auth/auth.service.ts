@@ -7,48 +7,40 @@ import * as bcrypt from 'bcrypt';
 export class AuthService {
   constructor(
     private prisma: PrismaService,
-    private jwtService: JwtService
+    private jwtService: JwtService,
   ) {}
 
-  // 1. Validasi User & Password
-  async validateUser(username: string, pass: string): Promise<any> {
+  async validateUser(username: string, password: string): Promise<any> {
     const user = await this.prisma.user.findUnique({
       where: { username },
-      // Include Role & Permissions agar bisa dibaca
-      include: { role: { include: { permissions: true } } } 
     });
-
-    if (user && await bcrypt.compare(pass, user.password)) {
-      const { password, ...result } = user;
-      return result;
-    }
-    return null;
+    if (!user) return null;
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return null;
+    const { password: _, ...result } = user;
+    return result;
   }
 
-  // 2. Logic Login
   async login(user: any) {
-    // Mapping permission dari format DB (Array Object) ke format App (Array String)
-    // Contoh: ['CUTTING', 'MR', 'QC']
-    const permissionList = user.role.permissions.map(p => p.featureId);
-
-    const payload = { 
-      username: user.username, 
-      sub: user.id, 
-      role: user.role.name,
-      permissions: permissionList 
+    const payload = {
+      username: user.username,
+      sub: user.id,
+      role: user.role,
+      allowedStations: user.allowedStations || [],
     };
-    
+
     return {
       access_token: this.jwtService.sign(payload),
-      // DATA INI YANG DIBACA FRONTEND:
       user: {
         id: user.id,
         username: user.username,
         fullName: user.fullName,
-        role: user.role.name,
-        permissions: permissionList, // <--- INI KUNCINYA (Tadi belum dikirim)
-        avatarSeed: user.fullName
-      }
+        role: user.role,
+        lineCode: user.lineCode,
+        allowedStations: user.allowedStations || [],
+        permissions: user.permissions || [],
+        isActive: user.isActive,
+      },
     };
   }
 }

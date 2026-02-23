@@ -1,142 +1,291 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProductionStatus, StationCode } from '@prisma/client';
 
 @Injectable()
 export class ProductionOrdersService {
   constructor(private prisma: PrismaService) {}
 
-  // --- QUERY METHODS ---
-  
-  async findActiveForStation(station: string) {
-    return (this.prisma as any).productionOrder.findMany({
-      where: {
-        currentStation: station,
-        status: { in: ['SCHEDULED', 'WIP'] }
-      },
-      orderBy: { createdAt: 'asc' }
+  // ======================================================
+  // QUERY
+  // ======================================================
+  async findAll() {
+    return this.prisma.productionOrder.findMany({
+      orderBy: { updatedAt: 'desc' },
+      take: 100
     });
+  }
+
+  async findActiveForStation(station: string) {
+    const where: any = {
+      currentStation: station as StationCode,
+      status: ProductionStatus.WIP,
+    };
+
+    const includeOptions: any = {
+      line: true,
+    };
+    if (station === 'CUTTING_POND') {
+      includeOptions.patternProgress = true;
+    }
+
+    const ops = await this.prisma.productionOrder.findMany({
+      where,
+      include: includeOptions,
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Jika station CUTTING_POND, kita format ulang patternProgress menjadi array patterns
+    if (station === 'CUTTING_POND') {
+      return ops.map(op => ({
+        ...op,
+        patterns: op.patternProgress?.map(p => ({
+          index: p.patternIndex,
+          name: p.patternName,
+          target: p.target,
+          good: p.good,
+          ng: p.ng,
+          current: p.good + p.ng,
+          completed: p.completed,
+        })) || [],
+        patternProgress: undefined, // hapus data mentah
+      }));
+    }
+
+    return ops;
   }
 
   async findHistoryForStation(station: string) {
-    if (station === 'CUTTING') {
-       return (this.prisma as any).productionOrder.findMany({
-        where: {
-           cutQty: { gt: 0 },
-           OR: [
-             { status: 'COMPLETED' },
-             { currentStation: { not: 'CUTTING' } }
-           ]
-        },
+    if (station === 'CUTTING_ENTAN') {
+      return this.prisma.productionOrder.findMany({
+        where: { qtyEntan: { gt: 0 } },
         orderBy: { updatedAt: 'desc' },
-        take: 50 
-       });
+        take: 50
+      });
     }
-    return [];
+
+    if (station === 'CUTTING_POND') {
+      return this.prisma.productionOrder.findMany({
+        where: { qtyPond: { gt: 0 } },
+        orderBy: { updatedAt: 'desc' },
+        take: 50
+      });
+    }
+
+    return this.prisma.productionOrder.findMany({
+      where: { currentStation: { not: station as StationCode } },
+      orderBy: { updatedAt: 'desc' },
+      take: 50
+    });
   }
 
   async findOne(id: string) {
-    return (this.prisma as any).productionOrder.findUnique({ where: { id } });
+    return this.prisma.productionOrder.findUnique({ where: { id } });
   }
 
+  // ======================================================
+  // PATTERN PROGRESS (NEW)
+  // ======================================================
+  async getPatternProgress(opId: string) {
+    const progress = await this.prisma.patternProgress.findMany({
+      where: { opId },
+      orderBy: { patternIndex: 'asc' },
+    });
+    return progress;
+  }
+
+  // ======================================================
+  // DASHBOARD STATS
+  // ======================================================
   async getDashboardStats() {
     const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()); 
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    const activeOps = await (this.prisma as any).productionOrder.findMany({
-        where: { status: { in: ['WIP', 'COMPLETED', 'COMPLETED_CUTTING'] } },
-        select: { cutQty: true, packedQty: true, currentStation: true }
+    const activeOps = await this.prisma.productionOrder.findMany({
+      where: {
+        status: { in: [ProductionStatus.WIP, ProductionStatus.DONE] }
+      },
+      select: { qtyPond: true, qtyPacking: true, currentStation: true }
     });
 
-    const totalWip = activeOps.reduce((acc, op) => acc + (op.cutQty - op.packedQty), 0);
-    
-    const packingLogs = await (this.prisma as any).stationLog.aggregate({
-        _sum: { qtyGood: true },
-        where: {
-            station: 'PACKING',
-            actionType: 'PACKING_OUT',
-            timestamp: { gte: startOfDay }
-        }
+    const totalWip = activeOps.reduce((acc, op) => acc + (op.qtyPond - op.qtyPacking), 0);
+
+    const packingLogs = await this.prisma.productionLog.aggregate({
+      _sum: { qty: true },
+      where: {
+        station: StationCode.PACKING,
+        type: 'PACKING_OUT',
+        createdAt: { gte: startOfDay }
+      }
     });
 
-    const inspectionLogs = await (this.prisma as any).stationLog.aggregate({
-        _sum: { qtyGood: true, qtyNG: true },
-        where: {
-            actionType: 'INSPECT', 
-            timestamp: { gte: startOfDay }
-        }
-    });
-    const totalInspected = (inspectionLogs._sum.qtyGood || 0) + (inspectionLogs._sum.qtyNG || 0);
-    const ngRate = totalInspected > 0 
-        ? ((inspectionLogs._sum.qtyNG || 0) / totalInspected) * 100 
-        : 0;
-
-    const stationGroup = await (this.prisma as any).productionOrder.groupBy({
-        by: ['currentStation'],
-        where: { status: { not: 'CLOSED_FG' } }, 
-        _count: { id: true }
+    const inspectionLogs = await this.prisma.productionLog.aggregate({
+      _sum: { qty: true },
+      where: {
+        type: 'INSPECT',
+        createdAt: { gte: startOfDay }
+      }
     });
 
-    const recentOps = await (this.prisma as any).productionOrder.findMany({
-        where: { status: { not: 'CLOSED_FG' } },
-        orderBy: { updatedAt: 'desc' },
-        take: 10 
+    const totalInspected = inspectionLogs._sum.qty || 0;
+    const ngRate = 0;
+
+    const stationGroup = await this.prisma.productionOrder.groupBy({
+      by: ['currentStation'],
+      where: { status: { not: ProductionStatus.DONE } },
+      _count: { id: true }
+    });
+
+    const recentOps = await this.prisma.productionOrder.findMany({
+      where: { status: { not: ProductionStatus.DONE } },
+      orderBy: { updatedAt: 'desc' },
+      take: 10
     });
 
     return {
-        kpi: {
-            wip: totalWip,
-            output: packingLogs._sum.qtyGood || 0,
-            ngRate: ngRate.toFixed(1),
-            speed: Math.round((packingLogs._sum.qtyGood || 0) / 8) 
-        },
-        stations: stationGroup.map(s => ({
-            name: s.currentStation,
-            count: s._count.id
-        })),
-        activeOps: recentOps
+      kpi: {
+        wip: totalWip,
+        output: packingLogs._sum.qty || 0,
+        ngRate: ngRate.toFixed(1),
+        speed: Math.round((packingLogs._sum.qty || 0) / 8)
+      },
+      stations: stationGroup.map(s => ({
+        name: s.currentStation,
+        count: s._count.id
+      })),
+      activeOps: recentOps
     };
   }
 
-  // --- TOOLS ---
+  // ======================================================
+  // SYNC EXTERNAL
+  // ======================================================
+  async syncExternalData() {
+    try {
+      const response = await fetch('http://202.52.15.30:998/miniapps/admin/api/cuttingreport');
+      const externalData = await response.json();
 
-  async createSimulation(dto: any) {
-      return (this.prisma as any).productionOrder.create({
-          data: {
-              opNumber: dto.opNumber,
-              styleCode: dto.styleCode,
-              buyer: dto.buyer || 'Internal',
-              targetQty: Number(dto.targetQty),
-              status: 'SCHEDULED',
-              currentStation: 'CUTTING' 
+      return await this.prisma.$transaction(async (tx) => {
+        for (const item of externalData) {
+          if (!item?.nomorOp) continue;
+
+          const styleCode = item.nomorOp.substring(0, 4).toUpperCase();
+          const qtyOp = parseInt(item.qtyOp ?? '0') || 0;
+          const grandTotalCutting = parseInt(item.grandTotalCutting ?? '0') || 0;
+
+          // ===== FIND / CREATE LINE =====
+          let line = await tx.lineMaster.findUnique({
+            where: { code: styleCode }
+          });
+
+          if (!line) {
+            line = await tx.lineMaster.create({
+              data: {
+                code: styleCode,
+                name: `Line ${styleCode}`,
+                patternMultiplier: 4,
+              }
+            });
           }
+
+          await tx.productionOrder.upsert({
+            where: { opNumber: item.nomorOp },
+            update: {
+              itemNumberFG: item.itemNumberFinishGood,
+              itemNameFG: item.itemNameFinishGood,
+              qtyOp: qtyOp,
+              qtyEntan: grandTotalCutting,
+            },
+            create: {
+              opNumber: item.nomorOp,
+              styleCode,
+              lineId: line.id,
+              itemNumberFG: item.itemNumberFinishGood,
+              itemNameFG: item.itemNameFinishGood,
+              qtyOp,
+              qtyEntan: grandTotalCutting,
+              currentStation: StationCode.CUTTING_ENTAN,
+              status: ProductionStatus.WIP,
+            }
+          });
+        }
+
+        return {
+          success: true,
+          total: externalData.length
+        };
       });
+    } catch (error: any) {
+      console.error(error);
+      throw new Error(`Sync failed: ${error.message}`);
+    }
   }
 
-  // FIX: Menggunakan TRUNCATE CASCADE (Nuclear Option)
-  // Ini jauh lebih kuat daripada deleteMany() karena mengabaikan urutan foreign key
-  async resetSystemData() {
-      try {
-          // Daftar tabel transaksi yang harus dibersihkan
-          // Pastikan nama tabel di sini sama persis dengan @@map("nama_tabel") di schema.prisma
-          const tableNames = [
-            "station_logs", 
-            "material_requests", 
-            "op_replacements", 
-            "bundles", 
-            "fg_stocks", 
-            "production_orders"
-          ];
-          
-          // Buat query raw SQL: TRUNCATE TABLE "t1", "t2" ... RESTART IDENTITY CASCADE;
-          const tables = tableNames.map(t => `"${t}"`).join(', ');
-          
-          // Eksekusi Raw SQL
-          await this.prisma.$executeRawUnsafe(`TRUNCATE TABLE ${tables} RESTART IDENTITY CASCADE;`);
+  // ======================================================
+  // CREATE SIMULATION
+  // ======================================================
+  async createSimulation(dto: any) {
+    let line = await this.prisma.lineMaster.findUnique({
+      where: { code: dto.styleCode }
+    });
 
-          return { message: 'Factory Reset Successful. Transaction Data Wiped.' };
-      } catch (error) {
-          console.error("Reset Failed:", error);
-          throw new InternalServerErrorException("Failed to reset system data.");
+    if (!line) {
+      line = await this.prisma.lineMaster.create({
+        data: {
+          code: dto.styleCode,
+          name: `Line ${dto.styleCode}`,
+          patternMultiplier: 4
+        }
+      });
+    }
+
+    return this.prisma.productionOrder.create({
+      data: {
+        opNumber: dto.opNumber,
+        styleCode: dto.styleCode,
+        lineId: line.id,
+        itemNumberFG: dto.itemNumberFG || 'N/A',
+        itemNameFG: dto.itemNameFG || null,
+        qtyOp: Number(dto.qtyOp),
+
+        status: ProductionStatus.WIP,
+        currentStation: StationCode.CUTTING_ENTAN,
+
+        qtyEntan: 0,
+        qtyPond: 0,
+        qtyCP: 0,
+        qtySewingIn: 0,
+        qtySewingOut: 0,
+        qtyQC: 0,
+        qtyPacking: 0,
+        qtyFG: 0
       }
+    });
+  }
+
+  // ======================================================
+  // RESET SYSTEM
+  // ======================================================
+  async resetSystemData() {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.productionLog.deleteMany({});
+
+        if ('materialRequest' in tx) {
+          await (tx as any).materialRequest.deleteMany({});
+        }
+        if ('opReplacement' in tx) {
+          await (tx as any).opReplacement.deleteMany({});
+        }
+
+        await tx.fGStock.deleteMany({});
+        await tx.productionOrder.deleteMany({});
+      });
+
+      return { message: 'Factory Reset Successful' };
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException('Reset failed');
+    }
   }
 }
