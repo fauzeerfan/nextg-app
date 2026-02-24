@@ -205,17 +205,17 @@ async sewingFinish(deviceId: string, opId: string, qty: number) {
       // TIDAK MENGURANGI START PROGRESS
     }
 
-    // Cek apakah OP selesai
-    const op = await tx.productionOrder.findUnique({
-      where: { id: opId },
-      select: { setsReadyForSewing: true, qtySewingOut: true }
-    });
-    if (op && op.qtySewingOut >= op.setsReadyForSewing) {
-      await tx.productionOrder.update({
-        where: { id: opId },
-        data: { currentStation: StationCode.QC }
-      });
-    }
+    // Cek apakah OP selesai (pemindahan ke QC sekarang dilakukan oleh QC inspect)
+    // const op = await tx.productionOrder.findUnique({
+    //   where: { id: opId },
+    //   select: { setsReadyForSewing: true, qtySewingOut: true }
+    // });
+    // if (op && op.qtySewingOut >= op.setsReadyForSewing) {
+    //   await tx.productionOrder.update({
+    //     where: { id: opId },
+    //     data: { currentStation: StationCode.QC }
+    //   });
+    // }
 
     return { success: true, setsProduced: possibleSets };
   });

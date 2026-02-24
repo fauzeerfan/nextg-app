@@ -92,4 +92,20 @@ export class ProductionOrdersController {
   async getSewingProgress(@Param('id') id: string) {
     return this.productionOrdersService.getSewingProgress(id);
   }
+
+  // =========================================================
+  // 7. QC INSPECTION ENDPOINTS (ADDED)
+  // =========================================================
+  @Post(':id/qc-inspect')
+  async qcInspect(
+    @Param('id') id: string,
+    @Body() body: { good: number; ng: number; ngReasons?: string[] }
+  ) {
+    return this.productionOrdersService.qcInspect(id, body);
+  }
+
+  @Get(':id/qc-inspections')
+  async getQcInspections(@Param('id') id: string) {
+    return this.productionOrdersService.getQcInspections(id);
+  }
 }

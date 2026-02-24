@@ -172,6 +172,7 @@ model ProductionOrder {
   cuttingBatches CuttingBatch[]
   patternProgress PatternProgress[]
   checkPanelInspections CheckPanelInspection[]
+  qcInspections         QcInspection[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -383,4 +384,16 @@ model CheckPanelInspection {
   op ProductionOrder @relation(fields: [opId], references: [id], onDelete: Cascade)
 
   @@unique([opId, patternIndex])
+}
+
+model QcInspection {
+  id        String   @id @default(uuid())
+  opId      String
+  good      Int      @default(0)
+  ng        Int      @default(0)
+  ngReasons Json?    // array of reasons
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  op ProductionOrder @relation(fields: [opId], references: [id], onDelete: Cascade)
 }
