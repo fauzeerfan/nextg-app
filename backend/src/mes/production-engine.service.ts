@@ -151,71 +151,75 @@ export class ProductionEngineService {
   }
 
   // ================= SEWING FINISH =================
-  async sewingFinish(deviceId: string, opId: string, qty: number) {
-    return this.prisma.$transaction(async (tx) => {
-      const device = await tx.iotDevice.findUnique({ where: { deviceId } });
-      if (!device) throw new NotFoundException('Device not found');
+async sewingFinish(deviceId: string, opId: string, qty: number) {
+  return this.prisma.$transaction(async (tx) => {
+    const device = await tx.iotDevice.findUnique({ where: { deviceId } });
+    if (!device) throw new NotFoundException('Device not found');
 
-      const line = await tx.lineMaster.findUnique({ where: { code: device.lineCode } });
-      const sewingConfig = line?.sewingConfig as any;
+    const line = await tx.lineMaster.findUnique({ where: { code: device.lineCode } });
+    const sewingConfig = line?.sewingConfig as any;
 
-      let finishIndex = this.extractIndexFromDevice(device, 'finish');
+    let finishIndex = this.extractIndexFromDevice(device, 'finish');
+    let finishConfig = sewingConfig?.finishes?.find((f: any) => f.index === finishIndex);
+    if (!finishConfig && line?.code === 'K1YH') {
+      finishConfig = { inputStarts: [1, 2] };
+    }
+    if (!finishConfig) {
+      throw new BadRequestException(`No configuration for finish index ${finishIndex} on line ${line?.code}`);
+    }
+    const inputStartIndices = finishConfig.inputStarts;
 
-      // Cari konfigurasi finish, jika tidak ada gunakan default (misal untuk K1YH)
-      let finishConfig = sewingConfig?.finishes?.find((f: any) => f.index === finishIndex);
-      if (!finishConfig && line?.code === 'K1YH') {
-        finishConfig = { inputStarts: [1, 2] }; // default untuk K1YH
-      }
-      if (!finishConfig) {
-        throw new BadRequestException(`No configuration for finish index ${finishIndex} on line ${line?.code}`);
-      }
-      const inputStartIndices = finishConfig.inputStarts;
-
-      const startProgresses = await tx.sewingStartProgress.findMany({
-        where: { opId, startIndex: { in: inputStartIndices } }
-      });
-
-      if (startProgresses.length === 0) {
-        throw new BadRequestException('No start progress found for this finish');
-      }
-
-      const possibleSets = Math.min(...startProgresses.map(p => p.qty), qty);
-
-      if (possibleSets > 0) {
-        await tx.sewingFinishProgress.upsert({
-          where: { opId_finishIndex: { opId, finishIndex } },
-          update: { qty: { increment: possibleSets } },
-          create: { opId, finishIndex, qty: possibleSets }
-        });
-
-        for (const sp of startProgresses) {
-          await tx.sewingStartProgress.update({
-            where: { id: sp.id },
-            data: { qty: { decrement: possibleSets } }
-          });
-        }
-
-        await tx.productionOrder.update({
-          where: { id: opId },
-          data: { qtySewingOut: { increment: possibleSets } }
-        });
-      }
-
-      // Cek apakah OP selesai
-      const op = await tx.productionOrder.findUnique({
-        where: { id: opId },
-        select: { setsReadyForSewing: true, qtySewingOut: true }
-      });
-      if (op && op.qtySewingOut >= op.setsReadyForSewing) {
-        await tx.productionOrder.update({
-          where: { id: opId },
-          data: { currentStation: StationCode.QC }
-        });
-      }
-
-      return { success: true, setsProduced: possibleSets };
+    const startProgresses = await tx.sewingStartProgress.findMany({
+      where: { opId, startIndex: { in: inputStartIndices } }
     });
-  }
+
+    if (startProgresses.length === 0) {
+      throw new BadRequestException('No start progress found for this finish');
+    }
+
+    // Ambil current finish qty
+    const finishProgress = await tx.sewingFinishProgress.findUnique({
+      where: { opId_finishIndex: { opId, finishIndex } }
+    });
+    const currentFinish = finishProgress?.qty || 0;
+
+    // Hitung available sets = min(start) - currentFinish
+    const minStart = Math.min(...startProgresses.map(p => p.qty));
+    const available = Math.max(0, minStart - currentFinish);
+    const possibleSets = Math.min(available, qty);
+
+    if (possibleSets > 0) {
+      // Update finish progress
+      await tx.sewingFinishProgress.upsert({
+        where: { opId_finishIndex: { opId, finishIndex } },
+        update: { qty: { increment: possibleSets } },
+        create: { opId, finishIndex, qty: possibleSets }
+      });
+
+      // Update qtySewingOut di ProductionOrder
+      await tx.productionOrder.update({
+        where: { id: opId },
+        data: { qtySewingOut: { increment: possibleSets } }
+      });
+
+      // TIDAK MENGURANGI START PROGRESS
+    }
+
+    // Cek apakah OP selesai
+    const op = await tx.productionOrder.findUnique({
+      where: { id: opId },
+      select: { setsReadyForSewing: true, qtySewingOut: true }
+    });
+    if (op && op.qtySewingOut >= op.setsReadyForSewing) {
+      await tx.productionOrder.update({
+        where: { id: opId },
+        data: { currentStation: StationCode.QC }
+      });
+    }
+
+    return { success: true, setsProduced: possibleSets };
+  });
+}
 
   // ================= QC PROCESS =================
   async qcProcess(opId: string, good: number, ng: number) {

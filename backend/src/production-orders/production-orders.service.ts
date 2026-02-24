@@ -16,7 +16,7 @@ export class ProductionOrdersService {
     });
   }
 
-  async findActiveForStation(station: string) {
+  async findActiveForStation(station: string, includeProgress = false) {
     const where: any = {
       currentStation: station as StationCode,
       status: ProductionStatus.WIP,
@@ -27,6 +27,11 @@ export class ProductionOrdersService {
     };
     if (station === 'CUTTING_POND') {
       includeOptions.patternProgress = true;
+    }
+    // Jika station SEWING dan includeProgress true, sertakan progress
+    if (station === 'SEWING' && includeProgress) {
+      includeOptions.sewingStartProgress = true;
+      includeOptions.sewingFinishProgress = true;
     }
 
     const ops = await this.prisma.productionOrder.findMany({

@@ -87,14 +87,12 @@ const FinishProgressBar = ({ finishIndex, current, target }: { finishIndex: numb
 
 const SewingOpCard = ({ op, onSelect, isSelected }: { op: SewingOp; onSelect: () => void; isSelected: boolean }) => {
   const target = op.setsReadyForSewing || 0;
-  const output = op.qtySewingOut || 0;
+  const output = op.qtySewingOut || 0;   // total output
   const remaining = target - output;
   const isCompleted = remaining <= 0;
 
   const startMap = new Map(op.sewingStartProgress?.map(s => [s.startIndex, s.qty]) || []);
-  const finishMap = new Map(op.sewingFinishProgress?.map(f => [f.finishIndex, f.qty]) || []);
 
-  // Untuk K1YH, kita punya 2 start dan 2 finish
   const startIndices = [1, 2];
   const finishIndices = [1, 2];
 
@@ -152,7 +150,12 @@ const SewingOpCard = ({ op, onSelect, isSelected }: { op: SewingOp; onSelect: ()
             <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Finish Progress</span>
           </div>
           {finishIndices.map(idx => (
-            <FinishProgressBar key={idx} finishIndex={idx} current={finishMap.get(idx) || 0} target={target} />
+            <FinishProgressBar
+              key={idx}
+              finishIndex={idx}
+              current={output}   // gunakan total output untuk kedua finish
+              target={target}
+            />
           ))}
         </div>
 

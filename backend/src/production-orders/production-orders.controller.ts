@@ -50,13 +50,15 @@ export class ProductionOrdersController {
   @Get()
   findAll(
     @Query('station') station?: string,
-    @Query('view') view?: string
+    @Query('view') view?: string,
+    @Query('includeProgress') includeProgress?: string, // tambah
   ) {
     if (station) {
       if (view === 'history') {
         return this.productionOrdersService.findHistoryForStation(station);
       }
-      return this.productionOrdersService.findActiveForStation(station);
+      // Ubah pemanggilan method dengan parameter includeProgress
+      return this.productionOrdersService.findActiveForStation(station, includeProgress === 'true');
     }
 
     return this.productionOrdersService.findAll();
