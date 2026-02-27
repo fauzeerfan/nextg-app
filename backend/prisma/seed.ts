@@ -290,6 +290,31 @@ async function main() {
   })
   console.log('🏭 Line K1YH created')
 
+  // ======================================================
+  // UPDATE KATEGORI NG UNTUK LINE K1YH
+  // ======================================================
+  await prisma.lineMaster.update({
+    where: { code: 'K1YH' },
+    data: {
+      ngCategories: [ // CP
+        'Garis', 'Lubang jarum/dekok', 'Bentol/jendol', 'Noda garis putih',
+        'Noda titik putih/hitam', 'Emboss halus', 'Backing cloth', 'Bowing',
+        'Shiwa', 'Cacat cutting dimensi', 'Cacat cutting kirikomi', 'Cacat cutting scrim tertarik'
+      ],
+      qcNgCategories: [ // QC
+        'Jarak jahitan tidak standar', 'Bahan balap tidak standar', 'Point tidak center',
+        'Lipatan tidak standar', 'Jahitan gelombang', 'Ex jarum', 'Benang over/keluar',
+        'Bahan terlipat/terjahit', 'Tidak ada sutechi', 'Jahitan meleset', 'Sampah benang terjahit',
+        'Kuncian putus/lepas', 'Part tidak terpasang', 'Part terbalik', 'Salah pasang',
+        'Arah motif terbalik', 'Tidak ada piping', 'Benang pecah', 'Noda bahan',
+        'Bekas marking', 'Cacat bahan', 'Langkah jahitan tidak standar', 'Jahitan putus',
+        'Jahitan loncat', 'Benang kendor', 'Jahitan kencang', 'Slit over/tidak ada',
+        'Jahitan keriput', 'Hole tidak ada/burry', 'Dimensi minus/over'
+      ]
+    }
+  })
+  console.log('✅ Kategori NG (CP dan QC) untuk line K1YH diupdate')
+
   // Tidak membuat pattern master untuk K1YH (akan dibuat manual via UI)
   // ======================================================
   // LINE K0WL dihilangkan

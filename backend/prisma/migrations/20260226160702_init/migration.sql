@@ -30,6 +30,10 @@ CREATE TABLE "LineMaster" (
     "name" TEXT NOT NULL,
     "description" TEXT,
     "patternMultiplier" INTEGER NOT NULL DEFAULT 1,
+    "ngCategories" JSONB,
+    "qcNgCategories" JSONB,
+    "sewingConfig" JSONB,
+    "packingConfig" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -87,6 +91,8 @@ CREATE TABLE "ProductionOrder" (
     "qtyCP" INTEGER NOT NULL DEFAULT 0,
     "cpGoodQty" INTEGER NOT NULL DEFAULT 0,
     "cpNgQty" INTEGER NOT NULL DEFAULT 0,
+    "readyForCP" BOOLEAN NOT NULL DEFAULT false,
+    "setsReadyForSewing" INTEGER NOT NULL DEFAULT 0,
     "qtySewingIn" INTEGER NOT NULL DEFAULT 0,
     "qtySewingOut" INTEGER NOT NULL DEFAULT 0,
     "qtyQC" INTEGER NOT NULL DEFAULT 0,
@@ -99,6 +105,22 @@ CREATE TABLE "ProductionOrder" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "ProductionOrder_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PatternProgress" (
+    "id" TEXT NOT NULL,
+    "opId" TEXT NOT NULL,
+    "patternIndex" INTEGER NOT NULL,
+    "patternName" TEXT NOT NULL,
+    "target" INTEGER NOT NULL,
+    "good" INTEGER NOT NULL DEFAULT 0,
+    "ng" INTEGER NOT NULL DEFAULT 0,
+    "completed" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "PatternProgress_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -145,7 +167,10 @@ CREATE TABLE "PackingSession" (
     "fgNumber" TEXT NOT NULL,
     "totalQty" INTEGER NOT NULL DEFAULT 0,
     "status" TEXT NOT NULL DEFAULT 'OPEN',
+    "qrCode" TEXT,
+    "printed" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "PackingSession_pkey" PRIMARY KEY ("id")
 );
@@ -222,12 +247,61 @@ CREATE TABLE "IotDevice" (
     "mode" TEXT NOT NULL,
     "station" "StationCode" NOT NULL,
     "lineCode" TEXT NOT NULL,
+    "config" JSONB,
     "lastSeen" TIMESTAMP(3),
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "IotDevice_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SewingStartProgress" (
+    "id" TEXT NOT NULL,
+    "opId" TEXT NOT NULL,
+    "startIndex" INTEGER NOT NULL,
+    "qty" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "SewingStartProgress_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SewingFinishProgress" (
+    "id" TEXT NOT NULL,
+    "opId" TEXT NOT NULL,
+    "finishIndex" INTEGER NOT NULL,
+    "qty" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "SewingFinishProgress_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CheckPanelInspection" (
+    "id" TEXT NOT NULL,
+    "opId" TEXT NOT NULL,
+    "patternIndex" INTEGER NOT NULL,
+    "patternName" TEXT NOT NULL,
+    "good" INTEGER NOT NULL DEFAULT 0,
+    "ng" INTEGER NOT NULL DEFAULT 0,
+    "ngReasons" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CheckPanelInspection_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "QcInspection" (
+    "id" TEXT NOT NULL,
+    "opId" TEXT NOT NULL,
+    "good" INTEGER NOT NULL DEFAULT 0,
+    "ng" INTEGER NOT NULL DEFAULT 0,
+    "ngReasons" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "QcInspection_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -246,6 +320,9 @@ CREATE UNIQUE INDEX "PatternMaster_styleCode_lineId_key" ON "PatternMaster"("sty
 CREATE UNIQUE INDEX "ProductionOrder_opNumber_key" ON "ProductionOrder"("opNumber");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "PatternProgress_opId_patternIndex_key" ON "PatternProgress"("opId", "patternIndex");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "CuttingBatch_qrCode_key" ON "CuttingBatch"("qrCode");
 
 -- CreateIndex
@@ -260,6 +337,15 @@ CREATE UNIQUE INDEX "FGStock_fgNumber_key" ON "FGStock"("fgNumber");
 -- CreateIndex
 CREATE UNIQUE INDEX "IotDevice_deviceId_key" ON "IotDevice"("deviceId");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "SewingStartProgress_opId_startIndex_key" ON "SewingStartProgress"("opId", "startIndex");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SewingFinishProgress_opId_finishIndex_key" ON "SewingFinishProgress"("opId", "finishIndex");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CheckPanelInspection_opId_patternIndex_key" ON "CheckPanelInspection"("opId", "patternIndex");
+
 -- AddForeignKey
 ALTER TABLE "LineStation" ADD CONSTRAINT "LineStation_lineId_fkey" FOREIGN KEY ("lineId") REFERENCES "LineMaster"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -271,6 +357,9 @@ ALTER TABLE "PatternPart" ADD CONSTRAINT "PatternPart_patternId_fkey" FOREIGN KE
 
 -- AddForeignKey
 ALTER TABLE "ProductionOrder" ADD CONSTRAINT "ProductionOrder_lineId_fkey" FOREIGN KEY ("lineId") REFERENCES "LineMaster"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PatternProgress" ADD CONSTRAINT "PatternProgress_opId_fkey" FOREIGN KEY ("opId") REFERENCES "ProductionOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "CuttingBatch" ADD CONSTRAINT "CuttingBatch_opId_fkey" FOREIGN KEY ("opId") REFERENCES "ProductionOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -298,3 +387,15 @@ ALTER TABLE "ShipmentItem" ADD CONSTRAINT "ShipmentItem_shipmentId_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "ShipmentItem" ADD CONSTRAINT "ShipmentItem_opId_fkey" FOREIGN KEY ("opId") REFERENCES "ProductionOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SewingStartProgress" ADD CONSTRAINT "SewingStartProgress_opId_fkey" FOREIGN KEY ("opId") REFERENCES "ProductionOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SewingFinishProgress" ADD CONSTRAINT "SewingFinishProgress_opId_fkey" FOREIGN KEY ("opId") REFERENCES "ProductionOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CheckPanelInspection" ADD CONSTRAINT "CheckPanelInspection_opId_fkey" FOREIGN KEY ("opId") REFERENCES "ProductionOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "QcInspection" ADD CONSTRAINT "QcInspection_opId_fkey" FOREIGN KEY ("opId") REFERENCES "ProductionOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE;

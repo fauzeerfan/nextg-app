@@ -1,22 +1,27 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ExternalShippingService } from './external-shipping.service';
 
 @Injectable()
 export class FinishedGoodsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private externalShipping: ExternalShippingService,
+  ) {}
 
-  async receiveBox(qrCode: string) {
-    // Parse QR code untuk mendapatkan sessionId
-    // Asumsi QR code berisi sessionId: "PACK-{sessionId}"
+  /**
+   * Menerima box dari packing (scan QR)
+   */
+  async receive(qrCode: string) {
+    // Asumsi QR code berisi "PACK-{sessionId}"
     const sessionId = qrCode.replace('PACK-', '');
     const session = await this.prisma.packingSession.findUnique({
       where: { id: sessionId },
-      include: { items: true },
+      include: { items: { include: { op: true } } },
     });
     if (!session) throw new NotFoundException('Session not found');
     if (session.status !== 'CLOSED') throw new BadRequestException('Session not closed yet');
 
-    // Gunakan transaction
     return this.prisma.$transaction(async (tx) => {
       // 1. Untuk setiap item di session, buat FGStockItem
       for (const item of session.items) {
@@ -42,7 +47,7 @@ export class FinishedGoodsService {
         create: { fgNumber: session.fgNumber, totalQty },
       });
 
-      // 3. Tandai session sebagai RECEIVED (opsional)
+      // 3. Tandai session sebagai RECEIVED
       await tx.packingSession.update({
         where: { id: sessionId },
         data: { status: 'RECEIVED' },
@@ -52,11 +57,21 @@ export class FinishedGoodsService {
     });
   }
 
+  /**
+   * Melakukan pengiriman barang jadi
+   */
   async ship(fgNumber: string, qty: number, suratJalan: string) {
-    // Cari stock items untuk fgNumber tersebut, urut berdasarkan createdAt (FIFO)
+    // Validasi surat jalan eksternal
+    const isValid = await this.externalShipping.validateSuratJalan(suratJalan);
+    if (!isValid) {
+      throw new BadRequestException(`Nomor surat jalan ${suratJalan} tidak valid`);
+    }
+
+    // Cari stock items untuk fgNumber, urut berdasarkan createdAt (FIFO)
     const stockItems = await this.prisma.fGStockItem.findMany({
       where: { fg: { fgNumber } },
       orderBy: { createdAt: 'asc' },
+      include: { op: true },
     });
 
     const totalAvailable = stockItems.reduce((sum, item) => sum + item.qty, 0);
@@ -111,12 +126,31 @@ export class FinishedGoodsService {
     });
   }
 
+  /**
+   * Mendapatkan semua stok finished goods beserta item-itemnya
+   */
   async getStock() {
     return this.prisma.fGStock.findMany({
       include: {
         items: {
           include: { op: true },
           orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+  }
+
+  /**
+   * Mendapatkan history pengiriman
+   */
+  async getShipments() {
+    return this.prisma.shipment.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: {
+          include: {
+            op: { select: { opNumber: true } },
+          },
         },
       },
     });

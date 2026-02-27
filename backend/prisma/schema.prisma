@@ -58,8 +58,11 @@ model LineMaster {
   name              String
   description       String?
   patternMultiplier Int     @default(1)
-  ngCategories      Json?   // existing
+  ngCategories      Json?   // untuk Check Panel
+  qcNgCategories    Json?   // <-- baru untuk Quality Control
   sewingConfig      Json?   // <-- NEW: menyimpan konfigurasi sewing start/finish
+  packingConfig      Json?   // { "packSize": 50 }
+  
 
   stations         LineStation[]
   patterns         PatternMaster[]
@@ -142,6 +145,7 @@ model ProductionOrder {
   cpNgQty    Int @default(0)
   readyForCP   Boolean @default(false)
   setsReadyForSewing Int @default(0)
+  allPatternsCompleted  Boolean @default(false)
 
   // Sewing
   qtySewingIn  Int @default(0)
@@ -251,14 +255,15 @@ model ProductionLog {
 //////////////////////////////////////////////////////
 
 model PackingSession {
-  id       String @id @default(uuid())
-  fgNumber String
-  totalQty Int    @default(0)
-  status   String @default("OPEN")
-
-  items PackingItem[]
-
+  id        String   @id @default(uuid())
+  fgNumber  String
+  totalQty  Int      @default(0)
+  status    String   @default("OPEN")   // OPEN, CLOSED
+  qrCode    String?                      // menyimpan kode QR untuk box
+  printed   Boolean  @default(false)     // status cetak ulang
+  items     PackingItem[]
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model PackingItem {

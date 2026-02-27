@@ -42,6 +42,17 @@ export class LineMastersController {
     return this.lineMastersService.getNgCategories(code);
   }
 
+  // ========== QC NG CATEGORIES ==========
+  @Get(':code/qc-ng-categories')
+  async getQcNgCategories(@Param('code') code: string) {
+    return this.lineMastersService.getQcNgCategories(code);
+  }
+
+  @Patch(':code/qc-ng-categories')
+  async updateQcNgCategories(@Param('code') code: string, @Body() categories: string[]) {
+    return this.lineMastersService.updateNgCategories(code, 'qc', categories);
+  }
+
   // ========== ENDPOINT BARU UNTUK SEWING CONFIG ==========
   @Get(':code/sewing-config')
   async getSewingConfig(@Param('code') code: string) {
@@ -53,6 +64,18 @@ export class LineMastersController {
     return this.lineMastersService.updateSewingConfig(code, sewingConfig);
   }
   // ========================================================
+
+  // ========== ENDPOINT UNTUK PACKING CONFIG ==========
+  @Get(':code/packing-config')
+  async getPackingConfig(@Param('code') code: string) {
+    return this.lineMastersService.getPackingConfig(code);
+  }
+
+  @Patch(':code/packing-config')
+  async updatePackingConfig(@Param('code') code: string, @Body() body: { packSize: number }) {
+    return this.lineMastersService.updatePackingConfig(code, body.packSize);
+  }
+  // =====================================================
 
   @Patch(':code')
   update(@Param('code') code: string, @Body() dto: any) {

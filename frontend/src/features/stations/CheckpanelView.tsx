@@ -7,8 +7,6 @@ import {
 import type { ProductionOrder, PatternPart } from '../../types/production';
 import { NG_REASONS as FALLBACK_NG_REASONS } from '../../lib/data';
 
-type ProductionOrderWithId = ProductionOrder & { id: string };
-
 const API_BASE_URL = 'http://localhost:3000';
 const STORAGE_KEY_OP = 'nextg_cp_active_op';
 const STORAGE_KEY_GLOBAL_LOGS = 'nextg_cp_recent_logs';
@@ -89,8 +87,8 @@ export const CheckPanelView = ({
   addLog: (msg: string, type: any) => void;
   onNavigate: (tab: string) => void;
 }) => {
-  const [ops, setOps] = useState<ProductionOrderWithId[]>([]);
-  const [actOp, setActOp] = useState<ProductionOrderWithId | null>(null);
+  const [ops, setOps] = useState<ProductionOrder[]>([]);
+  const [actOp, setActOp] = useState<ProductionOrder | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpd, setLastUpd] = useState('');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -105,7 +103,6 @@ export const CheckPanelView = ({
   const [categories, setCategories] = useState<string[]>([]);
   const [refTrigger, setRefTrigger] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  // 🔥 Ref untuk mencegah double submit (race condition)
   const isSubmittingRef = useRef(false);
 
   const getAuthHeaders = () => {
@@ -135,7 +132,8 @@ export const CheckPanelView = ({
     try {
       const res = await fetch(`${API_BASE_URL}/production-orders?station=CP`);
       if (res.ok) {
-        setOps(await res.json());
+        const data: ProductionOrder[] = await res.json();
+        setOps(data);
         setLastUpd(
           new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         );
@@ -157,7 +155,7 @@ export const CheckPanelView = ({
     fetchOps();
   }, [refTrigger]);
 
-  const loadPatterns = async (op: ProductionOrderWithId) => {
+  const loadPatterns = async (op: ProductionOrder) => {
     setPatterns([]);
     setActPtrn(null);
     const lineCode = op.lineCode || 'K1YH';
@@ -177,7 +175,6 @@ export const CheckPanelView = ({
     }
   };
 
-  // 🔥 Ubah endpoint dari pattern-progress menjadi check-panel-inspections
   const fetchProg = async (opId: string) => {
     try {
       const res = await fetch(`${API_BASE_URL}/production-orders/${opId}/check-panel-inspections`, {
@@ -191,7 +188,6 @@ export const CheckPanelView = ({
         });
         setProg(m);
       } else {
-        // Jika gagal (misal 404), set prog kosong
         setProg({});
       }
     } catch {
@@ -238,7 +234,7 @@ export const CheckPanelView = ({
     setTimeout(() => setToast(null), 2000);
   };
 
-  const selectOp = (op: ProductionOrderWithId) => {
+  const selectOp = (op: ProductionOrder) => {
     setActOp(op);
     loadPatterns(op);
     fetchProg(op.id);
@@ -257,7 +253,6 @@ export const CheckPanelView = ({
   };
 
   const submitInspection = async (isGood: boolean, reason: string = '') => {
-    // 🔥 Cegah double submit dengan ref
     if (isSubmittingRef.current) return;
     if (!actOp || !actPtrn) return showToast('Pilih OP dan pola terlebih dahulu', 'error');
     const idx = patterns.findIndex((p) => p.name === actPtrn.name);
@@ -272,7 +267,6 @@ export const CheckPanelView = ({
     const token = localStorage.getItem('nextg_token');
     if (!token) return showToast('Token tidak ditemukan', 'error');
 
-    // 🔥 Set ref dan state submitting
     isSubmittingRef.current = true;
     setSubmitting(true);
 
@@ -296,10 +290,8 @@ export const CheckPanelView = ({
         const newNg = cur.ng + (isGood ? 0 : 1);
         const completed = newGood + newNg >= target;
 
-        // Update state lokal segera
         setProg((p) => ({ ...p, [idx]: { good: newGood, ng: newNg, completed } }));
 
-        // Simpan log ke localStorage
         const log: InspectionLog = {
           id: `L-${Date.now()}`,
           time: new Date().toLocaleTimeString(),
@@ -313,23 +305,22 @@ export const CheckPanelView = ({
         localStorage.setItem(STORAGE_KEY_GLOBAL_LOGS, JSON.stringify([log, ...recent].slice(0, 50)));
 
         showToast(isGood ? 'Good +1' : 'NG Recorded', isGood ? 'success' : 'error');
+        
+        // 🔄 Refresh data dari server
+        await fetchOps(); // panggil fungsi refresh
         setRefTrigger((prev) => prev + 1);
 
-        // Jika pola selesai, pindah ke pola berikutnya
         if (completed) {
           const nextIdx = patterns.findIndex((_, i) => i !== idx && !(prog[i]?.completed));
           if (nextIdx !== -1) {
             setActPtrn(patterns[nextIdx]);
           } else {
-            // Semua pola selesai, kembali ke daftar OP
             back();
           }
         }
       } else {
         const err = await res.json();
-        // 🔥 Tangani kasus "Pattern already completed" dengan refresh progress
         if (err.message === 'Pattern already completed') {
-          // Refresh progress dari server
           await fetchProg(actOp.id);
           showToast('Pola ini sudah selesai (sinkronisasi data)', 'error');
         } else {
@@ -339,7 +330,6 @@ export const CheckPanelView = ({
     } catch {
       showToast('Network error', 'error');
     } finally {
-      // 🔥 Reset ref dan state submitting
       isSubmittingRef.current = false;
       setSubmitting(false);
     }
@@ -451,7 +441,7 @@ export const CheckPanelView = ({
       </div>
 
       {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {/* Left Column - OP List */}
         <div className="lg:col-span-1">
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden h-full">
@@ -498,7 +488,7 @@ export const CheckPanelView = ({
                     <p className="text-slate-500 dark:text-slate-400">Waiting for incoming orders...</p>
                   </div>
                 ) : (
-                  ops.map((op) => (
+                  ops.map((op: ProductionOrder) => (
                     <div
                       key={op.id}
                       className={`group p-4 rounded-2xl border-2 transition-all duration-300 cursor-pointer mb-2 ${

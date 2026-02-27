@@ -61,26 +61,111 @@ export class PackingService {
   async closeSession(sessionId: string) {
     const session = await this.prisma.packingSession.findUnique({
       where: { id: sessionId },
-      include: { items: { include: { op: true } } },
+      include: {
+        items: {
+          include: {
+            op: {
+              include: { line: true }  // ambil line dari OP pertama
+            }
+          }
+        }
+      }
     });
     if (!session) throw new NotFoundException('Session not found');
     if (session.status !== 'OPEN') throw new BadRequestException('Session already closed');
 
-    if (session.totalQty !== 100) {
-      throw new BadRequestException(`Session total is ${session.totalQty}, must be exactly 100`);
+    // Ambil pack size dari line (asumsi semua item dari line yang sama)
+    const firstItem = session.items[0];
+    if (!firstItem) throw new BadRequestException('Session has no items');
+    const line = firstItem.op.line;
+    let packSize = 50;
+    if (line && line.packingConfig) {
+      const config = line.packingConfig as any;
+      if (config && typeof config.packSize === 'number') {
+        packSize = config.packSize;
+      }
     }
 
-    // Generate QR code
-    const qrCode = `PACK-${session.fgNumber}-${Date.now()}`;
+    if (session.totalQty !== packSize) {
+      throw new BadRequestException(`Session total is ${session.totalQty}, must be exactly ${packSize}`);
+    }
 
-    // Update session status
-    await this.prisma.packingSession.update({
+    // Generate QR code unik (misal berdasarkan ID sesi)
+    const qrCode = `PACK-${session.id}`;
+
+    // Update session: status CLOSED, simpan qrCode
+    const updated = await this.prisma.packingSession.update({
       where: { id: sessionId },
-      data: { status: 'CLOSED' },
+      data: {
+        status: 'CLOSED',
+        qrCode: qrCode,
+      },
     });
 
-    // Opsional: simpan QR code di field baru jika ada
+    return { success: true, qrCode, session: updated };
+  }
 
-    return { success: true, qrCode, session };
+  async getActiveSession() {
+    // Asumsikan hanya satu sesi aktif per pengguna atau global.
+    // Bisa berdasarkan user atau mengambil sesi dengan status OPEN terbaru.
+    return this.prisma.packingSession.findFirst({
+      where: { status: 'OPEN' },
+      include: { items: { include: { op: true } } },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  async getHistory() {
+    // Ambil semua session yang sudah CLOSED, urut descending
+    return this.prisma.packingSession.findMany({
+      where: { status: 'CLOSED' },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: {
+          include: { op: { select: { opNumber: true } } },
+        },
+      },
+    });
+  }
+
+  async reprint(sessionId: string) {
+    const session = await this.prisma.packingSession.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session) throw new NotFoundException('Session not found');
+    if (session.status !== 'CLOSED') {
+      throw new BadRequestException('Only closed sessions can be reprinted');
+    }
+
+    // Tandai sebagai telah dicetak ulang (opsional)
+    await this.prisma.packingSession.update({
+      where: { id: sessionId },
+      data: { printed: true },
+    });
+
+    // Kembalikan data yang dibutuhkan untuk cetak ulang
+    return {
+      qrCode: session.qrCode,
+      fgNumber: session.fgNumber,
+      totalQty: session.totalQty,
+      createdAt: session.createdAt,
+    };
+  }
+
+  async cancelSession(sessionId: string) {
+    const session = await this.prisma.packingSession.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session) throw new NotFoundException('Session not found');
+    if (session.status !== 'OPEN') {
+      throw new BadRequestException('Only open sessions can be canceled');
+    }
+
+    // Hapus session (item akan ikut terhapus karena onDelete: Cascade di skema)
+    await this.prisma.packingSession.delete({
+      where: { id: sessionId },
+    });
+
+    return { success: true };
   }
 }

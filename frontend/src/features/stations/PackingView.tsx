@@ -1,34 +1,60 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Package, Box, PackageOpen, RefreshCw, Search, TrendingUp, Users, Clock, Truck, CheckSquare } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } from 'react';
+import {
+  Package, Box, RefreshCw, Search, Plus, Printer, X, CheckCircle,
+  Layers, Save, Loader2, QrCode, History, Delete, Minus
+} from 'lucide-react';
 import type { ProductionOrder } from '../../types/production';
 
 const API_BASE_URL = 'http://localhost:3000';
 
-interface PackingBox {
-  id: string; boxNumber: string; itemNumberFG: string; styleCode: string; qty: number;
-  opsIncluded: Array<{ opNumber: string, qty: number }>; packedAt: string; packedBy: string; qrCode: string;
+interface PackingSession {
+  id: string;
+  fgNumber: string;
+  totalQty: number;
+  status: 'OPEN' | 'CLOSED';
+  qrCode?: string;
+  printed?: boolean;
+  items: PackingItem[];
+  createdAt: string;
+  updatedAt: string;
 }
 
-// Local extension to ProductionOrder to include packedQty (from API)
-interface ProductionOrderWithPacked extends ProductionOrder {
-  packedQty?: number;
+interface PackingItem {
+  id: string;
+  sessionId: string;
+  opId: string;
+  qty: number;
+  op?: ProductionOrder;
 }
 
-interface MetricCardProps { title: string; value: number | string; icon: any; color?: 'indigo' | 'emerald' | 'amber' | 'blue'; subtitle?: string; suffix?: string; }
+interface PackingOp extends ProductionOrder {
+  remainingPacking: number; // qtyQC - qtyPacking
+}
 
-const MetricCard = ({ title, value, icon: Icon, color = 'indigo', subtitle, suffix }: MetricCardProps) => {
-  const c = {
+interface PackingSessionHistory extends PackingSession {}
+
+// Metric Card Component
+const MetricCard = ({ title, value, icon: Icon, color = 'indigo', subtitle, suffix }: {
+  title: string;
+  value: number | string;
+  icon: React.ElementType;
+  color?: 'indigo' | 'emerald' | 'amber' | 'blue';
+  subtitle?: string;
+  suffix?: string;
+}) => {
+  const colors = {
     indigo: { bg: 'from-indigo-100 to-indigo-50', icon: 'text-indigo-600', darkBg: 'from-indigo-900/20 to-indigo-900/10' },
     emerald: { bg: 'from-emerald-100 to-emerald-50', icon: 'text-emerald-600', darkBg: 'from-emerald-900/20 to-emerald-900/10' },
     amber: { bg: 'from-amber-100 to-amber-50', icon: 'text-amber-600', darkBg: 'from-amber-900/20 to-amber-900/10' },
     blue: { bg: 'from-blue-100 to-blue-50', icon: 'text-blue-600', darkBg: 'from-blue-900/20 to-blue-900/10' }
   }[color];
+
   return (
     <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-lg hover:shadow-xl transition-all duration-300">
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">{title}</div>
-        <div className={`w-10 h-10 bg-gradient-to-br ${c.bg} dark:${c.darkBg} rounded-lg flex items-center justify-center`}>
-          <Icon size={18} className={c.icon} />
+        <div className={`w-10 h-10 bg-gradient-to-br ${colors.bg} dark:${colors.darkBg} rounded-lg flex items-center justify-center`}>
+          <Icon size={18} className={colors.icon} />
         </div>
       </div>
       <div className="text-3xl font-bold text-slate-900 dark:text-white">
@@ -39,142 +65,754 @@ const MetricCard = ({ title, value, icon: Icon, color = 'indigo', subtitle, suff
   );
 };
 
-export const PackingView = () => {
-  const [ops, setOps] = useState<ProductionOrderWithPacked[]>([]);
-  const [sel, setSel] = useState<ProductionOrderWithPacked[]>([]);
-  const [boxes, setBoxes] = useState<PackingBox[]>([]);
-  const [qty, setQty] = useState(0);
-  const [creating, setCreating] = useState(false);
-  const [printing, setPrinting] = useState(false);
-  const [search, setSearch] = useState('');
-  const [ref, setRef] = useState(false);
-  const [upd, setUpd] = useState('');
+// Item Row Component
+const SessionItemRow = ({ item, onRemove }: { item: PackingItem; onRemove: () => void }) => (
+  <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+    <div>
+      <div className="font-mono font-bold text-sm text-slate-900 dark:text-white">{item.op?.opNumber}</div>
+      <div className="text-xs text-slate-500 dark:text-slate-400">Qty: {item.qty} sets</div>
+    </div>
+    <button onClick={onRemove} className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded-lg text-rose-600">
+      <X size={16} />
+    </button>
+  </div>
+);
 
-  const boxToday = 0; const pcsToday = 0; const eff = 0; const avgTime = 0; const operators = 0;
+// Simple Numpad with only 1,5,10,50
+const SimpleNumpad = ({ value, onChange, max }: { value: number; onChange: (val: number) => void; max: number }) => {
+  const quickAmounts = [1, 5, 10, 50];
+
+  const handleSet = (amt: number) => {
+    // Jika nilai sekarang + amt <= max, maka tambah; jika melebihi max, set ke max
+    const newVal = value + amt;
+    if (newVal <= max) {
+      onChange(newVal);
+    } else {
+      onChange(max);
+    }
+  };
+
+  const handleClear = () => onChange(0);
+
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg">
+      <div className="mb-3">
+        <div className="text-sm text-slate-500 dark:text-slate-400 mb-1">Quantity</div>
+        <div className="text-4xl font-bold text-slate-900 dark:text-white text-center py-3 bg-slate-100 dark:bg-slate-900 rounded-xl">
+          {value}
+        </div>
+      </div>
+
+      {/* Quick buttons grid 2x2 */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        {quickAmounts.map(amt => (
+          <button
+            key={amt}
+            onClick={() => handleSet(amt)}
+            className="py-4 bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-xl font-bold text-2xl hover:from-indigo-600 hover:to-indigo-700 transition-all shadow-md"
+          >
+            +{amt}
+          </button>
+        ))}
+      </div>
+
+      {/* Clear button */}
+      <button
+        onClick={handleClear}
+        className="w-full py-3 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-xl text-slate-800 dark:text-white font-bold flex items-center justify-center gap-2"
+      >
+        <Delete size={18} /> Clear
+      </button>
+    </div>
+  );
+};
+
+// History Modal
+const HistoryModal = ({ show, onClose, history, onReprint, loading }: any) => {
+  if (!show) return null;
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+          <h3 className="text-xl font-bold">Packing History</h3>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="p-6 overflow-y-auto">
+          {loading ? (
+            <div className="flex justify-center py-8"><Loader2 className="animate-spin text-indigo-600" size={32} /></div>
+          ) : history.length === 0 ? (
+            <p className="text-center text-slate-500 py-8">No packing history yet.</p>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-sm text-slate-500">
+                  <th className="pb-3">Date</th>
+                  <th className="pb-3">FG Number</th>
+                  <th className="pb-3">Qty</th>
+                  <th className="pb-3">Items</th>
+                  <th className="pb-3">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((s: PackingSessionHistory) => (
+                  <tr key={s.id} className="border-t border-slate-100 dark:border-slate-700">
+                    <td className="py-3">{new Date(s.createdAt).toLocaleString()}</td>
+                    <td className="py-3">{s.fgNumber}</td>
+                    <td className="py-3">{s.totalQty}</td>
+                    <td className="py-3">
+                      {s.items.map(item => `${item.op?.opNumber} (${item.qty})`).join(', ')}
+                    </td>
+                    <td className="py-3">
+                      <button
+                        onClick={() => onReprint(s.id)}
+                        className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                      >
+                        Reprint
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const PackingView = () => {
+  const [ops, setOps] = useState<PackingOp[]>([]);
+  const [search, setSearch] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState('');
+
+  const [activeSession, setActiveSession] = useState<PackingSession | null>(null);
+  const [loadingSession, setLoadingSession] = useState(false);
+  const [selectedFG, setSelectedFG] = useState('');
+  const [fgOptions, setFgOptions] = useState<string[]>([]);
+
+  const [selectedOpId, setSelectedOpId] = useState<string>('');
+  const [inputQty, setInputQty] = useState<number>(0);
+  const [adding, setAdding] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+
+  // History
+  const [history, setHistory] = useState<PackingSessionHistory[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Ref untuk scroll & data sebelumnya
+  const prevOpsRef = useRef<PackingOp[]>([]);
+  const leftListRef = useRef<HTMLDivElement>(null);
+  const prevScrollTop = useRef(0);
+
+  // ========== NEW STATE FOR PACK SIZE ==========
+  const [packSize, setPackSize] = useState<number>(50);
+  // ==============================================
+
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('nextg_token');
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  };
 
   const fetchOps = useCallback(async () => {
-    setRef(true);
+    setRefreshing(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/production-orders?station=PACKING`);
+      const res = await fetch(`${API_BASE_URL}/production-orders?station=QC`, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
-        setOps(await res.json());
-        setUpd(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        const data: ProductionOrder[] = await res.json();
+        const withRemaining: PackingOp[] = data.map(op => ({
+          ...op,
+          remainingPacking: (op.qtyQC || 0) - (op.qtyPacking || 0)
+        })).filter(op => op.remainingPacking > 0);
+
+        // Only update if data changed
+        if (JSON.stringify(prevOpsRef.current) !== JSON.stringify(withRemaining)) {
+          setOps(withRemaining);
+          prevOpsRef.current = withRemaining;
+        }
+
+        setLastUpdate(new Date().toLocaleTimeString());
+
+        const fgs = [...new Set(withRemaining.map(op => op.itemNumberFG))];
+        setFgOptions(fgs);
       }
-    } catch { console.error('Failed to fetch packing OPs:'); } finally { setRef(false); }
+    } catch (error) {
+      console.error('Failed to fetch packing OPs', error);
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
-  const fetchBoxes = useCallback(async () => setBoxes([]), []);
+  const fetchActiveSession = useCallback(async () => {
+    setLoadingSession(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/packing/sessions/active`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.status === 404) {
+        setActiveSession(null);
+      } else if (res.ok) {
+        const session = await res.json();
+        setActiveSession(session);
+        if (session) setSelectedFG(session.fgNumber);
+      } else {
+        console.error('Failed to fetch active session', res.status);
+        setActiveSession(null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch active session', error);
+      setActiveSession(null);
+    } finally {
+      setLoadingSession(false);
+    }
+  }, []);
 
-  useEffect(() => { fetchOps(); fetchBoxes(); const i = setInterval(fetchOps, 10000); return () => clearInterval(i); }, [fetchOps, fetchBoxes]);
+  const fetchHistory = useCallback(async () => {
+    setLoadingHistory(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/packing/history`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        setHistory(await res.json());
+      }
+    } catch (error) {
+      console.error('Failed to fetch packing history', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
 
-  const toggleOp = (op: ProductionOrderWithPacked) => setSel(p => p.some(o => o.id === op.id) ? p.filter(o => o.id !== op.id) : [...p, op]);
+  // ========== FETCH PACK SIZE WHEN ACTIVE SESSION CHANGES ==========
+  useEffect(() => {
+    if (activeSession && activeSession.items && activeSession.items.length > 0) {
+      const firstOp = activeSession.items[0].op;
+      if (firstOp && firstOp.lineCode) {
+        fetch(`${API_BASE_URL}/line-masters/${firstOp.lineCode}/packing-config`, {
+          headers: getAuthHeaders(),
+        })
+          .then(res => res.ok ? res.json() : { packSize: 50 })
+          .then(data => setPackSize(data.packSize))
+          .catch(() => setPackSize(50));
+      } else {
+        setPackSize(50);
+      }
+    } else {
+      setPackSize(50);
+    }
+  }, [activeSession]);
+  // =================================================================
 
-  const addQty = (n: number) => { const v = qty + n; if (v <= 100) setQty(v); else alert('Cannot exceed 100 pieces per box'); };
-  const removeQty = (n: number) => setQty(Math.max(0, qty - n));
+  useEffect(() => {
+    fetchOps();
+    fetchActiveSession();
+    fetchHistory();
+    const interval = setInterval(() => {
+      fetchOps();
+      fetchActiveSession();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [fetchOps, fetchActiveSession, fetchHistory]);
 
-  const createBox = () => {
-    if (sel.length === 0) return alert('Please select at least one OP');
-    if (qty !== 100) return alert('Box must contain exactly 100 pieces');
-    setCreating(true);
-    setTimeout(() => {
-      const newBox: PackingBox = {
-        id: Date.now().toString(),
-        boxNumber: `BOX-${String(boxes.length + 1).padStart(3, '0')}`,
-        itemNumberFG: 'N/A',
-        styleCode: sel[0].styleCode,
-        qty,
-        opsIncluded: sel.map(op => ({ opNumber: op.opNumber, qty: Math.floor(qty / sel.length) })),
-        packedAt: new Date().toISOString(),
-        packedBy: 'Current User',
-        qrCode: `BOX-${String(boxes.length + 1).padStart(3, '0')}-QR`
-      };
-      setBoxes([newBox, ...boxes]);
-      setSel([]); setQty(0); setCreating(false);
-      alert(`Box ${newBox.boxNumber} created successfully!`);
-    }, 1000);
+  const filteredOps = useMemo(() => {
+    if (search.trim() === '') return ops;
+    const lower = search.toLowerCase();
+    return ops.filter(op => 
+      op.opNumber.toLowerCase().includes(lower) || 
+      op.styleCode.toLowerCase().includes(lower) ||
+      op.itemNumberFG?.toLowerCase().includes(lower)
+    );
+  }, [ops, search]);
+
+  // Scroll persistence
+  useLayoutEffect(() => {
+    if (leftListRef.current) {
+      prevScrollTop.current = leftListRef.current.scrollTop;
+    }
+  });
+
+  useEffect(() => {
+    if (leftListRef.current && prevScrollTop.current > 0) {
+      leftListRef.current.scrollTop = prevScrollTop.current;
+    }
+  }, [filteredOps]);
+
+  const handleLeftScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    prevScrollTop.current = e.currentTarget.scrollTop;
   };
 
-  const printLabel = (box: PackingBox) => {
-    setPrinting(true);
-    setTimeout(() => { setPrinting(false); alert(`Printing label for ${box.boxNumber}`); }, 1500);
+  const createSession = async () => {
+    if (!selectedFG) return;
+    setLoadingSession(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/packing/session`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ fgNumber: selectedFG })
+      });
+      if (res.ok) {
+        const session = await res.json();
+        setActiveSession(session);
+      } else {
+        const err = await res.json();
+        alert(`Gagal membuat sesi: ${err.message || res.status}`);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Network error saat membuat sesi');
+    } finally {
+      setLoadingSession(false);
+    }
   };
 
-  const filtered = ops.filter(op => op.opNumber.toLowerCase().includes(search.toLowerCase()) || op.styleCode.toLowerCase().includes(search.toLowerCase()));
+  const addItem = async () => {
+    if (!activeSession || !selectedOpId || inputQty <= 0) return;
+    const op = ops.find(o => o.id === selectedOpId);
+    if (!op) return;
+    if (inputQty > op.remainingPacking) {
+      alert(`Maksimal ${op.remainingPacking} sets tersisa`);
+      return;
+    }
+    setAdding(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/packing/add`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          sessionId: activeSession.id,
+          opId: selectedOpId,
+          qty: inputQty
+        })
+      });
+      if (res.ok) {
+        const updatedSession = await res.json();
+        setActiveSession(updatedSession);
+        setSelectedOpId('');
+        setInputQty(0);
+        await fetchOps(); // refresh remaining
+        await fetchActiveSession(); // refresh session data
+      } else {
+        const err = await res.json();
+        alert(`Gagal: ${err.message}`);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const removeItem = async (itemId: string) => {
+    // Not implemented
+    alert('Fungsi hapus item belum tersedia');
+  };
+
+  const closeSession = async () => {
+    if (!activeSession) return;
+    // Validasi menggunakan packSize
+    if (activeSession.totalQty !== packSize) {
+      alert(`Sesi harus mencapai ${packSize} sets untuk ditutup`);
+      return;
+    }
+    setClosing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/packing/close`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ sessionId: activeSession.id })
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setQrCode(result.qrCode);
+        setActiveSession(null);
+        setSelectedFG('');
+        await fetchOps(); // refresh remaining
+        await fetchActiveSession(); // ensure no active session
+        fetchHistory(); // refresh history
+      } else {
+        alert('Gagal menutup sesi');
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  const printQR = () => {
+    if (qrCode) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head><title>Print QR</title></head>
+            <body style="text-align:center; padding:50px;">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrCode}" />
+              <p>${qrCode}</p>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    }
+  };
+
+  const reprintQR = async (sessionId: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/packing/reprint/${sessionId}`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setQrCode(data.qrCode);
+      } else {
+        alert('Gagal mencetak ulang');
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const totalRemaining = ops.reduce((sum, op) => sum + op.remainingPacking, 0);
+  const totalPackedToday = history.filter(s => new Date(s.createdAt).toDateString() === new Date().toDateString()).reduce((sum, s) => sum + s.totalQty, 0);
+
+  const selectedOp = ops.find(o => o.id === selectedOpId);
+  const maxQty = selectedOp?.remainingPacking || 0;
 
   return (
     <div className="animate-in fade-in duration-300">
+      {/* QR Modal */}
+      {qrCode && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 p-8 rounded-3xl shadow-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
+            <div className="absolute top-6 right-6">
+              <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-400 rounded-xl flex items-center justify-center">
+                <CheckCircle size={24} className="text-white" />
+              </div>
+            </div>
+            <div className="text-center mb-8">
+              <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Box Created!</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300">QR Code generated successfully</p>
+            </div>
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border-2 border-slate-100 dark:border-slate-800 mb-8">
+              <div className="flex justify-center mb-4">
+                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrCode}`} alt="QR Code" className="w-48 h-48 border-4 border-white dark:border-slate-800 rounded-xl" />
+              </div>
+              <div className="text-center font-mono text-sm text-slate-600 dark:text-slate-300 break-all">{qrCode}</div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setQrCode(null)} className="flex-1 py-3.5 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+                Close
+              </button>
+              <button onClick={printQR} className="flex-1 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl font-semibold flex justify-center items-center gap-3">
+                <Printer size={18} /> Print
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      <HistoryModal
+        show={showHistory}
+        onClose={() => setShowHistory(false)}
+        history={history}
+        onReprint={reprintQR}
+        loading={loadingHistory}
+      />
+
+      {/* Header */}
       <div className="bg-gradient-to-br from-white to-indigo-50/30 dark:from-slate-900 dark:to-indigo-900/10 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden mb-8">
         <div className="p-8">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
             <div className="flex items-center gap-4">
               <div className="relative">
-                <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg"><Package size={28} className="text-white"/></div>
-                <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-400 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-lg"><Truck size={16} className="text-white"/></div>
+                <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <Package size={28} className="text-white" />
+                </div>
+                <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-400 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-lg">
+                  <Box size={16} className="text-white" />
+                </div>
               </div>
-              <div><h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">Packing<span className="text-xs px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-full font-bold">FINAL PACKING</span></h1></div>
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  Packing
+                  <span className="text-xs px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-full font-bold">
+                    BOXING SYSTEM
+                  </span>
+                </h1>
+              </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
               <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl shadow-lg">
-                <div className="flex flex-col"><div className="text-xs font-medium opacity-90">Boxes Today</div><div className="text-2xl font-bold">{boxToday}</div></div>
-                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm"><Box size={20} className="text-white"/></div>
+                <div className="flex flex-col">
+                  <div className="text-xs font-medium opacity-90">Remaining Sets</div>
+                  <div className="text-2xl font-bold">{totalRemaining}</div>
+                </div>
+                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                  <Layers size={20} className="text-white" />
+                </div>
               </div>
-              <button onClick={fetchOps} disabled={ref} className="group px-5 py-3 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all duration-300 shadow-sm hover:shadow-md">
-                {ref ? <RefreshCw size={18} className="animate-spin"/> : <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-500"/>}Refresh
+              <button
+                onClick={() => { fetchOps(); fetchActiveSession(); }}
+                disabled={refreshing}
+                className="group px-5 py-3 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all duration-300 shadow-sm hover:shadow-md"
+              >
+                {refreshing ? <RefreshCw size={18} className="animate-spin" /> : <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-500" />}
+                Refresh
+              </button>
+              <button
+                onClick={() => { fetchHistory(); setShowHistory(true); }}
+                className="px-5 py-3 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl font-semibold flex items-center gap-2 hover:from-purple-700 hover:to-purple-600 transition-all"
+              >
+                <History size={18} />
+                History
               </button>
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-8 pb-8">
-          <MetricCard title="Boxes Created" value={boxToday} icon={Box} color="blue" suffix="boxes" subtitle={`${pcsToday} pieces total`} />
-          <MetricCard title="Packing Efficiency" value={`${eff}%`} icon={TrendingUp} color="emerald" subtitle="Target: 95%" />
-          <MetricCard title="Avg Time/Box" value={avgTime} icon={Clock} color="amber" suffix="min" subtitle="Target: 10 min" />
-          <MetricCard title="Active Operators" value={operators} icon={Users} color="indigo" subtitle="Currently packing" />
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-6 px-8 pb-8">
+          <MetricCard title="Remaining to Pack" value={totalRemaining} icon={Package} color="indigo" suffix="sets" subtitle="From QC" />
+          <MetricCard title="Packed Today" value={totalPackedToday} icon={Box} color="emerald" suffix="sets" />
+          <MetricCard title="Active Session" value={activeSession ? `${activeSession.totalQty}/${packSize}` : 'None'} icon={Layers} color="amber" subtitle={activeSession ? `FG: ${activeSession.fgNumber}` : 'No active session'} />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* LEFT COLUMN - AVAILABLE OPS */}
-        <div className="lg:col-span-2 space-y-8">
-          <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+      {/* Main Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {/* Left Column - Available OPs */}
+        <div className="lg:col-span-1">
+          <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden h-full">
             <div className="p-6 border-b border-slate-100 dark:border-slate-700/50">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="flex items-center gap-3"><div className="w-10 h-10 bg-gradient-to-br from-indigo-100 to-indigo-50 dark:from-indigo-900/30 dark:to-indigo-900/10 rounded-xl flex items-center justify-center"><PackageOpen size={20} className="text-indigo-600 dark:text-indigo-400"/></div><div><h3 className="font-bold text-slate-900 dark:text-white">Available for Packing</h3><p className="text-sm text-slate-500 dark:text-slate-400">Select OPs to include in the current box</p></div></div>
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="relative"><div className="absolute left-3 top-1/2 -translate-y-1/2"><Search size={18} className="text-slate-400"/></div><input type="text" placeholder="Search OP number or style..." className="pl-10 pr-4 py-2.5 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/30 transition-all" value={search} onChange={e => setSearch(e.target.value)}/></div>
-                  <div className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full"><span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{ops.length} Available</span></div>
+                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-100 to-indigo-50 dark:from-indigo-900/30 dark:to-indigo-900/10 rounded-xl flex items-center justify-center">
+                    <Package size={20} className="text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 dark:text-white">Available from QC</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Select OP to add to session</p>
+                  </div>
+                </div>
+                <div className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full">
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{ops.length}</span>
                 </div>
               </div>
             </div>
-            <div className="p-6">
-              {filtered.length === 0 ? (
-                <div className="text-center py-12"><div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-4"><PackageOpen size={32} className="text-slate-400"/></div><h4 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">No OPs Available</h4><p className="text-slate-500 dark:text-slate-400">All production orders have been packed</p></div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {filtered.map(op => {
-                    const isSel = sel.some(o => o.id === op.id);
-                    // Use cpGoodQty (from Check Panel) as available quantity for packing
-                    const avail = op.cpGoodQty || 0;
-                    // Use packedQty (from API) if available, else default to 0
-                    const packed = op.packedQty || 0;
-                    const bal = avail - packed;
+            <div className="p-4">
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search OP, style, FG..."
+                  className="w-full pl-10 pr-4 py-2.5 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/30 transition-all"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+              </div>
+              <div
+                className="space-y-2 max-h-[500px] overflow-y-auto pr-1"
+                ref={leftListRef}
+                onScroll={handleLeftScroll}
+              >
+                {filteredOps.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <Package size={24} className="text-slate-400" />
+                    </div>
+                    <p className="text-slate-500 dark:text-slate-400">No OPs ready for packing</p>
+                  </div>
+                ) : (
+                  filteredOps.map(op => {
+                    const isSelected = selectedOpId === op.id;
                     return (
-                      <div key={op.id} className={`group p-6 rounded-2xl border-2 transition-all duration-300 cursor-pointer hover:-translate-y-1 ${isSel ? 'border-indigo-500 bg-gradient-to-r from-indigo-50 to-white dark:from-indigo-900/20 dark:to-slate-800 shadow-lg' : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-lg'}`} onClick={() => toggleOp(op)}>
-                        <div className="flex items-start justify-between mb-4">
-                          <div><div className="font-mono font-bold text-xl text-slate-900 dark:text-white">{op.opNumber}</div><div className="text-sm text-slate-600 dark:text-slate-300">Style: {op.styleCode}</div></div>
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isSel ? 'bg-gradient-to-r from-indigo-500 to-indigo-400 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700'}`}>{isSel ? <CheckSquare size={16} className="text-white"/> : ''}</div>
+                      <div
+                        key={op.id}
+                        className={`group p-4 rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
+                          isSelected
+                            ? 'border-indigo-500 bg-gradient-to-r from-indigo-50 to-white dark:from-indigo-900/20 dark:to-slate-800 shadow-lg'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-lg'
+                        }`}
+                        onClick={() => setSelectedOpId(op.id)}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <div className="font-mono font-bold text-lg text-slate-900 dark:text-white">{op.opNumber}</div>
+                            <div className="text-sm text-slate-600 dark:text-slate-400">Style: {op.styleCode}</div>
+                            <div className="text-xs text-slate-500 mt-1">FG: {op.itemNumberFG}</div>
+                          </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-4 mb-4">
-                          <div className="text-center"><div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Available</div><div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{avail}</div></div>
-                          <div className="text-center"><div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Packed</div><div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{packed}</div></div>
-                          <div className="text-center"><div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Balance</div><div className={`text-2xl font-bold ${bal > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>{bal}</div></div>
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                            <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Sisa: {op.remainingPacking}</span>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-bold text-slate-900 dark:text-white">{op.qtyQC || 0}</div>
+                            <div className="text-xs text-slate-500">total QC good</div>
+                          </div>
                         </div>
-                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden"><div className="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 rounded-full transition-all duration-1000" style={{ width: `${(packed / avail) * 100 || 0}%` }}></div></div>
                       </div>
                     );
-                  })}
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column - Packing Session */}
+        <div className="lg:col-span-2">
+          <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-700/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-purple-100 to-purple-50 dark:from-purple-900/30 dark:to-purple-900/10 rounded-xl flex items-center justify-center">
+                  <Box size={20} className="text-purple-600 dark:text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-white">Packing Session</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {activeSession ? `Active: ${activeSession.fgNumber} (${activeSession.totalQty}/${packSize})` : 'No active session'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {loadingSession ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="animate-spin text-indigo-600" size={32} />
+                </div>
+              ) : !activeSession ? (
+                // Form buat sesi baru
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Pilih Finished Goods Number</label>
+                    <select
+                      className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/30 transition-all"
+                      value={selectedFG}
+                      onChange={e => setSelectedFG(e.target.value)}
+                    >
+                      <option value="">-- Pilih FG --</option>
+                      {fgOptions.map(fg => (
+                        <option key={fg} value={fg}>{fg}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={createSession}
+                    disabled={!selectedFG}
+                    className="w-full py-4 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <Plus size={20} />
+                    Buat Sesi Baru
+                  </button>
+                </div>
+              ) : (
+                // Tampilkan sesi aktif dengan tata letak compact
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Kolom kiri: informasi sesi dan daftar item */}
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="font-medium text-slate-700 dark:text-slate-300">Progress Box</span>
+                        {/* ===== MODIFIED: menggunakan packSize ===== */}
+                        <span className="text-slate-600 dark:text-slate-400">{activeSession.totalQty} / {packSize} sets</span>
+                      </div>
+                      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 rounded-full transition-all duration-500"
+                          // ===== MODIFIED: menggunakan packSize =====
+                          style={{ width: `${(activeSession.totalQty / packSize) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="font-semibold text-slate-800 dark:text-slate-200 mb-3">Items in this box</h4>
+                      <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                        {activeSession.items?.map(item => (
+                          <SessionItemRow
+                            key={item.id}
+                            item={item}
+                            onRemove={() => removeItem(item.id)}
+                          />
+                        ))}
+                        {(!activeSession.items || activeSession.items.length === 0) && (
+                          <p className="text-center text-slate-500 py-4">Belum ada item</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Kolom kanan: form tambah item dengan simple numpad */}
+                  <div className="bg-slate-50 dark:bg-slate-800/30 rounded-2xl p-5 border border-slate-200 dark:border-slate-700">
+                    <h4 className="font-semibold text-slate-800 dark:text-slate-200 mb-4">Tambah Item</h4>
+                    
+                    {/* Pilih OP */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Pilih OP</label>
+                      <select
+                        className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/30 transition-all"
+                        value={selectedOpId}
+                        onChange={e => setSelectedOpId(e.target.value)}
+                      >
+                        <option value="">-- Pilih OP --</option>
+                        {ops.map(op => (
+                          <option key={op.id} value={op.id}>
+                            {op.opNumber} (sisa {op.remainingPacking})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Simple Numpad */}
+                    <SimpleNumpad
+                      value={inputQty}
+                      onChange={setInputQty}
+                      max={maxQty}
+                    />
+
+                    {/* Tombol tambah */}
+                    <button
+                      onClick={addItem}
+                      disabled={adding || !selectedOpId || inputQty <= 0}
+                      className="mt-4 w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {adding ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                      Tambah ke Sesi
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
+
+            {/* Tombol tutup sesi (hanya muncul jika ada sesi aktif) */}
+            {activeSession && (
+              <div className="p-6 border-t border-slate-100 dark:border-slate-700/50">
+                <button
+                  onClick={closeSession}
+                  // ===== MODIFIED: menggunakan packSize untuk validasi disabled =====
+                  disabled={closing || activeSession.totalQty !== packSize}
+                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {closing ? <Loader2 size={20} className="animate-spin" /> : <QrCode size={20} />}
+                  Tutup Sesi & Generate QR
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

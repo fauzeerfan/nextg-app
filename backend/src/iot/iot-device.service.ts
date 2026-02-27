@@ -15,6 +15,7 @@ export interface PondOp {
   id: string;
   opNumber: string;
   style: string;
+  itemNumberFG: string;
   qtyEntan: number;
   qtyPond: number;
   multiplier: number;
@@ -29,6 +30,7 @@ export interface DeviceSession {
   pondState?: 'SELECT_OP' | 'SELECT_PATTERN' | 'CONFIRM_PATTERN' | 'COUNTING';
   pondOps?: PondOp[];
   pondOpIndex?: number;
+  pondSelectedOpId?: string; // <-- tambahkan
   pondPatternIndex?: number;
   pondConfirmChoice?: 'YES' | 'BACK';
   lastRefresh?: number;

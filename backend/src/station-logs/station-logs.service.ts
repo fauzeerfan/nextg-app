@@ -374,77 +374,73 @@ async processCheckPanel(dto: {
   // 2. CHECKPANEL (CP) STATION - PARTIAL RECEIVE
   // ==========================================
   
-  async scanInCP(dto: { qrCode: string, qty?: number }) {
-    const qrCode = dto.qrCode ? dto.qrCode.trim() : "";
-    console.log(`🔍 [Service] CP Scan: '${qrCode}' Input Qty: ${dto.qty}`);
+async scanInCP(dto: { qrCode: string; qty?: number }) {
+  const qrCode = dto.qrCode ? dto.qrCode.trim() : "";
+  console.log(`🔍 [Service] CP Scan: '${qrCode}' Input Qty: ${dto.qty}`);
 
-    // 1. Smart Lookup
-    let op = await (this.prisma as any).productionOrder.findUnique({ where: { qrCode } });
+  return this.prisma.$transaction(async (tx) => {
+    // 1. Cari OP
+    let op = await (tx as any).productionOrder.findUnique({ where: { qrCode } });
     if (!op) {
-        const parts = qrCode.split('-');
-        if (parts.length >= 1) {
-            const potentialOpNumber = parts[0];
-            op = await (this.prisma as any).productionOrder.findUnique({ 
-                where: { opNumber: potentialOpNumber } 
-            });
-            // Auto-heal QR
-            if (op) {
-                await (this.prisma as any).productionOrder.update({
-                    where: { id: op.id },
-                    data: { qrCode: qrCode }
-                });
-            }
+      const parts = qrCode.split('-');
+      if (parts.length >= 1) {
+        const potentialOpNumber = parts[0];
+        op = await (tx as any).productionOrder.findUnique({
+          where: { opNumber: potentialOpNumber },
+        });
+        if (op) {
+          // Auto-heal QR
+          await (tx as any).productionOrder.update({
+            where: { id: op.id },
+            data: { qrCode: qrCode },
+          });
         }
+      }
     }
 
     if (!op) throw new NotFoundException(`OP Not Found for QR: ${qrCode}`);
 
-    // Validasi Alur
     const validStations = ['CUTTING', 'CUTTING_ENTAN', 'CUTTING_POND', 'CP'];
     if (!validStations.includes(op.currentStation)) {
-        throw new BadRequestException(`OP at ${op.currentStation}, not ready for CP.`);
+      throw new BadRequestException(`OP at ${op.currentStation}, not ready for CP.`);
     }
 
-    // --- LOGIC PARSIAL ---
     const currentReceived = op.cpInQty || 0;
-    // Supply CP sekarang adalah output dari POND (qtyPond)
     const remainingToReceive = op.qtyPond - currentReceived;
-
-    // Jika input 0/kosong dari IoT, asumsikan terima SEMUA sisa
     let inputQty = dto.qty && Number(dto.qty) > 0 ? Number(dto.qty) : remainingToReceive;
 
     if (remainingToReceive <= 0 && inputQty > 0) {
-        throw new BadRequestException(`All items (${op.qtyPond}) already received at CP!`);
+      throw new BadRequestException(`All items (${op.qtyPond}) already received at CP!`);
     }
-
     if (inputQty > remainingToReceive) {
-        throw new BadRequestException(`OVER LIMIT! Sisa: ${remainingToReceive}, Input: ${inputQty}`);
+      throw new BadRequestException(`OVER LIMIT! Sisa: ${remainingToReceive}, Input: ${inputQty}`);
     }
 
-    // Update DB
-    await (this.prisma as any).productionOrder.update({
-        where: { id: op.id },
-        data: { 
-            currentStation: 'CP', 
-            status: 'WIP',
-            cpInQty: { increment: inputQty }
-        }
+    // 2. Update OP
+    await (tx as any).productionOrder.update({
+      where: { id: op.id },
+      data: {
+        currentStation: 'CP',
+        status: 'WIP',
+        cpInQty: { increment: inputQty },
+      },
     });
-    
-    // Log Transaksi Masuk
-    await (this.prisma as any).stationLog.create({
-        data: {
-            opId: op.id,
-            station: 'CP',
-            actionType: 'IN',
-            qtyGood: inputQty, 
-            timestamp: new Date()
-        }
+
+    // 3. Buat log
+    await (tx as any).stationLog.create({
+      data: {
+        opId: op.id,
+        station: 'CP',
+        actionType: 'IN',
+        qtyGood: inputQty,
+        timestamp: new Date(),
+      },
     });
 
     console.log(`🚀 [Service] CP Partial In: +${inputQty}. Total: ${currentReceived + inputQty}/${op.qtyPond}`);
     return op;
-  }
+  });
+}
 
   async submitCpResult(dto: any) {
       return this.prisma.$transaction(async (tx) => {
@@ -483,35 +479,37 @@ async processCheckPanel(dto: {
     const qrCode = dto.qrCode ? dto.qrCode.trim() : "";
     console.log(`🧵 [Service] Sewing Scan: '${qrCode}'`);
 
-    let op = await (this.prisma as any).productionOrder.findUnique({ where: { qrCode } });
-    if (!op) {
-        const parts = qrCode.split('-');
-        if (parts.length >= 1) op = await (this.prisma as any).productionOrder.findUnique({ where: { opNumber: parts[0] } });
-    }
-    
-    if (!op) throw new NotFoundException('QR Invalid / OP Not Found');
+    return this.prisma.$transaction(async (tx) => {
+      let op = await (tx as any).productionOrder.findUnique({ where: { qrCode } });
+      if (!op) {
+          const parts = qrCode.split('-');
+          if (parts.length >= 1) op = await (tx as any).productionOrder.findUnique({ where: { opNumber: parts[0] } });
+      }
+      
+      if (!op) throw new NotFoundException('QR Invalid / OP Not Found');
 
-    if (op.cpGoodQty <= 0) {
-        throw new BadRequestException(`No CP Stock available yet!`);
-    }
+      if (op.cpGoodQty <= 0) {
+          throw new BadRequestException(`No CP Stock available yet!`);
+      }
 
-    if (op.currentStation === 'CP') {
-        await (this.prisma as any).productionOrder.update({
-            where: { id: op.id },
-            data: { currentStation: 'SEWING', status: 'WIP' }
-        });
-        
-        await (this.prisma as any).stationLog.create({
-            data: {
-                opId: op.id,
-                station: 'SEWING',
-                actionType: 'IN',
-                qtyGood: op.cpGoodQty, 
-                timestamp: new Date()
-            }
-        });
-    }
-    return op;
+      if (op.currentStation === 'CP') {
+          await (tx as any).productionOrder.update({
+              where: { id: op.id },
+              data: { currentStation: 'SEWING', status: 'WIP' }
+          });
+          
+          await (tx as any).stationLog.create({
+              data: {
+                  opId: op.id,
+                  station: 'SEWING',
+                  actionType: 'IN',
+                  qtyGood: op.cpGoodQty, 
+                  timestamp: new Date()
+              }
+          });
+      }
+      return op;
+    });
   }
 
   async sewingStart(dto: any) {
@@ -589,24 +587,26 @@ async processCheckPanel(dto: {
   // ==========================================
 
   async scanInQC(qrCode: string) {
-    let op = await (this.prisma as any).productionOrder.findUnique({ where: { qrCode } });
-    if (!op) {
-         const parts = qrCode.split('-');
-         if (parts.length >= 1) op = await (this.prisma as any).productionOrder.findUnique({ where: { opNumber: parts[0] } });
-    }
-    
-    if (!op) throw new NotFoundException('QR Invalid');
+    return this.prisma.$transaction(async (tx) => {
+      let op = await (tx as any).productionOrder.findUnique({ where: { qrCode } });
+      if (!op) {
+          const parts = qrCode.split('-');
+          if (parts.length >= 1) op = await (tx as any).productionOrder.findUnique({ where: { opNumber: parts[0] } });
+      }
+      
+      if (!op) throw new NotFoundException('QR Invalid');
 
-    if (op.currentStation !== 'SEWING' && op.currentStation !== 'QC') {
-        throw new BadRequestException(`OP at ${op.currentStation}. Not ready for QC.`);
-    }
+      if (op.currentStation !== 'SEWING' && op.currentStation !== 'QC') {
+          throw new BadRequestException(`OP at ${op.currentStation}. Not ready for QC.`);
+      }
 
-    if (op.currentStation === 'SEWING') { 
-         if (op.sewingOutQty <= 0) throw new BadRequestException("No output from Sewing.");
-        await (this.prisma as any).productionOrder.update({ where: { id: op.id }, data: { currentStation: 'QC', status: 'WIP' } });
-        await (this.prisma as any).stationLog.create({ data: { opId: op.id, station: 'QC', actionType: 'IN', qtyGood: op.sewingOutQty, timestamp: new Date() } });
-    }
-    return op;
+      if (op.currentStation === 'SEWING') { 
+          if (op.sewingOutQty <= 0) throw new BadRequestException("No output from Sewing.");
+          await (tx as any).productionOrder.update({ where: { id: op.id }, data: { currentStation: 'QC', status: 'WIP' } });
+          await (tx as any).stationLog.create({ data: { opId: op.id, station: 'QC', actionType: 'IN', qtyGood: op.sewingOutQty, timestamp: new Date() } });
+      }
+      return op;
+    });
   }
 
   async submitQcResult(dto: any) {

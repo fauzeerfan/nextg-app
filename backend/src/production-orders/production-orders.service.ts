@@ -144,81 +144,86 @@ export class ProductionOrdersService {
   // ======================================================
   // QC INSPECTION (MODIFIED)
   // ======================================================
-  async qcInspect(opId: string, dto: { good: number; ng: number; ngReasons?: string[] }) {
-    const { good, ng, ngReasons } = dto;
+async qcInspect(opId: string, dto: { good: number; ng: number; ngReasons?: string[] }) {
+  const { good, ng, ngReasons } = dto;
 
-    if (good < 0 || ng < 0) throw new BadRequestException('good and ng must be non-negative');
-    if (good + ng === 0) throw new BadRequestException('No quantity to process');
+  if (good < 0 || ng < 0) throw new BadRequestException('good and ng must be non-negative');
+  if (good + ng === 0) throw new BadRequestException('No quantity to process');
 
-    const op = await this.prisma.productionOrder.findUnique({
-      where: { id: opId },
+  const op = await this.prisma.productionOrder.findUnique({
+    where: { id: opId },
+  });
+  if (!op) throw new NotFoundException('OP not found');
+
+  // Validasi station: harus di QC
+  if (op.currentStation !== StationCode.QC) {
+    throw new BadRequestException(`OP is not at QC station (current: ${op.currentStation})`);
+  }
+
+  // Hitung sisa output yang belum diinspeksi
+  const totalInspected = (op.qtyQC || 0) + (op.qcNgQty || 0);
+  const available = (op.qtySewingOut || 0) - totalInspected;
+  if (available <= 0) {
+    throw new BadRequestException('No remaining output to inspect');
+  }
+  if (good + ng > available) {
+    throw new BadRequestException(`Cannot inspect more than remaining ${available} sets`);
+  }
+
+  return this.prisma.$transaction(async (tx) => {
+    // 1. Update ProductionTracking
+    await tx.productionTracking.upsert({
+      where: { opId_station: { opId, station: StationCode.QC } },
+      update: { goodQty: { increment: good }, ngQty: { increment: ng } },
+      create: { opId, station: StationCode.QC, goodQty: good, ngQty: ng },
     });
-    if (!op) throw new NotFoundException('OP not found');
 
-    // Hitung sisa output yang belum diinspeksi
-    const totalInspected = (op.qtyQC || 0) + (op.qcNgQty || 0);
-    const available = (op.qtySewingOut || 0) - totalInspected;
-    if (available <= 0) {
-      throw new BadRequestException('No remaining output to inspect');
-    }
-    if (good + ng > available) {
-      throw new BadRequestException(`Cannot inspect more than remaining ${available} sets`);
-    }
+    // 2. Update ProductionOrder
+    await tx.productionOrder.update({
+      where: { id: opId },
+      data: {
+        qtyQC: { increment: good },
+        qcNgQty: { increment: ng },
+      },
+    });
 
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Update ProductionTracking
-      await tx.productionTracking.upsert({
-        where: { opId_station: { opId, station: StationCode.QC } },
-        update: { goodQty: { increment: good }, ngQty: { increment: ng } },
-        create: { opId, station: StationCode.QC, goodQty: good, ngQty: ng },
-      });
+    // 3. Simpan ke QcInspection
+    await tx.qcInspection.create({
+      data: {
+        opId,
+        good,
+        ng,
+        ngReasons: ngReasons || [],
+      },
+    });
 
-      // 2. Update ProductionOrder
+    // 4. Buat ProductionLog
+    await tx.productionLog.create({
+      data: {
+        opId,
+        station: StationCode.QC,
+        type: 'INSPECT',
+        qty: good + ng,
+        note: ngReasons?.join(', ') || null,
+      },
+    });
+
+    // 5. Cek apakah semua set sudah diinspeksi
+    const allInspections = await tx.qcInspection.aggregate({
+      where: { opId },
+      _sum: { good: true, ng: true },
+    });
+    const totalInspectedNow = (allInspections._sum.good || 0) + (allInspections._sum.ng || 0);
+    if (totalInspectedNow >= (op.qtySewingOut || 0)) {
       await tx.productionOrder.update({
         where: { id: opId },
-        data: {
-          qtyQC: { increment: good },
-          qcNgQty: { increment: ng },
-        },
+        data: { currentStation: StationCode.PACKING },
       });
+    }
 
-      // 3. Simpan ke QcInspection
-      await tx.qcInspection.create({
-        data: {
-          opId,
-          good,
-          ng,
-          ngReasons: ngReasons || [],
-        },
-      });
-
-      // 4. Buat ProductionLog
-      await tx.productionLog.create({
-        data: {
-          opId,
-          station: StationCode.QC,
-          type: 'INSPECT',
-          qty: good + ng,
-          note: ngReasons?.join(', ') || null,
-        },
-      });
-
-      // 5. Cek apakah semua set sudah diinspeksi
-      const allInspections = await tx.qcInspection.aggregate({
-        where: { opId },
-        _sum: { good: true, ng: true },
-      });
-      const totalInspectedNow = (allInspections._sum.good || 0) + (allInspections._sum.ng || 0);
-      if (totalInspectedNow >= (op.qtySewingOut || 0)) {
-        await tx.productionOrder.update({
-          where: { id: opId },
-          data: { currentStation: StationCode.PACKING },
-        });
-      }
-
-      return { success: true };
-    });
-  }
+    return { success: true };
+  });
+}
 
   async getQcInspections(opId: string) {
     return this.prisma.qcInspection.findMany({

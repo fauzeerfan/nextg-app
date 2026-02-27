@@ -50,23 +50,21 @@ async function resetProduction() {
       console.log('  - Menghapus CuttingSyncLog...');
       await tx.cuttingSyncLog.deleteMany({});
 
-      // 7. Sewing progress (jika sudah ada di schema)
-      if (tx.sewingStartProgress) {
-        console.log('  - Menghapus SewingStartProgress...');
-        await tx.sewingStartProgress.deleteMany({});
-      }
-      if (tx.sewingFinishProgress) {
-        console.log('  - Menghapus SewingFinishProgress...');
-        await tx.sewingFinishProgress.deleteMany({});
-      }
+      // 7. Sewing progress
+      console.log('  - Menghapus SewingStartProgress...');
+      await tx.sewingStartProgress.deleteMany({});
+      console.log('  - Menghapus SewingFinishProgress...');
+      await tx.sewingFinishProgress.deleteMany({});
 
-      // 8. ProductionOrder (induk utama)
-      console.log('  - Menghapus ProductionOrder...');
-      await tx.productionOrder.deleteMany({});
-
-      // 9. Opsional: jika ada tabel material request, op replacement, dll. (tidak ada di schema saat ini)
+      // 8. Inspeksi
       console.log('  - Menghapus CheckPanelInspection...');
       await tx.checkPanelInspection.deleteMany({});
+      console.log('  - Menghapus QcInspection...');
+      await tx.qcInspection.deleteMany({});
+
+      // 9. ProductionOrder (induk utama)
+      console.log('  - Menghapus ProductionOrder...');
+      await tx.productionOrder.deleteMany({});
     });
 
     console.log('✅ Semua data produksi berhasil direset!');

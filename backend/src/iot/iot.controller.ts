@@ -6,6 +6,7 @@ import {
   Body,
   Query,
   NotFoundException,
+  BadRequestException, // <-- ditambahkan
 } from '@nestjs/common';
 import { IotService } from './iot.service';
 import { ProductionEngineService } from '../mes/production-engine.service';
@@ -42,6 +43,18 @@ export class IotController {
   @Post('pond/button')
   async pondButton(@Body() body: { deviceId: string; button: 'YELLOW' | 'RED' | 'GREEN' }) {
     return this.productionEngine.handlePondButton(body.deviceId, body.button);
+  }
+
+  /**
+   * Mendapatkan state tampilan LCD untuk Sparsha Pond
+   * Dipanggil secara periodik oleh ESP32 untuk refresh otomatis
+   */
+  @Get('pond/state')
+  async getPondState(@Query('deviceId') deviceId: string) {
+    if (!deviceId) {
+      throw new BadRequestException('deviceId is required');
+    }
+    return this.productionEngine.getPondDisplay(deviceId);
   }
 
   @Post('sewing/start')

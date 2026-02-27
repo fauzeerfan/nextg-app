@@ -24,7 +24,7 @@ export class LineMastersService {
     description?: string;
     patternMultiplier?: number;
     stations?: { station: StationCode; required: boolean; order: number }[];
-    sewingConfig?: any; // <-- tambahkan field sewingConfig
+    sewingConfig?: any;
   }) {
     const exist = await this.prisma.lineMaster.findUnique({
       where: { code: dto.code },
@@ -42,7 +42,7 @@ export class LineMastersService {
         name: dto.name,
         description: dto.description,
         patternMultiplier: dto.patternMultiplier ?? 1,
-        sewingConfig: dto.sewingConfig, // <-- simpan sewingConfig
+        sewingConfig: dto.sewingConfig,
         stations: {
           create: stations.map((s) => ({
             station: s.station,
@@ -121,7 +121,7 @@ export class LineMastersService {
       description?: string;
       patternMultiplier?: number;
       stations?: { station: StationCode; required: boolean; order: number }[];
-      sewingConfig?: any; // <-- tambahkan field sewingConfig
+      sewingConfig?: any;
     },
   ) {
     const existing = await this.prisma.lineMaster.findUnique({
@@ -137,7 +137,7 @@ export class LineMastersService {
         name: dto.name,
         description: dto.description,
         patternMultiplier: dto.patternMultiplier,
-        sewingConfig: dto.sewingConfig, // <-- update sewingConfig
+        sewingConfig: dto.sewingConfig,
       },
     });
 
@@ -266,21 +266,140 @@ export class LineMastersService {
     return line.sewingConfig || { starts: [], finishes: [] };
   }
 
+  // ========== METHOD UNTUK PACKING CONFIG ==========
+
+  /**
+   * Mendapatkan konfigurasi packing untuk suatu line
+   * @param lineCode Kode line
+   * @returns Objek berisi packSize (default 50)
+   */
+  async getPackingConfig(lineCode: string): Promise<{ packSize: number }> {
+    const line = await this.prisma.lineMaster.findUnique({
+      where: { code: lineCode },
+      select: { packingConfig: true }
+    });
+    if (!line) throw new NotFoundException('Line not found');
+    const config = (line.packingConfig as any) || {};
+    return { packSize: config.packSize ?? 50 };
+  }
+
+  /**
+   * Memperbarui konfigurasi packing (packSize) untuk suatu line
+   * @param lineCode Kode line
+   * @param packSize Ukuran packing baru
+   */
+  async updatePackingConfig(lineCode: string, packSize: number) {
+    const line = await this.prisma.lineMaster.findUnique({
+      where: { code: lineCode }
+    });
+    if (!line) throw new NotFoundException('Line not found');
+    const currentConfig = (line.packingConfig as any) || {};
+    const newConfig = { ...currentConfig, packSize };
+    return this.prisma.lineMaster.update({
+      where: { code: lineCode },
+      data: { packingConfig: newConfig }
+    });
+  }
+
   // ================================================
 
-  // ========== METHOD YANG SUDAH ADA SEBELUMNYA ==========
+  // ========== METHOD UNTUK NG CATEGORIES ==========
+
+  /**
+   * Mendapatkan kategori NG untuk Check Panel (CP)
+   * @param lineCode Kode line
+   */
   async getNgCategories(lineCode: string): Promise<string[]> {
+    const line = await this.prisma.lineMaster.findUnique({
+      where: { code: lineCode },
+      select: { ngCategories: true },
+    });
+    if (!line) throw new NotFoundException('Line not found');
+
+    // Default dari dokumen CP
+    const defaultCategories = [
+      'Garis',
+      'Lubang jarum/dekok',
+      'Bentol/jendol',
+      'Noda garis putih',
+      'Noda titik putih/hitam',
+      'Emboss halus',
+      'Backing cloth',
+      'Bowing',
+      'Shiwa',
+      'Cacat cutting dimensi',
+      'Cacat cutting kirikomi',
+      'Cacat cutting scrim tertarik',
+    ];
+    return (line.ngCategories as string[]) || defaultCategories;
+  }
+
+  /**
+   * Mendapatkan kategori NG untuk Quality Control (QC)
+   * @param lineCode Kode line
+   */
+  async getQcNgCategories(lineCode: string): Promise<string[]> {
+    const line = await this.prisma.lineMaster.findUnique({
+      where: { code: lineCode },
+      select: { qcNgCategories: true },
+    });
+    if (!line) throw new NotFoundException('Line not found');
+
+    // Default dari dokumen QC
+    const defaultCategories = [
+      'Jarak jahitan tidak standar',
+      'Bahan balap tidak standar',
+      'Point tidak center',
+      'Lipatan tidak standar',
+      'Jahitan gelombang',
+      'Ex jarum',
+      'Benang over/keluar',
+      'Bahan terlipat/terjahit',
+      'Tidak ada sutechi',
+      'Jahitan meleset',
+      'Sampah benang terjahit',
+      'Kuncian putus/lepas',
+      'Part tidak terpasang',
+      'Part terbalik',
+      'Salah pasang',
+      'Arah motif terbalik',
+      'Tidak ada piping',
+      'Benang pecah',
+      'Noda bahan',
+      'Bekas marking',
+      'Cacat bahan',
+      'Langkah jahitan tidak standar',
+      'Jahitan putus',
+      'Jahitan loncat',
+      'Benang kendor',
+      'Jahitan kencang',
+      'Slit over/tidak ada',
+      'Jahitan keriput',
+      'Hole tidak ada/burry',
+      'Dimensi minus/over',
+    ];
+    return (line.qcNgCategories as string[]) || defaultCategories;
+  }
+
+  /**
+   * Update kategori NG (untuk kedua jenis)
+   * @param lineCode Kode line
+   * @param type 'cp' untuk Check Panel, 'qc' untuk Quality Control
+   * @param categories Daftar kategori baru
+   */
+  async updateNgCategories(lineCode: string, type: 'cp' | 'qc', categories: string[]) {
     const line = await this.prisma.lineMaster.findUnique({
       where: { code: lineCode },
     });
     if (!line) throw new NotFoundException('Line not found');
-    // Jika belum ada, kembalikan default dari dokumen
-    const defaultCategories = [
-      'Garis', 'Lubang jarum/dekok', 'Bentol/jendol', 'Noda garis putih',
-      'Noda titik putih/hitam', 'Emboss halus', 'Backing cloth', 'Bowing',
-      'Shiwa', 'Cacat cutting dimensi', 'Cacat cutting kirikomi', 'Cacat cutting scrim tertarik'
-    ];
-    return (line.ngCategories as string[]) || defaultCategories;
+
+    const updateData = type === 'cp' 
+      ? { ngCategories: categories }
+      : { qcNgCategories: categories };
+
+    return this.prisma.lineMaster.update({
+      where: { code: lineCode },
+      data: updateData,
+    });
   }
-  // =====================================================
 }

@@ -29,14 +29,37 @@ export class CheckPanelService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Update ProductionTracking (opsional, untuk riwayat)
+      // 🔒 Kunci baris CheckPanelInspection untuk pattern ini
+      const locked = await tx.$queryRaw`
+        SELECT * FROM "CheckPanelInspection"
+        WHERE "opId" = ${opId} AND "patternIndex" = ${patternIndex}
+        FOR UPDATE
+      `;
+
+      // Baca data terbaru (setelah dikunci)
+      const existing = await tx.checkPanelInspection.findUnique({
+        where: { opId_patternIndex: { opId, patternIndex } },
+      });
+
+      // Hitung total setelah inspeksi ini, gunakan nullish coalescing untuk menghindari undefined
+      const currentGood = existing?.good ?? 0;
+      const currentNg = existing?.ng ?? 0;
+      const newTotal = currentGood + currentNg + good + ng;
+
+      if (newTotal > op.qtyEntan) {
+        throw new BadRequestException(
+          `Cannot exceed target ${op.qtyEntan}. Current: ${currentGood + currentNg}, adding: ${good + ng}`
+        );
+      }
+
+      // 1. Update ProductionTracking
       await tx.productionTracking.upsert({
         where: { opId_station: { opId, station: StationCode.CP } },
         update: { goodQty: { increment: good }, ngQty: { increment: ng } },
         create: { opId, station: StationCode.CP, goodQty: good, ngQty: ng },
       });
 
-      // 2. Update ProductionOrder (akumulasi inspeksi)
+      // 2. Update ProductionOrder
       await tx.productionOrder.update({
         where: { id: opId },
         data: {
@@ -46,18 +69,8 @@ export class CheckPanelService {
         },
       });
 
-      // 3. Upsert ke CheckPanelInspection (bukan PatternProgress)
-      const existing = await tx.checkPanelInspection.findUnique({
-        where: { opId_patternIndex: { opId, patternIndex } },
-      });
-
-      if (existing && (existing.good + existing.ng) >= op.qtyEntan) {
-        throw new BadRequestException('Pattern already fully inspected');
-      }
-
-      const newGood = (existing?.good || 0) + good;
-      const newNg = (existing?.ng || 0) + ng;
-      const completed = newGood + newNg >= op.qtyEntan;
+      // 3. Upsert ke CheckPanelInspection
+      const completed = newTotal >= op.qtyEntan;
 
       await tx.checkPanelInspection.upsert({
         where: { opId_patternIndex: { opId, patternIndex } },
@@ -77,7 +90,7 @@ export class CheckPanelService {
         },
       });
 
-      // 4. Buat ProductionLog
+      // 4. ProductionLog
       await tx.productionLog.create({
         data: {
           opId,
@@ -88,7 +101,7 @@ export class CheckPanelService {
         },
       });
 
-      // 5. Hitung setsReadyForSewing berdasarkan hasil inspeksi
+      // 5. Hitung setsReadyForSewing jika semua pattern selesai
       const allInspections = await tx.checkPanelInspection.findMany({
         where: { opId },
       });

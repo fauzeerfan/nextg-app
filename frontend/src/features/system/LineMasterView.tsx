@@ -138,7 +138,7 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
   const [edit, setEdit] = useState(false);
   const [create, setCreate] = useState(false);
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<'details' | 'patterns' | 'sewing'>('details'); // MODIFIED: added 'sewing'
+  const [tab, setTab] = useState<'details' | 'patterns' | 'sewing' | 'packing'>('details');
   const [fd, setFd] = useState<Partial<LineMaster>>({ code: '', name: '', description: '', patternMultiplier: 1, stations: availStations.map(s => ({ ...s, required: true })) });
   const [patModal, setPatModal] = useState(false);
   const [patEdit, setPatEdit] = useState(false);
@@ -146,11 +146,17 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
   const [upFiles, setUpFiles] = useState<{ setGood?: File; setNg?: File; patternGood: (File | null)[]; patternNg: (File | null)[]; }>({ patternGood: [], patternNg: [] });
   const [patSaving, setPatSaving] = useState(false);
   
-  // ========== NEW STATE FOR SEWING CONFIG ==========
+  // ========== STATE FOR SEWING CONFIG ==========
   const [sewingConfig, setSewingConfig] = useState<{ starts: any[], finishes: any[] }>({ starts: [], finishes: [] });
   const [loadingSewing, setLoadingSewing] = useState(false);
   const [savingSewing, setSavingSewing] = useState(false);
-  // =================================================
+  // ==============================================
+
+  // ========== NEW STATE FOR PACKING CONFIG ==========
+  const [packSize, setPackSize] = useState<number>(50);
+  const [loadingPacking, setLoadingPacking] = useState(false);
+  const [savingPacking, setSavingPacking] = useState(false);
+  // ==================================================
 
   const convBack = (b: BackendLineMaster): LineMaster => {
     const active = new Set(b.stations.filter(s => s.required).map(s => s.station));
@@ -183,7 +189,6 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
     } catch { setPats([]); setSelPat(null); } finally { setPatLoad(false); }
   };
 
-  // ========== NEW FUNCTION TO FETCH SEWING CONFIG ==========
   const fetchSewingConfig = async (lineCode: string) => {
     setLoadingSewing(true);
     try {
@@ -200,22 +205,40 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
       setLoadingSewing(false);
     }
   };
-  // =========================================================
+
+  // ========== NEW FUNCTION TO FETCH PACKING CONFIG ==========
+  const fetchPackingConfig = async (lineCode: string) => {
+    setLoadingPacking(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/line-masters/${lineCode}/packing-config`);
+      if (res.ok) {
+        const data = await res.json();
+        setPackSize(data.packSize);
+      }
+    } catch (error) {
+      console.error('Failed to fetch packing config', error);
+    } finally {
+      setLoadingPacking(false);
+    }
+  };
+  // ==========================================================
 
   useEffect(() => { fetchLs(); }, []);
-  useEffect(() => { if (sel) fetchPats(sel.code); else { setPats([]); setSelPat(null); } }, [sel]);
-  // ========== ADD FETCH SEWING CONFIG WHEN LINE CHANGES ==========
+  
+  // ========== MODIFIED useEffect untuk menangani perubahan line ==========
   useEffect(() => {
     if (sel) {
       fetchPats(sel.code);
       fetchSewingConfig(sel.code);
+      fetchPackingConfig(sel.code); // <-- tambah
     } else {
       setPats([]);
       setSelPat(null);
       setSewingConfig({ starts: [], finishes: [] });
+      setPackSize(50); // reset ke default
     }
   }, [sel]);
-  // ================================================================
+  // ========================================================================
   
   useEffect(() => { setFlt(search.trim() ? ls.filter(l => l.code.toLowerCase().includes(search.toLowerCase()) || l.name.toLowerCase().includes(search.toLowerCase()) || l.description?.toLowerCase().includes(search.toLowerCase())) : ls); }, [search, ls]);
 
@@ -401,6 +424,29 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
     }
   };
   // =========================================================
+
+  // ========== NEW FUNCTION TO SAVE PACKING CONFIG ==========
+  const savePackingConfig = async () => {
+    if (!sel) return;
+    setSavingPacking(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/line-masters/${sel.code}/packing-config`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packSize }),
+      });
+      if (res.ok) {
+        alert('Packing configuration saved!');
+      } else {
+        alert('Failed to save');
+      }
+    } catch (error) {
+      console.error('Error saving packing config', error);
+    } finally {
+      setSavingPacking(false);
+    }
+  };
+  // ==========================================================
 
   const back = () => { if (onNavigate) onNavigate('dashboard'); };
 
@@ -589,12 +635,24 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                   >
                     Pattern Master
                   </button>
-                  {/* ========== NEW TAB BUTTON ========== */}
                   <button
                     onClick={() => setTab('sewing')}
-                    className={`px-6 py-3 text-sm font-medium transition-colors relative ${tab === 'sewing' ? 'text-cyan-600 dark:text-cyan-400 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-cyan-500' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+                    className={`px-6 py-3 text-sm font-medium transition-colors relative ${tab === 'sewing'
+                        ? 'text-cyan-600 dark:text-cyan-400 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-cyan-500'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
                   >
                     Sewing Master
+                  </button>
+                  {/* ========== NEW TAB BUTTON ========== */}
+                  <button
+                    onClick={() => setTab('packing')}
+                    className={`px-6 py-3 text-sm font-medium transition-colors relative ${tab === 'packing'
+                        ? 'text-cyan-600 dark:text-cyan-400 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-cyan-500'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                  >
+                    Packing Master
                   </button>
                   {/* ==================================== */}
                 </div>
@@ -839,8 +897,8 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                         </div>
                       )}
                     </div>
-                  ) : (
-                    // ========== SEWING MASTER TAB ==========
+                  ) : tab === 'sewing' ? (
+                    // Sewing Master Tab
                     <div className="space-y-6">
                       <div className="flex justify-between items-center">
                         <h3 className="text-xl font-bold">Sewing Configuration</h3>
@@ -945,6 +1003,42 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                                 <p className="text-center text-slate-500 py-4">No sewing finishes configured.</p>
                               )}
                             </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    // ========== PACKING MASTER TAB ==========
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-xl font-bold">Packing Configuration</h3>
+                        <button
+                          onClick={savePackingConfig}
+                          disabled={savingPacking}
+                          className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-lg text-sm font-medium flex items-center gap-2 hover:from-emerald-700 hover:to-emerald-600"
+                        >
+                          {savingPacking ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save Changes
+                        </button>
+                      </div>
+
+                      {loadingPacking ? (
+                        <div className="flex justify-center py-8">
+                          <Loader2 className="animate-spin text-cyan-600" size={32} />
+                        </div>
+                      ) : (
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                              Pack Size (sets per box)
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 dark:focus:ring-cyan-900/30 transition-all"
+                              value={packSize}
+                              onChange={(e) => setPackSize(parseInt(e.target.value) || 50)}
+                            />
+                            <p className="text-xs text-slate-500 mt-2">Number of sets per box for this line.</p>
                           </div>
                         </div>
                       )}

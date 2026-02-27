@@ -1,27 +1,90 @@
-import { useState, useEffect } from 'react';
-import { Truck, Package, Search, BarChart, TrendingUp, QrCode, History, Warehouse, RefreshCw, MapPin, Calendar, CheckCircle, AlertCircle, Eye, Plus, Minus, Tag, ArrowRight } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  Truck, Package, Search, BarChart, TrendingUp, QrCode, History,
+  Warehouse, RefreshCw, MapPin, Calendar, CheckCircle, AlertCircle,
+  Eye, Plus, Minus, Tag, ArrowRight, X, Loader2, ChevronDown, ChevronUp,
+  FileText, User, Clock, CheckSquare, Square
+} from 'lucide-react';
 
-interface FinishedGoodsStock {
-  id: string; itemNumberFG: string; styleCode: string; description: string; totalStock: number; totalBoxes: number; availableStock: number; warehouse: string; shelfLocation?: string; lastUpdated: string;
-}
-interface ShippingRecord {
-  id: string; shippingNo: string; shippingDate: string; customerName: string; itemNumberFG: string; styleCode: string; qty: number; status: 'DRAFT' | 'SHIPPED' | 'DELIVERED'; createdBy: string;
+const API_BASE_URL = 'http://localhost:3000';
+
+// ==================== Tipe Data ====================
+
+interface FGStockItem {
+  id: string;
+  opId: string;
+  op?: { opNumber: string; styleCode: string; qtyOp: number };
+  qty: number;
+  createdAt: string;
 }
 
-interface MetricCardProps { title: string; value: number | string; icon: any; color?: 'emerald' | 'blue' | 'amber' | 'purple'; subtitle?: string; suffix?: string; trend?: string; }
-const MetricCard = ({ title, value, icon: Icon, color = 'emerald', subtitle, suffix, trend }: MetricCardProps) => {
-  const c = {
+interface FGStock {
+  id: string;
+  fgNumber: string;
+  totalQty: number;
+  items: FGStockItem[];
+}
+
+interface ShippingDocument {
+  no_surat_jalan: number;
+  tanggal_surat_jalan: string;
+  customer: string;
+}
+
+interface ShippingDocumentItem {
+  no_surat_jalan: number;
+  tanggal_surat_jalan: string;
+  kode_item: string;
+  name_finishgood: string;
+  qty: number;
+}
+
+interface ShipmentRecord {
+  id: string;
+  shippingNo: string;
+  shippingDate: string;
+  customerName?: string;
+  fgNumber: string;
+  qty: number;
+  status: 'DRAFT' | 'SHIPPED' | 'DELIVERED';
+  items?: { opNumber: string; qty: number }[];
+}
+
+// ==================== Komponen Bantuan ====================
+
+const MetricCard = ({ 
+  title, 
+  value, 
+  icon: Icon, 
+  color = 'emerald', 
+  subtitle, 
+  suffix, 
+  trend 
+}: { 
+  title: string; 
+  value: number | string; 
+  icon: React.ElementType; 
+  color?: 'emerald' | 'blue' | 'amber' | 'purple'; 
+  subtitle?: string; 
+  suffix?: string; 
+  trend?: string; 
+}) => {
+  const colors = {
     emerald: { bg: 'from-emerald-100 to-emerald-50', icon: 'text-emerald-600', darkBg: 'from-emerald-900/20 to-emerald-900/10' },
     blue: { bg: 'from-blue-100 to-blue-50', icon: 'text-blue-600', darkBg: 'from-blue-900/20 to-blue-900/10' },
     amber: { bg: 'from-amber-100 to-amber-50', icon: 'text-amber-600', darkBg: 'from-amber-900/20 to-amber-900/10' },
     purple: { bg: 'from-purple-100 to-purple-50', icon: 'text-purple-600', darkBg: 'from-purple-900/20 to-purple-900/10' }
-  }[color];
+  };
+  
+  // Fallback jika color tidak valid (seharusnya tidak terjadi karena sudah di-type)
+  const selected = colors[color] || colors.emerald;
+  
   return (
     <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-lg hover:shadow-xl transition-all duration-300">
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">{title}</div>
-        <div className={`w-10 h-10 bg-gradient-to-br ${c.bg} dark:${c.darkBg} rounded-lg flex items-center justify-center`}>
-          <Icon size={18} className={c.icon} />
+        <div className={`w-10 h-10 bg-gradient-to-br ${selected.bg} dark:${selected.darkBg} rounded-lg flex items-center justify-center`}>
+          <Icon size={18} className={selected.icon} />
         </div>
       </div>
       <div className="text-3xl font-bold text-slate-900 dark:text-white">
@@ -33,173 +96,579 @@ const MetricCard = ({ title, value, icon: Icon, color = 'emerald', subtitle, suf
   );
 };
 
-const ShippingCard = ({ ship, onConfirm }: { ship: ShippingRecord; onConfirm: (id: string) => void }) => (
-  <div className="group p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:shadow-md transition-all hover:border-emerald-300 dark:hover:border-emerald-700">
-    <div className="flex justify-between items-start mb-3">
-      <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 bg-gradient-to-br rounded-xl flex items-center justify-center ${ship.status === 'SHIPPED' ? 'from-amber-500 to-amber-400' : ship.status === 'DELIVERED' ? 'from-emerald-500 to-emerald-400' : 'from-slate-500 to-slate-400'}`}><Truck size={18} className="text-white"/></div>
-        <div><div className="font-bold text-slate-900 dark:text-white">{ship.shippingNo}</div><div className="text-xs text-slate-500">{ship.customerName}</div></div>
-      </div>
-      <span className={`px-2 py-1 rounded-lg text-xs font-medium ${ship.status === 'SHIPPED' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : ship.status === 'DELIVERED' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-400'}`}>{ship.status}</span>
-    </div>
-    <div className="grid grid-cols-2 gap-3 mb-4">
-      <div className="flex items-center gap-2"><div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg"><Tag size={14} className="text-slate-600 dark:text-slate-400"/></div><div><div className="text-xs text-slate-500 dark:text-slate-400">Style Code</div><div className="font-medium text-slate-900 dark:text-white">{ship.styleCode}</div></div></div>
-      <div className="flex items-center gap-2"><div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg"><Package size={14} className="text-slate-600 dark:text-slate-400"/></div><div><div className="text-xs text-slate-500 dark:text-slate-400">Quantity</div><div className="font-bold text-slate-900 dark:text-white">{ship.qty} pcs</div></div></div>
-    </div>
-    <div className="flex items-center justify-between text-xs text-slate-500">
-      <div className="flex items-center gap-1"><Calendar size={12}/><span>{new Date(ship.shippingDate).toLocaleDateString()}</span></div>
-      <div className="flex items-center gap-2">{ship.status === 'DRAFT' && <button onClick={() => onConfirm(ship.id)} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium transition-colors">Confirm Ship</button>}<button className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-400"><Eye size={14}/></button></div>
-    </div>
-  </div>
-);
+// ==================== Komponen Utama ====================
 
 export const FinishedGoodsView = () => {
-  const [stk, setStk] = useState<FinishedGoodsStock[]>([]);
-  const [shp, setShp] = useState<ShippingRecord[]>([]);
-  const [sel, setSel] = useState<FinishedGoodsStock | null>(null);
-  const [scan, setScan] = useState(false);
-  const [ref, setRef] = useState(false);
-  const [upd, setUpd] = useState('');
-  const [qr, setQr] = useState('');
-  const [form, setForm] = useState({ customerName: '', shippingNo: '', qty: 0, remarks: '' });
+  // State Stok
+  const [stocks, setStocks] = useState<FGStock[]>([]);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
-  const tot = {
-    totalStock: stk.reduce((s, i) => s + i.totalStock, 0),
-    totalBoxes: stk.reduce((s, i) => s + i.totalBoxes, 0),
-    totalValue: stk.reduce((s, i) => s + (i.totalStock * 150000), 0),
-    totalShipped: shp.reduce((s, i) => s + i.qty, 0),
-    todayShipped: shp.filter(s => new Date(s.shippingDate).toDateString() === new Date().toDateString()).reduce((s, i) => s + i.qty, 0)
+  // State QR
+  const [qrInput, setQrInput] = useState('');
+  const [processingQr, setProcessingQr] = useState(false);
+  const [qrMessage, setQrMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // State Shipping Documents
+  const [shippingDocs, setShippingDocs] = useState<ShippingDocument[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState<ShippingDocument | null>(null);
+  const [docItems, setDocItems] = useState<ShippingDocumentItem[]>([]);
+  const [loadingDocItems, setLoadingDocItems] = useState(false);
+  const [shippingQuantities, setShippingQuantities] = useState<Record<string, number>>({});
+  const [processingShip, setProcessingShip] = useState(false);
+
+  // State History
+  const [shipments, setShipments] = useState<ShipmentRecord[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Helper untuk auth headers
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('nextg_token');
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
   };
 
-  const scanQR = () => { setScan(true); setTimeout(() => { setQr('SCANNED-BOX-001-100PCS'); setScan(false); alert('QR Code scanned: BOX-001-100PCS'); }, 1000); };
-  const refresh = () => { setRef(true); setTimeout(() => { setUpd(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })); setRef(false); }, 1000); };
+  // ========== FETCH DATA ==========
+  const fetchStocks = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/finished-goods/stock`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        setStocks(await res.json());
+      }
+    } catch (error) {
+      console.error('Gagal mengambil stok', error);
+    }
+  }, []);
 
-  const stockIn = () => {
-    if (!qr) return alert('Please scan a QR code first');
-    const parts = qr.split('-');
-    if (parts.length < 4) return alert('Invalid QR code format');
-    const styleCode = 'STYLE', qty = 100;
-    const exist = stk.find(s => s.styleCode === styleCode);
-    if (exist) {
-      setStk(p => p.map(s => s.styleCode === styleCode ? { ...s, totalStock: s.totalStock + qty, totalBoxes: s.totalBoxes + 1, availableStock: s.availableStock + qty, lastUpdated: new Date().toISOString() } : s));
-      alert(`Stock updated: +${qty} pieces`); setQr('');
-    } else {
-      setStk([...stk, { id: Date.now().toString(), itemNumberFG: `FG-${styleCode}-${Date.now().toString().slice(-4)}`, styleCode, description: 'New finished goods', totalStock: qty, totalBoxes: 1, availableStock: qty, warehouse: 'MAIN_WAREHOUSE', shelfLocation: 'A-01-1', lastUpdated: new Date().toISOString() }]);
-      alert(`New stock created: +${qty} pieces of ${styleCode}`); setQr('');
+  const fetchShippingDocs = useCallback(async () => {
+    setLoadingDocs(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/finished-goods/shipping-documents`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        setShippingDocs(await res.json());
+      }
+    } catch (error) {
+      console.error('Gagal mengambil dokumen surat jalan', error);
+    } finally {
+      setLoadingDocs(false);
+    }
+  }, []);
+
+  const fetchShipments = useCallback(async () => {
+    setLoadingHistory(true);
+    try {
+      // Asumsikan ada endpoint untuk mengambil history shipment
+      const res = await fetch(`${API_BASE_URL}/finished-goods/shipments`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        setShipments(await res.json());
+      }
+    } catch (error) {
+      console.error('Gagal mengambil history shipment', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStocks();
+    fetchShippingDocs();
+    fetchShipments();
+    const interval = setInterval(fetchStocks, 10000); // refresh stok tiap 10 detik
+    return () => clearInterval(interval);
+  }, [fetchStocks, fetchShippingDocs, fetchShipments]);
+
+  // ========== HANDLE QR ==========
+  const handleConfirmQr = async () => {
+    if (!qrInput.trim()) {
+      setQrMessage({ type: 'error', text: 'QR code tidak boleh kosong' });
+      return;
+    }
+    setProcessingQr(true);
+    setQrMessage(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/finished-goods/receive`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ qrCode: qrInput.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setQrMessage({ type: 'success', text: `Berhasil menerima ${data.totalQty} pcs` });
+        setQrInput('');
+        fetchStocks(); // refresh stok
+      } else {
+        const err = await res.json();
+        setQrMessage({ type: 'error', text: err.message || 'Gagal memproses QR' });
+      }
+    } catch (error) {
+      setQrMessage({ type: 'error', text: 'Network error' });
+    } finally {
+      setProcessingQr(false);
     }
   };
 
-  const createShip = () => {
-    if (!sel || form.qty <= 0) return alert('Please select stock and enter quantity');
-    if (form.qty > sel.availableStock) return alert(`Insufficient stock! Available: ${sel.availableStock}`);
-    const newShip: ShippingRecord = {
-      id: Date.now().toString(),
-      shippingNo: form.shippingNo || `SJ-${new Date().getFullYear()}-${String(shp.length + 1).padStart(3, '0')}`,
-      shippingDate: new Date().toISOString(),
-      customerName: form.customerName || 'Customer',
-      itemNumberFG: sel.itemNumberFG,
-      styleCode: sel.styleCode,
-      qty: form.qty,
-      status: 'DRAFT',
-      createdBy: 'Current User'
-    };
-    setShp(p => [newShip, ...p]);
-    setStk(p => p.map(s => s.id === sel.id ? { ...s, availableStock: s.availableStock - form.qty } : s));
-    setForm({ customerName: '', shippingNo: '', qty: 0, remarks: '' });
-    alert(`Shipping ${form.qty} pieces created!`);
+  // ========== HANDLE SHIPPING DOC SELECTION ==========
+  const handleSelectDoc = async (doc: ShippingDocument | null) => {
+    setSelectedDoc(doc);
+    if (!doc) {
+      setDocItems([]);
+      setShippingQuantities({});
+      return;
+    }
+    setLoadingDocItems(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/finished-goods/shipping-document-items/${doc.no_surat_jalan}`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        const items: ShippingDocumentItem[] = await res.json();
+        setDocItems(items);
+        // Inisialisasi quantity per item dengan 0
+        const initialQty: Record<string, number> = {};
+        items.forEach(item => {
+          initialQty[item.kode_item] = 0;
+        });
+        setShippingQuantities(initialQty);
+      }
+    } catch (error) {
+      console.error('Gagal mengambil item dokumen', error);
+    } finally {
+      setLoadingDocItems(false);
+    }
   };
 
-  const confirmShip = (id: string) => setShp(p => p.map(s => s.id === id ? { ...s, status: 'SHIPPED' } : s));
+  // ========== HANDLE SHIP ==========
+  const handleShip = async () => {
+    if (!selectedDoc) {
+      alert('Pilih surat jalan terlebih dahulu');
+      return;
+    }
 
-  useEffect(() => { setUpd(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })); }, []);
+    // Kumpulkan item yang akan dikirim (yang quantity > 0)
+    const itemsToShip = docItems
+      .filter(item => (shippingQuantities[item.kode_item] || 0) > 0)
+      .map(item => ({
+        fgNumber: item.kode_item,
+        qty: shippingQuantities[item.kode_item],
+      }));
+
+    if (itemsToShip.length === 0) {
+      alert('Tidak ada item yang dipilih untuk dikirim');
+      return;
+    }
+
+    setProcessingShip(true);
+    try {
+      // Lakukan pengiriman satu per satu atau bisa juga dibuat batch endpoint
+      for (const item of itemsToShip) {
+        const res = await fetch(`${API_BASE_URL}/finished-goods/ship`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            fgNumber: item.fgNumber,
+            qty: item.qty,
+            suratJalan: selectedDoc.no_surat_jalan.toString(),
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          alert(`Gagal mengirim ${item.fgNumber}: ${err.message}`);
+          break;
+        }
+      }
+      // Refresh data
+      fetchStocks();
+      fetchShipments();
+      // Reset form
+      setSelectedDoc(null);
+      setDocItems([]);
+      setShippingQuantities({});
+    } catch (error) {
+      console.error('Error saat shipping', error);
+    } finally {
+      setProcessingShip(false);
+    }
+  };
+
+  // ========== RENDER ==========
+
+  // Hitung metrik
+  const totalStock = stocks.reduce((sum, s) => sum + s.totalQty, 0);
+  const totalItems = stocks.reduce((sum, s) => sum + s.items.length, 0);
+  const totalShippedToday = shipments
+    .filter(s => new Date(s.shippingDate).toDateString() === new Date().toDateString())
+    .reduce((sum, s) => sum + s.qty, 0);
 
   return (
-    <div className="animate-in fade-in duration-300">
-      <div className="bg-gradient-to-br from-white to-emerald-50/30 dark:from-slate-900 dark:to-emerald-900/10 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden mb-8">
+    <div className="animate-in fade-in duration-300 p-6 space-y-8">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-white to-emerald-50/30 dark:from-slate-900 dark:to-emerald-900/10 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
         <div className="p-8">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
             <div className="flex items-center gap-4">
-              <div className="relative"><div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg"><Truck size={28} className="text-white"/></div><div className="absolute -bottom-2 -right-2 w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-400 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-lg"><Package size={16} className="text-white"/></div></div>
-              <div><h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">Finished Goods<span className="text-xs px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-full font-bold">SHIPPING READY</span></h1></div>
+              <div className="relative">
+                <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <Truck size={28} className="text-white" />
+                </div>
+                <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-400 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-lg">
+                  <Package size={16} className="text-white" />
+                </div>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  Finished Goods
+                  <span className="text-xs px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-full font-bold">
+                    STOCK & SHIPPING
+                  </span>
+                </h1>
+              </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
-              <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl shadow-lg"><div className="flex flex-col"><div className="text-xs font-medium opacity-90">Total Value</div><div className="text-2xl font-bold">Rp 0</div></div><div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm"><BarChart size={20} className="text-white"/></div></div>
-              <button onClick={refresh} disabled={ref} className="group px-5 py-3 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-300 shadow-sm hover:shadow-md">
-                {ref ? <RefreshCw size={18} className="animate-spin"/> : <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-500"/>}Refresh
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => { fetchStocks(); fetchShippingDocs(); fetchShipments(); }}
+                className="group px-4 py-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2 hover:border-emerald-300 transition-all"
+              >
+                <RefreshCw size={16} className="group-hover:rotate-180 transition-transform" />
+                Refresh
+              </button>
+              <button
+                onClick={() => setShowHistory(true)}
+                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl font-semibold flex items-center gap-2 hover:from-purple-700 transition-all"
+              >
+                <History size={16} />
+                History
               </button>
             </div>
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-8 pb-8">
-          <MetricCard title="Total Stock" value={tot.totalStock} icon={Package} color="emerald" suffix="units" subtitle={`${tot.totalBoxes} boxes total`} />
-          <MetricCard title="Stock Value" value="Rp 0" icon={BarChart} color="blue" trend="No data for comparison" />
-          <MetricCard title="Today Shipped" value={tot.todayShipped} icon={Truck} color="amber" suffix="units" subtitle={`Total shipped: ${tot.totalShipped}`} />
-          <MetricCard title="Warehouses" value={new Set(stk.map(s => s.warehouse)).size} icon={Warehouse} color="purple" suffix="active" subtitle={`${stk.length} total items`} />
+          <MetricCard title="Total Stock" value={totalStock} icon={Package} color="emerald" suffix="pcs" subtitle={`${stocks.length} FG items`} />
+          <MetricCard title="Total Boxes" value={totalItems} icon={Warehouse} color="blue" suffix="boxes" subtitle="From packing" />
+          <MetricCard title="Shipped Today" value={totalShippedToday} icon={Truck} color="amber" suffix="pcs" />
+          <MetricCard title="Avg per Box" value={totalItems > 0 ? Math.round(totalStock / totalItems) : 0} icon={BarChart} color="purple" suffix="pcs" />
         </div>
       </div>
 
-      <div className="mb-8">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <button onClick={scanQR} disabled={scan} className="group flex-1 px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-2xl font-bold flex items-center justify-center gap-3 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50">
-            {scan ? <><div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div><span>Scanning...</span></> : <><QrCode size={24}/><span>Scan QR Code for Stock In</span><ArrowRight size={18} className="opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all"/></>}
-          </button>
-          {qr && !scan && <div className="flex-1 p-4 bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-900/20 dark:to-slate-800/30 rounded-2xl border-2 border-emerald-200 dark:border-emerald-700"><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-400 rounded-xl flex items-center justify-center"><CheckCircle size={20} className="text-white"/></div><div><div className="text-sm font-semibold text-slate-700 dark:text-slate-300">QR Code Scanned</div><div className="font-mono text-slate-900 dark:text-white">{qr}</div></div></div><button onClick={stockIn} className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl font-medium transition-all duration-300 shadow-sm hover:shadow-md">Process Stock In</button></div></div>}
+      {/* QR Input Section */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-lg">
+        <div className="flex flex-col md:flex-row gap-4 items-end">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              Scan / Input QR Code Box
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="flex-1 px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all"
+                placeholder="Contoh: PACK-123456"
+                value={qrInput}
+                onChange={(e) => setQrInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleConfirmQr()}
+              />
+              <button
+                onClick={handleConfirmQr}
+                disabled={processingQr}
+                className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl font-bold flex items-center gap-2 disabled:opacity-50"
+              >
+                {processingQr ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle size={18} />}
+                Konfirmasi
+              </button>
+            </div>
+          </div>
+          {qrMessage && (
+            <div className={`px-4 py-3 rounded-xl flex items-center gap-2 ${
+              qrMessage.type === 'success' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400'
+            }`}>
+              {qrMessage.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+              {qrMessage.text}
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Main Grid: Stock Table + Shipping Form */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {/* Stock Table - 2/3 width */}
         <div className="lg:col-span-2">
-          <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
             <div className="p-6 border-b border-slate-100 dark:border-slate-700/50">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="flex items-center gap-3"><div className="w-10 h-10 bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-900/10 rounded-xl flex items-center justify-center"><Package size={20} className="text-emerald-600 dark:text-emerald-400"/></div><div><h3 className="font-bold text-slate-900 dark:text-white">Finished Goods Stock</h3><p className="text-sm text-slate-500 dark:text-slate-400">Real-time inventory status and availability</p></div></div>
-                <div className="flex items-center gap-3"><div className="relative"><div className="absolute left-3 top-1/2 -translate-y-1/2"><Search size={18} className="text-slate-400"/></div><input type="text" placeholder="Search FG#, style, or description..." className="pl-10 pr-4 py-2.5 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all"/></div><div className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full"><span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{stk.length} Items</span></div></div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-900/10 rounded-xl flex items-center justify-center">
+                    <Package size={20} className="text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 dark:text-white">Stok Finished Goods</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Klik baris untuk melihat detail OP</p>
+                  </div>
+                </div>
+                <div className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full">
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{stocks.length} FG</span>
+                </div>
               </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead><tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700"><th className="text-left py-4 px-6 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">FG Number</th><th className="text-left py-4 px-6 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Style</th><th className="text-left py-4 px-6 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Stock Status</th><th className="text-left py-4 px-6 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Location</th><th className="text-left py-4 px-6 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th></tr></thead>
+                <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
+                  <tr>
+                    <th className="py-4 px-6 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">FG Number</th>
+                    <th className="py-4 px-6 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Stock</th>
+                    <th className="py-4 px-6 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Boxes</th>
+                    <th className="py-4 px-6 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Last Updated</th>
+                  </tr>
+                </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {stk.length === 0 ? (
-                    <tr><td colSpan={5} className="py-8 text-center"><div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-4"><Package size={32} className="text-slate-400"/></div><h4 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">No Stock Available</h4><p className="text-slate-500 dark:text-slate-400">No finished goods in stock yet</p></td></tr>
-                  ) : stk.map(s => {
-                    const isSel = sel?.id === s.id;
+                  {stocks.map((stock) => {
+                    const isExpanded = expandedRows.has(stock.id);
                     return (
-                      <tr key={s.id} className={`group cursor-pointer transition-all duration-300 ${isSel ? 'bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-900/20 dark:to-slate-800 border-l-4 border-emerald-500' : 'hover:bg-slate-50 dark:hover:bg-slate-900/30'}`} onClick={() => setSel(s)}>
-                        <td className="py-4 px-6"><div className="font-mono font-bold text-slate-900 dark:text-white">{s.itemNumberFG}</div><div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{s.description}</div></td>
-                        <td className="py-4 px-6"><span className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium">{s.styleCode}</span></td>
-                        <td className="py-4 px-6"><div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${s.availableStock > 500 ? 'bg-emerald-500' : s.availableStock > 100 ? 'bg-amber-500' : 'bg-rose-500'}`}></div><div className="font-bold text-slate-900 dark:text-white text-lg">{s.availableStock}<span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1">/ {s.totalStock}</span></div></div><div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{s.totalBoxes} boxes • {s.totalBoxes > 0 ? Math.round(s.totalStock / s.totalBoxes) : 0} pcs/box</div></td>
-                        <td className="py-4 px-6"><div className="flex items-center gap-2"><MapPin size={14} className="text-slate-400"/><div><div className="text-sm text-slate-700 dark:text-slate-300">{s.warehouse.replace('_', ' ')}</div><div className="text-xs text-slate-500 dark:text-slate-400 font-mono">{s.shelfLocation}</div></div></div></td>
-                        <td className="py-4 px-6"><div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400 transition-colors"><BarChart size={16}/></button><button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-400 transition-colors"><Eye size={16}/></button></div></td>
-                      </tr>
+                      <>
+                        <tr
+                          key={stock.id}
+                          className="group hover:bg-slate-50 dark:hover:bg-slate-900/30 cursor-pointer transition-colors"
+                          onClick={() => {
+                            const newSet = new Set(expandedRows);
+                            if (isExpanded) newSet.delete(stock.id);
+                            else newSet.add(stock.id);
+                            setExpandedRows(newSet);
+                          }}
+                        >
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-2">
+                              {isExpanded ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+                              <span className="font-mono font-bold text-slate-900 dark:text-white">{stock.fgNumber}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{stock.totalQty}</span>
+                            <span className="text-xs text-slate-500 ml-1">pcs</span>
+                          </td>
+                          <td className="py-4 px-6">{stock.items.length}</td>
+                          <td className="py-4 px-6 text-sm text-slate-500">
+                            {new Date(stock.items[0]?.createdAt || '').toLocaleDateString()}
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="bg-slate-50 dark:bg-slate-900/30">
+                            <td colSpan={4} className="p-4">
+                              <div className="ml-8 space-y-2">
+                                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Detail OP dalam stok ini:</h4>
+                                {stock.items.map((item) => (
+                                  <div key={item.id} className="flex justify-between items-center p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                                    <div>
+                                      <span className="font-mono text-sm">{item.op?.opNumber}</span>
+                                      <span className="text-xs text-slate-500 ml-2">({item.op?.styleCode})</span>
+                                    </div>
+                                    <span className="font-bold text-emerald-600">{item.qty} pcs</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     );
                   })}
+                  {stocks.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-slate-500">
+                        Belum ada stok finished goods
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
 
-        <div className="space-y-8">
-          <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-700/50"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/30 dark:to-amber-900/10 rounded-xl flex items-center justify-center"><Truck size={20} className="text-amber-600 dark:text-amber-400"/></div><div><h3 className="font-bold text-slate-900 dark:text-white">Create Shipping</h3><p className="text-sm text-slate-500 dark:text-slate-400">Ship selected stock to customer</p></div></div></div>
-            <div className="p-6 space-y-5">
-              <div className="space-y-4">
-                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Customer Name</label><input type="text" className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all" value={form.customerName} onChange={e => setForm({...form, customerName: e.target.value})} placeholder="Enter customer name"/></div>
-                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Shipping Number</label><input type="text" className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all" value={form.shippingNo} onChange={e => setForm({...form, shippingNo: e.target.value})} placeholder="Auto-generated if empty"/></div>
-                {sel && <div className="p-4 bg-gradient-to-r from-slate-50 to-emerald-50 dark:from-slate-900/50 dark:to-emerald-900/20 rounded-xl border border-slate-200 dark:border-slate-700"><div className="flex items-center justify-between mb-3"><div className="flex items-center gap-2"><div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/40 rounded-lg"><Package className="text-emerald-600 dark:text-emerald-400" size={16}/></div><span className="text-sm font-medium text-slate-700 dark:text-slate-300">Selected Stock</span></div><span className="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded text-xs font-medium">{sel.styleCode}</span></div><div className="grid grid-cols-2 gap-3 text-sm"><div><div className="text-slate-500 dark:text-slate-400 text-xs">Available Stock</div><div className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">{sel.availableStock}</div></div><div><div className="text-slate-500 dark:text-slate-400 text-xs">FG Number</div><div className="font-mono font-bold">{sel.itemNumberFG}</div></div></div></div>}
-                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Quantity to Ship</label><div className="flex items-center gap-3"><div className="relative flex-1"><input type="number" className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all" value={form.qty} onChange={e => setForm({...form, qty: parseInt(e.target.value) || 0})} min="0" max={sel?.availableStock || 0} placeholder="Enter quantity"/><div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">units</div></div><div className="flex gap-1"><button onClick={() => setForm({...form, qty: Math.min(sel?.availableStock || 0, form.qty + 10)})} className="p-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-xl border border-slate-300 dark:border-slate-700"><Plus size={16} className="text-slate-600 dark:text-slate-400"/></button><button onClick={() => setForm({...form, qty: Math.max(0, form.qty - 10)})} className="p-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-xl border border-slate-300 dark:border-slate-700"><Minus size={16} className="text-slate-600 dark:text-slate-400"/></button></div></div>{sel && form.qty > 0 && <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><AlertCircle size={12}/>Will remain: {sel.availableStock - form.qty} units after shipping</div>}</div>
+        {/* Shipping Form - 1/3 width */}
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-700/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/30 dark:to-amber-900/10 rounded-xl flex items-center justify-center">
+                  <FileText size={20} className="text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-white">Pengiriman Barang</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Pilih surat jalan & masukkan jumlah</p>
+                </div>
               </div>
-              <button onClick={createShip} disabled={!sel || form.qty <= 0} className={`group w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-2xl font-bold flex items-center justify-center gap-3 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed`}><CheckCircle size={20}/><span>Create Shipping Order</span><ArrowRight size={16} className="opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all"/></button>
+            </div>
+            <div className="p-6 space-y-4">
+              {/* Dropdown Surat Jalan */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Nomor Surat Jalan</label>
+                <select
+                  className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all"
+                  value={selectedDoc?.no_surat_jalan || ''}
+                  onChange={(e) => {
+                    const doc = shippingDocs.find(d => d.no_surat_jalan === Number(e.target.value));
+                    handleSelectDoc(doc || null);
+                  }}
+                >
+                  <option value="">-- Pilih Surat Jalan --</option>
+                  {shippingDocs.map(doc => (
+                    <option key={doc.no_surat_jalan} value={doc.no_surat_jalan}>
+                      {doc.no_surat_jalan} - {doc.customer} ({new Date(doc.tanggal_surat_jalan).toLocaleDateString('id-ID')})
+                    </option>
+                  ))}
+                </select>
+                {loadingDocs && <Loader2 className="animate-spin mt-2" size={16} />}
+              </div>
+
+              {/* Tabel Item Surat Jalan */}
+              {selectedDoc && (
+                <div className="mt-4">
+                  <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Item yang akan dikirim</h4>
+                  {loadingDocItems ? (
+                    <div className="flex justify-center py-4"><Loader2 className="animate-spin text-amber-600" size={24} /></div>
+                  ) : (
+                    <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                      {docItems.map((item) => {
+                        // Cari stok untuk FG ini
+                        const stock = stocks.find(s => s.fgNumber === item.kode_item);
+                        const available = stock?.totalQty || 0;
+                        const qty = shippingQuantities[item.kode_item] || 0;
+                        return (
+                          <div key={item.kode_item} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <div className="font-mono font-bold text-sm">{item.kode_item}</div>
+                                <div className="text-xs text-slate-500 truncate max-w-[150px]">{item.name_finishgood}</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xs text-slate-500">Dokumen: {item.qty}</div>
+                                <div className="text-xs text-emerald-600">Stok: {available}</div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="0"
+                                max={Math.min(available, item.qty)}
+                                className="flex-1 px-3 py-2 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm focus:border-amber-500"
+                                placeholder="Jumlah"
+                                value={qty}
+                                onChange={(e) => setShippingQuantities({
+                                  ...shippingQuantities,
+                                  [item.kode_item]: Math.min(Number(e.target.value) || 0, available, item.qty)
+                                })}
+                              />
+                              <span className="text-xs text-slate-500 w-12">/{item.qty}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tombol Proses Shipping */}
+              {selectedDoc && (
+                <button
+                  onClick={handleShip}
+                  disabled={processingShip || loadingDocItems}
+                  className="w-full mt-4 py-4 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {processingShip ? <Loader2 className="animate-spin" size={18} /> : <Truck size={18} />}
+                  Proses Pengiriman
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-700/50"><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl flex items-center justify-center"><History size={20} className="text-slate-600 dark:text-slate-400"/></div><div><h3 className="font-bold text-slate-900 dark:text-white">Recent Shippings</h3><p className="text-sm text-slate-500 dark:text-slate-400">Last shipping orders</p></div></div><div className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full"><span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{shp.length} Total</span></div></div></div>
-            <div className="p-4"><div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">{shp.map(s => <ShippingCard key={s.id} ship={s} onConfirm={confirmShip} />)}{shp.length === 0 && <div className="text-center py-8"><div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4"><Truck size={24} className="text-slate-400"/></div><p className="text-slate-500 dark:text-slate-400 text-sm">No shipping orders yet</p></div>}</div></div>
+          {/* Ringkasan Stok (opsional) */}
+          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-700/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-900/30 dark:to-blue-900/10 rounded-xl flex items-center justify-center">
+                  <Warehouse size={20} className="text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-white">Ringkasan Stok</h3>
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Total FG Number:</span>
+                  <span className="font-bold">{stocks.length}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Total Boxes:</span>
+                  <span className="font-bold">{totalItems}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Total Pcs:</span>
+                  <span className="font-bold">{totalStock}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* History Modal */}
+      {showHistory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+              <h3 className="text-xl font-bold">History Pengiriman</h3>
+              <button onClick={() => setShowHistory(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              {loadingHistory ? (
+                <div className="flex justify-center py-8"><Loader2 className="animate-spin text-amber-600" size={32} /></div>
+              ) : shipments.length === 0 ? (
+                <p className="text-center text-slate-500 py-8">Belum ada pengiriman</p>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-left text-sm text-slate-500">
+                      <th className="pb-3">Tanggal</th>
+                      <th className="pb-3">No. Surat</th>
+                      <th className="pb-3">Customer</th>
+                      <th className="pb-3">FG</th>
+                      <th className="pb-3">Qty</th>
+                      <th className="pb-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shipments.map(ship => (
+                      <tr key={ship.id} className="border-t border-slate-100 dark:border-slate-700">
+                        <td className="py-3">{new Date(ship.shippingDate).toLocaleDateString('id-ID')}</td>
+                        <td className="py-3">{ship.shippingNo}</td>
+                        <td className="py-3">{ship.customerName || '-'}</td>
+                        <td className="py-3">{ship.fgNumber}</td>
+                        <td className="py-3">{ship.qty}</td>
+                        <td className="py-3">
+                          <span className={`px-2 py-1 rounded-lg text-xs font-medium ${
+                            ship.status === 'SHIPPED' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                          }`}>{ship.status}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

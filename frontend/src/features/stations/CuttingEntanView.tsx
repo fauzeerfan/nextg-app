@@ -215,7 +215,7 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1">
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
             <div className="p-6 border-b border-slate-100 dark:border-slate-700/50"><h3 className="font-bold text-slate-900 dark:text-white">Production Orders</h3><p className="text-sm text-slate-500 dark:text-slate-400">Select an OP to generate QR</p></div>

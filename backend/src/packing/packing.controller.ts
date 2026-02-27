@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Param, Delete } from '@nestjs/common';
 import { PackingService } from './packing.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -22,5 +22,28 @@ export class PackingController {
   @UseGuards(JwtAuthGuard)
   async closeSession(@Body() body: { sessionId: string }) {
     return this.service.closeSession(body.sessionId);
+  }
+
+  @Get('sessions/active')
+  async getActiveSession() {
+    return this.service.getActiveSession();
+  }
+
+  @Get('history')
+  @UseGuards(JwtAuthGuard)
+  async getHistory() {
+    return this.service.getHistory();
+  }
+
+  @Post('reprint/:sessionId')
+  @UseGuards(JwtAuthGuard)
+  async reprint(@Param('sessionId') sessionId: string) {
+    return this.service.reprint(sessionId);
+  }
+
+  @Delete('session/:sessionId')
+  @UseGuards(JwtAuthGuard)
+  async cancelSession(@Param('sessionId') sessionId: string) {
+    return this.service.cancelSession(sessionId);
   }
 }

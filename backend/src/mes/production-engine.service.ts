@@ -70,9 +70,7 @@ export class ProductionEngineService {
 
   // ================= SEWING RECEIVE (SCAN FROM CHECK PANEL) =================
   async sewingReceive(qrCode: string, qty: number) {
-    // Parse qrCode untuk mendapatkan opNumber
     const parts = qrCode.split('-');
-    // Asumsi format QR: "item-opNumber" atau langsung opNumber
     const opNumber = parts.length > 1 ? parts[1] : qrCode;
 
     const op = await this.prisma.productionOrder.findUnique({
@@ -83,6 +81,13 @@ export class ProductionEngineService {
     // Pastikan OP berada di Check Panel
     if (op.currentStation !== StationCode.CP) {
       throw new BadRequestException('OP is not at Check Panel');
+    }
+
+    // 🔥 Validasi: harus ada set yang siap untuk sewing
+    if ((op.setsReadyForSewing ?? 0) <= 0) {
+      throw new BadRequestException(
+        'No sets ready for sewing. Possible cause: all patterns have 0 good pieces.'
+      );
     }
 
     // Pindahkan ke Sewing
@@ -127,17 +132,14 @@ export class ProductionEngineService {
     const line = await this.prisma.lineMaster.findUnique({ where: { code: device.lineCode } });
     const sewingConfig = line?.sewingConfig as any;
 
-    // Tentukan startIndex dari device.config atau fallback dari deviceId
     let startIndex = this.extractIndexFromDevice(device, 'start');
 
-    // Update progress start
     await this.prisma.sewingStartProgress.upsert({
       where: { opId_startIndex: { opId, startIndex } },
       update: { qty: { increment: qty } },
       create: { opId, startIndex, qty },
     });
 
-    // Update total qtySewingIn di ProductionOrder
     const totalIn = await this.prisma.sewingStartProgress.aggregate({
       where: { opId },
       _sum: { qty: true },
@@ -150,76 +152,66 @@ export class ProductionEngineService {
     return { success: true };
   }
 
-  // ================= SEWING FINISH =================
-async sewingFinish(deviceId: string, opId: string, qty: number) {
-  return this.prisma.$transaction(async (tx) => {
-    const device = await tx.iotDevice.findUnique({ where: { deviceId } });
-    if (!device) throw new NotFoundException('Device not found');
+  // ================= SEWING FINISH (dengan row locking) =================
+  async sewingFinish(deviceId: string, opId: string, qty: number) {
+    return this.prisma.$transaction(async (tx) => {
+      const device = await tx.iotDevice.findUnique({ where: { deviceId } });
+      if (!device) throw new NotFoundException('Device not found');
 
-    const line = await tx.lineMaster.findUnique({ where: { code: device.lineCode } });
-    const sewingConfig = line?.sewingConfig as any;
+      const line = await tx.lineMaster.findUnique({ where: { code: device.lineCode } });
+      const sewingConfig = line?.sewingConfig as any;
 
-    let finishIndex = this.extractIndexFromDevice(device, 'finish');
-    let finishConfig = sewingConfig?.finishes?.find((f: any) => f.index === finishIndex);
-    if (!finishConfig && line?.code === 'K1YH') {
-      finishConfig = { inputStarts: [1, 2] };
-    }
-    if (!finishConfig) {
-      throw new BadRequestException(`No configuration for finish index ${finishIndex} on line ${line?.code}`);
-    }
-    const inputStartIndices = finishConfig.inputStarts;
+      let finishIndex = this.extractIndexFromDevice(device, 'finish');
+      let finishConfig = sewingConfig?.finishes?.find((f: any) => f.id === finishIndex);
+      if (!finishConfig && line?.code === 'K1YH') {
+        finishConfig = { inputStarts: [1, 2] };
+      }
+      if (!finishConfig) {
+        throw new BadRequestException(`No configuration for finish index ${finishIndex} on line ${line?.code}`);
+      }
+      const inputStartIndices = finishConfig.inputStarts;
 
-    const startProgresses = await tx.sewingStartProgress.findMany({
-      where: { opId, startIndex: { in: inputStartIndices } }
-    });
+      for (const startIdx of inputStartIndices) {
+        await tx.$executeRaw`
+          SELECT * FROM "SewingStartProgress"
+          WHERE "opId" = ${opId} AND "startIndex" = ${startIdx}
+          FOR UPDATE
+        `;
+      }
 
-    if (startProgresses.length === 0) {
-      throw new BadRequestException('No start progress found for this finish');
-    }
-
-    // Ambil current finish qty
-    const finishProgress = await tx.sewingFinishProgress.findUnique({
-      where: { opId_finishIndex: { opId, finishIndex } }
-    });
-    const currentFinish = finishProgress?.qty || 0;
-
-    // Hitung available sets = min(start) - currentFinish
-    const minStart = Math.min(...startProgresses.map(p => p.qty));
-    const available = Math.max(0, minStart - currentFinish);
-    const possibleSets = Math.min(available, qty);
-
-    if (possibleSets > 0) {
-      // Update finish progress
-      await tx.sewingFinishProgress.upsert({
-        where: { opId_finishIndex: { opId, finishIndex } },
-        update: { qty: { increment: possibleSets } },
-        create: { opId, finishIndex, qty: possibleSets }
+      const startProgresses = await tx.sewingStartProgress.findMany({
+        where: { opId, startIndex: { in: inputStartIndices } }
       });
 
-      // Update qtySewingOut di ProductionOrder
-      await tx.productionOrder.update({
-        where: { id: opId },
-        data: { qtySewingOut: { increment: possibleSets } }
+      if (startProgresses.length === 0) {
+        throw new BadRequestException('No start progress found for this finish');
+      }
+
+      const finishProgress = await tx.sewingFinishProgress.findUnique({
+        where: { opId_finishIndex: { opId, finishIndex } }
       });
+      const currentFinish = finishProgress?.qty || 0;
 
-      // TIDAK MENGURANGI START PROGRESS
-    }
+      const minStart = Math.min(...startProgresses.map(p => p.qty));
+      const available = Math.max(0, minStart - currentFinish);
+      const possibleSets = Math.min(available, qty);
 
-    // Cek apakah OP selesai (pemindahan ke QC sekarang dilakukan oleh QC inspect)
-    // const op = await tx.productionOrder.findUnique({
-    //   where: { id: opId },
-    //   select: { setsReadyForSewing: true, qtySewingOut: true }
-    // });
-    // if (op && op.qtySewingOut >= op.setsReadyForSewing) {
-    //   await tx.productionOrder.update({
-    //     where: { id: opId },
-    //     data: { currentStation: StationCode.QC }
-    //   });
-    // }
+      if (possibleSets > 0) {
+        await tx.sewingFinishProgress.upsert({
+          where: { opId_finishIndex: { opId, finishIndex } },
+          update: { qty: { increment: possibleSets } },
+          create: { opId, finishIndex, qty: possibleSets }
+        });
 
-    return { success: true, setsProduced: possibleSets };
-  });
-}
+        await tx.productionOrder.update({
+          where: { id: opId },
+          data: { qtySewingOut: { increment: possibleSets } }
+        });
+      }
+
+      return { success: true, setsProduced: possibleSets };
+    });
+  }
 
   // ================= QC PROCESS =================
   async qcProcess(opId: string, good: number, ng: number) {
@@ -325,47 +317,52 @@ async sewingFinish(deviceId: string, opId: string, qty: number) {
       this.iotDeviceService.setSession(deviceId, session);
     }
 
+    // 🔄 Refresh daftar OP setiap kali tombol ditekan
+    const freshOps = await this.getPondOps(device.lineCode);
+    session.pondOps = freshOps;
+    session.lastRefresh = Date.now();
 
-      // 🔄 Refresh daftar OP setiap 10 detik
-    const now = Date.now();
-    if (!session.lastRefresh || now - session.lastRefresh > 10000) {
-      // Ambil ulang daftar OP dari database
-      const freshOps = await this.getPondOps(device.lineCode);
-      session.pondOps = freshOps;
-      session.lastRefresh = now;
-
-      // Jika masih ada OP yang sedang dipilih, pertahankan indeksnya
-      if (session.pondOps && session.pondOps.length > 0) {
-        const currentOpId = session.pondOps[session.pondOpIndex ?? 0]?.id;
-        const newIndex = session.pondOps.findIndex(op => op.id === currentOpId);
-        session.pondOpIndex = newIndex >= 0 ? newIndex : 0;
-      } else {
-        session.pondOps = undefined;
-        session.pondOpIndex = undefined;
-      }
+    // Jika tidak ada OP, reset session
+    if (!session.pondOps || session.pondOps.length === 0) {
+      session.pondOps = undefined;
+      session.pondOpIndex = undefined;
+      session.pondSelectedOpId = undefined;
+      session.pondPatternIndex = undefined;
+      session.pondState = undefined;
+      return { line1: 'No OP', line2: 'Waiting...' };
     }
 
-    // Ambil daftar OP jika belum ada
-    if (!session.pondOps) {
-      session.pondOps = await this.getPondOps(device.lineCode);
+    // Cari indeks berdasarkan selectedOpId jika ada
+    if (session.pondSelectedOpId) {
+      const newIndex = session.pondOps.findIndex(op => op.id === session.pondSelectedOpId);
+      if (newIndex >= 0) {
+        session.pondOpIndex = newIndex;
+      } else {
+        // Jika OP yang dipilih sudah tidak ada (misal karena selesai), pilih OP pertama
+        session.pondOpIndex = 0;
+        session.pondSelectedOpId = session.pondOps[0].id;
+        session.pondPatternIndex = 0;
+        session.pondState = 'SELECT_OP';
+      }
+    } else {
+      // Belum ada pilihan, set ke OP pertama
       session.pondOpIndex = 0;
+      session.pondSelectedOpId = session.pondOps[0].id;
       session.pondPatternIndex = 0;
       session.pondState = 'SELECT_OP';
     }
 
-    if (!session.pondOps?.length) {
-      return { line1: 'No OP', line2: 'Waiting...' };
-    }
-
-    const currentOp = session.pondOps[session.pondOpIndex ?? 0];
+    const currentOp = session.pondOps[session.pondOpIndex];
 
     // ===== SELECT OP =====
     if (session.pondState === 'SELECT_OP') {
       if (button === 'YELLOW') {
+        // Pindah ke OP berikutnya
         session.pondOpIndex = ((session.pondOpIndex ?? 0) + 1) % session.pondOps.length;
+        session.pondSelectedOpId = session.pondOps[session.pondOpIndex].id;
       } else if (button === 'RED') {
-        session.pondOpIndex =
-          ((session.pondOpIndex ?? 0) - 1 + session.pondOps.length) % session.pondOps.length;
+        session.pondOpIndex = ((session.pondOpIndex ?? 0) - 1 + session.pondOps.length) % session.pondOps.length;
+        session.pondSelectedOpId = session.pondOps[session.pondOpIndex].id;
       } else if (button === 'GREEN') {
         session.pondState = 'SELECT_PATTERN';
         session.pondPatternIndex = 0;
@@ -524,8 +521,10 @@ async sewingFinish(deviceId: string, opId: string, qty: number) {
         if (session.pondOps.length === 0) {
           session.pondOps = undefined;
           session.pondOpIndex = undefined;
+          session.pondSelectedOpId = undefined;
         } else {
           session.pondOpIndex = Math.min(session.pondOpIndex!, session.pondOps.length - 1);
+          session.pondSelectedOpId = session.pondOps[session.pondOpIndex].id;
         }
         session.pondState = 'SELECT_OP';
       }
@@ -539,9 +538,9 @@ async sewingFinish(deviceId: string, opId: string, qty: number) {
     const availablePatterns = op.patterns.filter(p => !p.completed);
 
     if (session.pondState === 'SELECT_OP') {
-      let line1 = `OP ${op.opNumber}`;
+      let line1 = op.opNumber;
       if (line1.length > 16) line1 = line1.substring(0, 13) + '...';
-      let line2 = op.style;
+      let line2 = op.itemNumberFG;
       if (line2.length > 16) line2 = line2.substring(0, 13) + '...';
       return { line1, line2 };
     } else if (session.pondState === 'SELECT_PATTERN') {
@@ -560,6 +559,82 @@ async sewingFinish(deviceId: string, opId: string, qty: number) {
       if (line2.length > 16) line2 = line2.substring(0, 13) + '...';
       return { line1, line2 };
     }
+    return { line1: 'Ready', line2: '' };
+  }
+
+  /**
+   * Mendapatkan tampilan LCD untuk Sparsha Pond berdasarkan sesi saat ini
+   * @param deviceId ID perangkat
+   * @returns Object berisi line1 dan line2 untuk ditampilkan di LCD
+   */
+  async getPondDisplay(deviceId: string): Promise<{ line1: string; line2: string }> {
+    const device = await this.prisma.iotDevice.findUnique({ where: { deviceId } });
+    if (!device) throw new NotFoundException('Device not registered');
+
+    let session = this.iotDeviceService.getSession(deviceId);
+    if (!session) {
+      session = { deviceId, station: device.station, line: device.lineCode };
+      this.iotDeviceService.setSession(deviceId, session);
+    }
+
+    // Ambil data terbaru
+    const freshOps = await this.getPondOps(device.lineCode);
+    session.pondOps = freshOps;
+    session.lastRefresh = Date.now();
+
+    if (!session.pondOps || session.pondOps.length === 0) {
+      session.pondOps = undefined;
+      session.pondOpIndex = undefined;
+      session.pondSelectedOpId = undefined;
+      session.pondPatternIndex = undefined;
+      session.pondState = undefined;
+      return { line1: 'No OP', line2: 'Waiting...' };
+    }
+
+    // Cari indeks berdasarkan selectedOpId
+    if (session.pondSelectedOpId) {
+      const newIndex = session.pondOps.findIndex(op => op.id === session.pondSelectedOpId);
+      if (newIndex >= 0) {
+        session.pondOpIndex = newIndex;
+      } else {
+        session.pondOpIndex = 0;
+        session.pondSelectedOpId = session.pondOps[0].id;
+        session.pondPatternIndex = 0;
+        session.pondState = 'SELECT_OP';
+      }
+    } else {
+      session.pondOpIndex = 0;
+      session.pondSelectedOpId = session.pondOps[0].id;
+      session.pondPatternIndex = 0;
+      session.pondState = 'SELECT_OP';
+    }
+
+    const op = session.pondOps[session.pondOpIndex];
+    const availablePatterns = op.patterns.filter(p => !p.completed);
+
+    if (session.pondState === 'SELECT_OP') {
+      let line1 = op.opNumber;
+      if (line1.length > 16) line1 = line1.substring(0, 13) + '...';
+      let line2 = op.itemNumberFG;
+      if (line2.length > 16) line2 = line2.substring(0, 13) + '...';
+      return { line1, line2 };
+    } else if (session.pondState === 'SELECT_PATTERN') {
+      const pattern = availablePatterns[session.pondPatternIndex ?? 0];
+      let line1 = pattern.name;
+      if (line1.length > 16) line1 = line1.substring(0, 13) + '...';
+      let line2 = `G:${pattern.good} NG:${pattern.ng} S:${pattern.target - pattern.current}`;
+      if (line2.length > 16) line2 = line2.substring(0, 13) + '...';
+      return { line1, line2 };
+    } else if (session.pondState === 'COUNTING') {
+      const pattern = availablePatterns[session.pondPatternIndex ?? 0];
+      const remaining = pattern.target - pattern.current;
+      let line1 = `${op.opNumber} +${pattern.good + pattern.ng}`;
+      if (line1.length > 16) line1 = line1.substring(0, 13) + '...';
+      let line2 = `${pattern.name} sisa ${remaining}`;
+      if (line2.length > 16) line2 = line2.substring(0, 13) + '...';
+      return { line1, line2 };
+    }
+
     return { line1: 'Ready', line2: '' };
   }
 
@@ -584,6 +659,9 @@ async sewingFinish(deviceId: string, opId: string, qty: number) {
         patternProgress: true,
       },
     });
+
+    console.log(`getPondOps for line ${lineCode} found ${ops.length} ops`);
+    ops.forEach(op => console.log(`- ${op.opNumber} station=${op.currentStation} readyForCP=${op.readyForCP}`));
 
     return ops.map(op => {
       const multiplier = op.line.patternMultiplier || 1;
@@ -624,6 +702,7 @@ async sewingFinish(deviceId: string, opId: string, qty: number) {
         id: op.id,
         opNumber: op.opNumber,
         style: op.styleCode,
+        itemNumberFG: op.itemNumberFG, // <-- ditambahkan
         qtyEntan: op.qtyEntan,
         qtyPond: op.qtyPond,
         multiplier,
@@ -637,9 +716,8 @@ async sewingFinish(deviceId: string, opId: string, qty: number) {
     if (device.config && typeof device.config === 'object' && 'sewingIndex' in device.config) {
       return (device.config as any).sewingIndex;
     }
-    // Fallback: ekstrak angka terakhir dari deviceId
     const match = device.deviceId.match(/(\d+)$/);
     if (match) return parseInt(match[1]);
-    return 1; // default
+    return 1;
   }
 }

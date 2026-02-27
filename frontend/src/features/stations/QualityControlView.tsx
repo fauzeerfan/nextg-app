@@ -1,50 +1,61 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+// frontend/src/features/stations/QualityControlView.tsx
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  CheckCircle, XCircle, RefreshCw, ImageIcon, ImageOff, AlertTriangle,
-  ClipboardCheck, ThumbsUp, Layers, Package, ArrowLeft, Wifi, Eye, Award,
-  Shield, CheckSquare, XSquare
+  CheckCircle, XCircle, RefreshCw, AlertTriangle,
+  ClipboardCheck, ThumbsUp, Layers, Package, ArrowLeft, Eye, Award,
+  Shield, CheckSquare, XSquare, Loader2, Info
 } from 'lucide-react';
 import type { ProductionOrder } from '../../types/production';
-import { NG_REASONS as FALLBACK_NG_REASONS } from '../../lib/data';
-
-type ProductionOrderWithId = ProductionOrder & { id: string };
 
 const API_BASE_URL = 'http://localhost:3000';
 const STORAGE_KEY_OP = 'nextg_qc_active_op';
-const STORAGE_KEY_GLOBAL_LOGS = 'nextg_qc_recent_logs';
 
-interface QCLog {
+interface QcInspection {
   id: string;
-  time: string;
-  opNumber?: string;
   good: number;
   ng: number;
-  reason?: string;
+  ngReasons: string[];
+  createdAt: string;
 }
 
-interface MetricCardProps {
-  title: string;
-  value: number | string;
-  icon: React.ElementType;
-  color?: 'amber' | 'emerald' | 'rose' | 'blue';
-  subtitle?: string;
-  suffix?: string;
+interface QcOp extends ProductionOrder {
+  inspected: number; // total inspected (qtyQC + qcNgQty)
+  remaining: number; // qtySewingOut - inspected
+  progress: number;  // persentase
 }
 
-const MetricCard = ({ title, value, icon: Icon, color = 'amber', subtitle, suffix }: MetricCardProps) => {
+const MetricCard = ({ 
+  title, 
+  value, 
+  icon: Icon, 
+  color = 'amber', 
+  subtitle, 
+  suffix 
+}: { 
+  title: string; 
+  value: number | string; 
+  icon: React.ElementType; 
+  color?: 'amber' | 'emerald' | 'rose' | 'blue'; 
+  subtitle?: string; 
+  suffix?: string; 
+}) => {
   const colors = {
     amber: { bg: 'from-amber-100 to-amber-50', icon: 'text-amber-600', darkBg: 'from-amber-900/20 to-amber-900/10' },
     emerald: { bg: 'from-emerald-100 to-emerald-50', icon: 'text-emerald-600', darkBg: 'from-emerald-900/20 to-emerald-900/10' },
     rose: { bg: 'from-rose-100 to-rose-50', icon: 'text-rose-600', darkBg: 'from-rose-900/20 to-rose-900/10' },
     blue: { bg: 'from-blue-100 to-blue-50', icon: 'text-blue-600', darkBg: 'from-blue-900/20 to-blue-900/10' }
-  }[color];
+  };
+  
+  // Fallback jika color tidak valid
+  const selected = colors[color] || colors.amber;
 
   return (
     <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-lg hover:shadow-xl transition-all duration-300">
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">{title}</div>
-        <div className={`w-10 h-10 bg-gradient-to-br ${colors.bg} dark:${colors.darkBg} rounded-lg flex items-center justify-center`}>
-          <Icon size={18} className={colors.icon} />
+        <div className={`w-10 h-10 bg-gradient-to-br ${selected.bg} dark:${selected.darkBg} rounded-lg flex items-center justify-center`}>
+          <Icon size={18} className={selected.icon} />
         </div>
       </div>
       <div className="text-3xl font-bold text-slate-900 dark:text-white">
@@ -56,25 +67,20 @@ const MetricCard = ({ title, value, icon: Icon, color = 'amber', subtitle, suffi
   );
 };
 
-export const QualityControlView = ({
-  addLog,
-  onNavigate: _onNavigate,
-}: {
-  addLog: (msg: string, type: any) => void;
-  onNavigate: (tab: string) => void;
-}) => {
-  const [ops, setOps] = useState<ProductionOrderWithId[]>([]);
-  const [actOp, setActOp] = useState<ProductionOrderWithId | null>(null);
+export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: string, type: any) => void; onNavigate: (tab: string) => void; }) => {
+  const [ops, setOps] = useState<QcOp[]>([]);
+  const [actOp, setActOp] = useState<QcOp | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpd, setLastUpd] = useState('');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [ngReason, setNgReason] = useState('');
   const [ngOpen, setNgOpen] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
-  const [refTrigger, setRefTrigger] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [setGoodImg, setSetGoodImg] = useState<string | null>(null);
   const [setNgImg, setSetNgImg] = useState<string | null>(null);
+  const [inspections, setInspections] = useState<QcInspection[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const isSubmittingRef = useRef(false);
 
   const getAuthHeaders = () => {
@@ -90,10 +96,17 @@ export const QualityControlView = ({
     try {
       const res = await fetch(`${API_BASE_URL}/production-orders?station=QC`);
       if (res.ok) {
-        setOps(await res.json());
-        setLastUpd(
-          new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-        );
+        const data: ProductionOrder[] = await res.json();
+        // Hitung inspected, remaining, progress
+        const enriched: QcOp[] = data.map(op => {
+          const inspected = (op.qtyQC || 0) + (op.qcNgQty || 0);
+          const total = op.qtySewingOut || 0;
+          const remaining = total - inspected;
+          const progress = total > 0 ? Math.round((inspected / total) * 100) : 0;
+          return { ...op, inspected, remaining, progress };
+        });
+        setOps(enriched);
+        setLastUpd(new Date().toLocaleTimeString());
       }
     } catch {
       console.error('Failed to fetch QC ops');
@@ -108,11 +121,7 @@ export const QualityControlView = ({
     return () => clearInterval(i);
   }, [fetchOps]);
 
-  useEffect(() => {
-    fetchOps();
-  }, [refTrigger]);
-
-  const loadSetImages = async (op: ProductionOrderWithId) => {
+  const loadSetImages = async (op: ProductionOrder) => {
     setSetGoodImg(null);
     setSetNgImg(null);
     const lineCode = op.lineCode || 'K1YH';
@@ -129,20 +138,29 @@ export const QualityControlView = ({
           setSetNgImg(master.imgSetNg || null);
         }
       }
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   };
 
-  const fetchCategories = async (lineCode: string) => {
+  const fetchQcCategories = async (lineCode: string) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/line-masters/${lineCode}/ng-categories`, {
+      const res = await fetch(`${API_BASE_URL}/line-masters/${lineCode}/qc-ng-categories`, {
         headers: getAuthHeaders(),
       });
       if (res.ok) setCategories(await res.json());
       else setCategories([]);
     } catch {
       console.error;
+    }
+  };
+
+  const fetchInspections = async (opId: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/production-orders/${opId}/qc-inspections`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) setInspections(await res.json());
+    } catch {
+      setInspections([]);
     }
   };
 
@@ -154,7 +172,8 @@ export const QualityControlView = ({
         if (parsed?.id) {
           setActOp(parsed);
           loadSetImages(parsed);
-          fetchCategories(parsed.lineCode || 'K1YH');
+          fetchQcCategories(parsed.lineCode || 'K1YH');
+          fetchInspections(parsed.id);
           addLog(`Session restored: ${parsed.opNumber}`, 'info');
         }
       } catch {
@@ -168,10 +187,11 @@ export const QualityControlView = ({
     setTimeout(() => setToast(null), 2000);
   };
 
-  const selectOp = (op: ProductionOrderWithId) => {
+  const selectOp = (op: QcOp) => {
     setActOp(op);
     loadSetImages(op);
-    fetchCategories(op.lineCode || 'K1YH');
+    fetchQcCategories(op.lineCode || 'K1YH');
+    fetchInspections(op.id);
     localStorage.setItem(STORAGE_KEY_OP, JSON.stringify(op));
     addLog(`Inspecting: ${op.opNumber}`, 'info');
     setNgReason('');
@@ -182,6 +202,7 @@ export const QualityControlView = ({
     setActOp(null);
     setSetGoodImg(null);
     setSetNgImg(null);
+    setInspections([]);
     fetchOps();
   };
 
@@ -207,32 +228,19 @@ export const QualityControlView = ({
       });
 
       if (res.ok) {
-        // Update local state (simulate)
-        const log: QCLog = {
-          id: `L-${Date.now()}`,
-          time: new Date().toLocaleTimeString(),
-          opNumber: actOp.opNumber,
-          good: isGood ? 1 : 0,
-          ng: isGood ? 0 : 1,
-          reason,
-        };
-        const recent = JSON.parse(localStorage.getItem(STORAGE_KEY_GLOBAL_LOGS) || '[]');
-        localStorage.setItem(STORAGE_KEY_GLOBAL_LOGS, JSON.stringify([log, ...recent].slice(0, 50)));
-
         showToast(isGood ? 'Good +1' : 'NG Recorded', isGood ? 'success' : 'error');
-        setRefTrigger((prev) => prev + 1);
-
-        // Check if OP is fully inspected (good+ng >= total sets from sewing)
-        // We'll rely on backend to update station, but for UI we can just refresh ops
-        // Optionally, if all done, go back
-        // For simplicity, we'll just refresh ops after a short delay
-        setTimeout(() => {
-          fetchOps();
-          if (actOp && (actOp.qtySewingOut || 0) <= ((actOp.qtyQC || 0) + (actOp.qcNgQty || 0) + 1)) {
-            // If likely done, go back
-            back();
+        // Refresh data
+        await fetchOps();
+        // Update active op jika masih sama
+        if (actOp) {
+          const updated = ops.find(o => o.id === actOp.id);
+          if (updated) {
+            setActOp(updated);
+            fetchInspections(updated.id);
+          } else {
+            back(); // OP sudah tidak ada di list (selesai)
           }
-        }, 500);
+        }
       } else {
         const err = await res.json();
         showToast(`Gagal (${res.status}): ${err.message}`, 'error');
@@ -262,21 +270,20 @@ export const QualityControlView = ({
   };
 
   const totalOps = ops.length;
+  const totalInput = ops.reduce((s, o) => s + (o.qtySewingOut || 0), 0);
   const totalGood = ops.reduce((s, o) => s + (o.qtyQC || 0), 0);
   const totalNg = ops.reduce((s, o) => s + (o.qcNgQty || 0), 0);
-  const totalInput = ops.reduce((s, o) => s + (o.qtySewingOut || 0), 0);
-  const completionRate = totalInput > 0 ? Math.round((totalGood / totalInput) * 100) : 0;
+  const completionRate = totalInput > 0 ? Math.round(((totalGood + totalNg) / totalInput) * 100) : 0;
 
   return (
     <div className="animate-in fade-in duration-300">
+      {/* Toast notification */}
       {toast && (
-        <div
-          className={`fixed top-6 right-6 z-[200] animate-in slide-in-from-right-5 fade-in duration-300 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-2xl border ${
-            toast.type === 'success'
-              ? 'bg-gradient-to-r from-emerald-500 to-emerald-400 text-white border-emerald-400'
-              : 'bg-gradient-to-r from-rose-500 to-rose-400 text-white border-rose-400'
-          }`}
-        >
+        <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-2xl border ${
+          toast.type === 'success'
+            ? 'bg-gradient-to-r from-emerald-500 to-emerald-400 text-white border-emerald-400'
+            : 'bg-gradient-to-r from-rose-500 to-rose-400 text-white border-rose-400'
+        }`}>
           <div className="flex items-center gap-3">
             {toast.type === 'success' ? <CheckCircle size={20} /> : <XCircle size={20} />}
             <span className="font-bold text-sm">{toast.msg}</span>
@@ -297,7 +304,7 @@ export const QualityControlView = ({
                   <ClipboardCheck size={28} className="text-white" />
                 </div>
                 <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-400 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-lg">
-                  <Wifi size={16} className="text-white" />
+                  <Eye size={16} className="text-white" />
                 </div>
               </div>
               <div>
@@ -322,13 +329,9 @@ export const QualityControlView = ({
               <button
                 onClick={fetchOps}
                 disabled={refreshing}
-                className="group px-5 py-3 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 hover:border-amber-300 dark:hover:border-amber-700 transition-all duration-300 shadow-sm hover:shadow-md"
+                className="group px-5 py-3 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 hover:border-amber-300 dark:hover:border-amber-700 transition-all"
               >
-                {refreshing ? (
-                  <RefreshCw size={18} className="animate-spin" />
-                ) : (
-                  <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-500" />
-                )}
+                {refreshing ? <RefreshCw size={18} className="animate-spin" /> : <RefreshCw size={18} className="group-hover:rotate-180 transition-transform" />}
                 Refresh
               </button>
             </div>
@@ -336,8 +339,8 @@ export const QualityControlView = ({
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-8 pb-8">
           <MetricCard title="Total Input" value={totalInput} icon={Package} color="blue" suffix="sets" subtitle="From Sewing" />
-          <MetricCard title="Verified Good" value={totalGood} icon={CheckCircle} color="emerald" suffix="sets" subtitle="Cumulative" />
-          <MetricCard title="NG Total" value={totalNg} icon={AlertTriangle} color="rose" suffix="sets" subtitle="Cumulative" />
+          <MetricCard title="Verified Good" value={totalGood} icon={CheckCircle} color="emerald" suffix="sets" />
+          <MetricCard title="NG Total" value={totalNg} icon={AlertTriangle} color="rose" suffix="sets" />
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-lg">
             <div className="flex items-center justify-between mb-3">
               <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">Completion Rate</div>
@@ -347,35 +350,26 @@ export const QualityControlView = ({
             </div>
             <div className="text-3xl font-bold text-slate-900 dark:text-white">{completionRate}%</div>
             <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mt-3 overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-1000"
-                style={{ width: `${completionRate}%` }}
-              ></div>
+              <div className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all" style={{ width: `${completionRate}%` }} />
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {/* Left Column - OP List */}
         <div className="lg:col-span-1">
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden h-full">
             <div className="p-6 border-b border-slate-100 dark:border-slate-700/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                      actOp
-                        ? 'bg-gradient-to-br from-purple-100 to-purple-50 dark:from-purple-900/30 dark:to-purple-900/10'
-                        : 'bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/30 dark:to-amber-900/10'
-                    }`}
-                  >
-                    {actOp ? (
-                      <Layers size={20} className="text-purple-600 dark:text-purple-400" />
-                    ) : (
-                      <ClipboardCheck size={20} className="text-amber-600 dark:text-amber-400" />
-                    )}
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                    actOp
+                      ? 'bg-gradient-to-br from-purple-100 to-purple-50 dark:from-purple-900/30 dark:to-purple-900/10'
+                      : 'bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/30 dark:to-amber-900/10'
+                  }`}>
+                    {actOp ? <Layers size={20} className="text-purple-600 dark:text-purple-400" /> : <ClipboardCheck size={20} className="text-amber-600 dark:text-amber-400" />}
                   </div>
                   <div>
                     <h3 className="font-bold text-slate-900 dark:text-white">
@@ -387,9 +381,7 @@ export const QualityControlView = ({
                   </div>
                 </div>
                 <div className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full">
-                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    {actOp ? 1 : totalOps}
-                  </span>
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{actOp ? 1 : totalOps}</span>
                 </div>
               </div>
             </div>
@@ -416,38 +408,54 @@ export const QualityControlView = ({
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <div className="font-mono font-bold text-lg text-slate-900 dark:text-white">
-                            {op.opNumber}
-                          </div>
+                          <div className="font-mono font-bold text-lg text-slate-900 dark:text-white">{op.opNumber}</div>
                           <div className="text-sm text-slate-600 dark:text-slate-400">Style: {op.styleCode}</div>
                         </div>
                       </div>
                       <div className="flex items-center justify-between mt-3">
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
-                          <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Ready</span>
+                          <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Sisa: {op.remaining}</span>
                         </div>
                         <div className="text-right">
                           <div className="text-lg font-bold text-slate-900 dark:text-white">{op.qtySewingOut || 0}</div>
                           <div className="text-xs text-slate-500">sets</div>
                         </div>
                       </div>
+                      {/* Progress bar */}
+                      <div className="mt-2">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-slate-500">Progress</span>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">{op.progress}%</span>
+                        </div>
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all"
+                            style={{ width: `${op.progress}%` }}
+                          />
+                        </div>
+                      </div>
                       <div className="mt-2 flex justify-between text-xs">
                         <span className="text-emerald-600">G:{op.qtyQC || 0}</span>
                         <span className="text-rose-600">NG:{op.qcNgQty || 0}</span>
-                        <span className="text-slate-500">Sisa:{(op.qtySewingOut || 0) - ((op.qtyQC || 0) + (op.qcNgQty || 0))}</span>
                       </div>
                     </div>
                   ))
                 )
               ) : (
-                // No patterns to select, just show a placeholder or nothing
                 <div className="text-center py-12">
                   <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-purple-50 dark:from-purple-900/10 dark:to-purple-900/5 rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <Eye size={32} className="text-purple-400" />
                   </div>
                   <h4 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">Ready to Inspect</h4>
-                  <p className="text-slate-500 dark:text-slate-400">Click the GOOD or NOT GOOD button to begin.</p>
+                  <p className="text-slate-500 dark:text-slate-400">Klik tombol GOOD atau NOT GOOD.</p>
+                  <button
+                    onClick={() => setShowHistory(true)}
+                    className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 mx-auto hover:bg-purple-700"
+                  >
+                    <Info size={16} />
+                    Lihat History Inspeksi
+                  </button>
                 </div>
               )}
             </div>
@@ -463,22 +471,23 @@ export const QualityControlView = ({
               </div>
               <h3 className="text-2xl font-bold text-slate-700 dark:text-slate-300 mb-3">Select an Order to Inspect</h3>
               <p className="text-slate-500 dark:text-slate-400 text-center mb-8 max-w-md mx-auto">
-                Choose a production order from the list to begin set inspection.
+                Pilih production order dari daftar untuk memulai inspeksi set.
               </p>
-              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-2 text-sm text-slate-500">
                 <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
-                <span>Click on any order to start</span>
+                <span>Klik pada order untuk memulai</span>
               </div>
             </div>
           ) : (
             <div className="space-y-8">
+              {/* Info OP dan progress */}
               <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
                 <div className="p-8 border-b border-slate-100 dark:border-slate-700/50">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                     <div className="flex items-center gap-4">
                       <button
                         onClick={back}
-                        className="group p-3 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-amber-300 dark:hover:border-amber-700 transition-all duration-300"
+                        className="group p-3 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-amber-300 dark:hover:border-amber-700 transition-all"
                         title="Back to queue"
                       >
                         <ArrowLeft size={20} className="text-slate-600 dark:text-slate-300 group-hover:text-amber-600" />
@@ -498,13 +507,26 @@ export const QualityControlView = ({
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <div className="text-sm text-slate-500 dark:text-slate-400">Total Good</div>
-                        <div className="text-2xl font-bold text-emerald-600">{actOp.qtyQC || 0}</div>
+                        <div className="text-sm text-slate-500 dark:text-slate-400">Sudah Diinspeksi</div>
+                        <div className="text-2xl font-bold text-emerald-600">{actOp.inspected}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm text-slate-500 dark:text-slate-400">Total NG</div>
-                        <div className="text-2xl font-bold text-rose-600">{actOp.qcNgQty || 0}</div>
+                        <div className="text-sm text-slate-500 dark:text-slate-400">Sisa</div>
+                        <div className="text-2xl font-bold text-amber-600">{actOp.remaining}</div>
                       </div>
+                    </div>
+                  </div>
+                  {/* Progress bar besar */}
+                  <div className="mt-6">
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-slate-600 dark:text-slate-400">Progress Inspeksi</span>
+                      <span className="font-bold text-slate-900 dark:text-white">{actOp.progress}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-4 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-500"
+                        style={{ width: `${actOp.progress}%` }}
+                      />
                     </div>
                   </div>
                 </div>
@@ -515,9 +537,9 @@ export const QualityControlView = ({
                       <Eye size={24} className="text-purple-600 dark:text-purple-400" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-slate-900 dark:text-white">Inspecting Set</h3>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white">Inspeksi Set</h3>
                       <p className="text-sm text-slate-500 dark:text-slate-400">
-                        Click GOOD or NOT GOOD to record inspection
+                        Klik GOOD atau NOT GOOD untuk merekam inspeksi
                       </p>
                     </div>
                   </div>
@@ -533,7 +555,7 @@ export const QualityControlView = ({
                     >
                       <button
                         onClick={handleGood}
-                        disabled={submitting}
+                        disabled={submitting || actOp.remaining === 0}
                         className="absolute inset-0 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -546,7 +568,7 @@ export const QualityControlView = ({
                               onError={handleImgError}
                             />
                             <div className="hidden absolute inset-0 flex-col items-center justify-center text-emerald-600 font-bold text-2xl bg-gradient-to-br from-emerald-50 to-white dark:from-slate-900 dark:to-slate-800 p-8">
-                              <ImageIcon size={48} className="mb-4 text-emerald-400" />
+                              <CheckCircle size={48} className="mb-4 text-emerald-400" />
                               <span>Set Image Not Available</span>
                             </div>
                           </>
@@ -556,7 +578,7 @@ export const QualityControlView = ({
                               <ThumbsUp size={32} className="text-white" />
                             </div>
                             <span>GOOD</span>
-                            <span className="text-base font-normal mt-3 opacity-70">(No Image Configured)</span>
+                            <span className="text-base font-normal mt-3 opacity-70">(No Image)</span>
                           </div>
                         )}
                       </button>
@@ -564,7 +586,7 @@ export const QualityControlView = ({
                         <div className="flex items-center justify-between">
                           <div className="text-lg font-bold">Accept</div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm">Press or click</span>
+                            <span className="text-sm">Press</span>
                             <CheckCircle size={20} className="text-emerald-300" />
                           </div>
                         </div>
@@ -581,7 +603,7 @@ export const QualityControlView = ({
                     >
                       <button
                         onClick={handleNg}
-                        disabled={submitting}
+                        disabled={submitting || actOp.remaining === 0}
                         className="absolute inset-0 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -594,7 +616,7 @@ export const QualityControlView = ({
                               onError={handleImgError}
                             />
                             <div className="hidden absolute inset-0 flex-col items-center justify-center text-rose-600 font-bold text-2xl bg-gradient-to-br from-rose-50 to-white dark:from-slate-900 dark:to-slate-800 p-8">
-                              <ImageOff size={48} className="mb-4 text-rose-400" />
+                              <XCircle size={48} className="mb-4 text-rose-400" />
                               <span>Set Image Not Available</span>
                             </div>
                           </>
@@ -604,7 +626,7 @@ export const QualityControlView = ({
                               <AlertTriangle size={32} className="text-white" />
                             </div>
                             <span>NOT GOOD</span>
-                            <span className="text-base font-normal mt-3 opacity-70">(No Image Configured)</span>
+                            <span className="text-base font-normal mt-3 opacity-70">(No Image)</span>
                           </div>
                         )}
                       </button>
@@ -612,7 +634,7 @@ export const QualityControlView = ({
                         <div className="flex items-center justify-between">
                           <div className="text-lg font-bold">Reject</div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm">Press or click</span>
+                            <span className="text-sm">Press</span>
                             <XCircle size={20} className="text-rose-300" />
                           </div>
                         </div>
@@ -628,19 +650,19 @@ export const QualityControlView = ({
 
       {/* NG Modal */}
       {ngOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 p-8 rounded-3xl shadow-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 bg-gradient-to-br from-rose-500 to-rose-400 rounded-2xl flex items-center justify-center">
                 <AlertTriangle size={24} className="text-white" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Select Defect Reason</h3>
-                <p className="text-sm text-slate-600 dark:text-slate-300">Choose the primary reason for rejection</p>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Pilih Alasan Defect</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300">Pilih alasan utama penolakan</p>
               </div>
             </div>
             <div className="grid gap-2 max-h-[300px] overflow-y-auto mb-6">
-              {(categories.length ? categories : FALLBACK_NG_REASONS.map((r) => r.label)).map((reason, i) => (
+              {categories.map((reason, i) => (
                 <button
                   key={i}
                   onClick={() => setNgReason(reason)}
@@ -659,15 +681,55 @@ export const QualityControlView = ({
                 onClick={() => setNgOpen(false)}
                 className="flex-1 py-3.5 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               >
-                Cancel
+                Batal
               </button>
               <button
                 onClick={confirmNg}
                 disabled={!ngReason}
-                className="flex-1 py-3.5 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-700 hover:to-rose-600 text-white rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
+                className="flex-1 py-3.5 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-700 hover:to-rose-600 text-white rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
-                Confirm NG
+                Konfirmasi NG
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {showHistory && actOp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+              <h3 className="text-xl font-bold">History Inspeksi {actOp.opNumber}</h3>
+              <button onClick={() => setShowHistory(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
+                <XCircle size={20} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              {inspections.length === 0 ? (
+                <p className="text-center text-slate-500 py-8">Belum ada inspeksi</p>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-left text-sm text-slate-500">
+                      <th className="pb-3">Waktu</th>
+                      <th className="pb-3">Good</th>
+                      <th className="pb-3">NG</th>
+                      <th className="pb-3">Alasan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inspections.map((ins) => (
+                      <tr key={ins.id} className="border-t border-slate-100 dark:border-slate-700">
+                        <td className="py-3">{new Date(ins.createdAt).toLocaleTimeString()}</td>
+                        <td className="py-3 text-emerald-600 font-bold">{ins.good}</td>
+                        <td className="py-3 text-rose-600 font-bold">{ins.ng}</td>
+                        <td className="py-3 text-sm">{ins.ngReasons?.join(', ') || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
