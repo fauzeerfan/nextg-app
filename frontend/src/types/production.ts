@@ -49,6 +49,7 @@ export interface ProductionOrder {
   qtyCP: number;             // total masuk CP (good + ng)
   cpGoodQty: number;         // good after Check Panel
   cpNgQty: number;           // ng after Check Panel
+  allPatternsCompleted?: boolean;
 
   // Sewing quantities
   qtySewingIn: number;       // input to Sewing (start)

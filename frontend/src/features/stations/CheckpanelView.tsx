@@ -235,6 +235,12 @@ export const CheckPanelView = ({
   };
 
   const selectOp = (op: ProductionOrder) => {
+    // 🔥 Cegah jika OP sudah selesai (allPatternsCompleted = true)
+    if (op.allPatternsCompleted) {
+      showToast('OP sudah selesai dan siap dikirim ke sewing', 'error');
+      return;
+    }
+
     setActOp(op);
     loadPatterns(op);
     fetchProg(op.id);
@@ -492,11 +498,13 @@ export const CheckPanelView = ({
                     <div
                       key={op.id}
                       className={`group p-4 rounded-2xl border-2 transition-all duration-300 cursor-pointer mb-2 ${
-                        actOp?.id === op.id
-                          ? 'border-blue-500 bg-gradient-to-r from-blue-50 to-white dark:from-blue-900/20 dark:to-slate-800 shadow-lg'
-                          : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-lg'
+                        op.allPatternsCompleted
+                          ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 opacity-70 cursor-not-allowed'
+                          : actOp?.id === op.id
+                            ? 'border-blue-500 bg-gradient-to-r from-blue-50 to-white dark:from-blue-900/20 dark:to-slate-800 shadow-lg'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-lg'
                       }`}
-                      onClick={() => selectOp(op)}
+                      onClick={() => !op.allPatternsCompleted && selectOp(op)}
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -511,11 +519,22 @@ export const CheckPanelView = ({
                           <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                           <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Ready</span>
                         </div>
-                        <div className="text-right">
-                          <div className="text-lg font-bold text-slate-900 dark:text-white">{op.qtyPond || 0}</div>
-                          <div className="text-xs text-slate-500">pieces</div>
-                        </div>
+                          <div className="text-right">
+                            <div className="text-lg font-bold text-slate-900 dark:text-white">{op.qtyPond || 0}</div>
+                            <div className="text-xs text-slate-500">pieces</div>
+                            {op.allPatternsCompleted && (
+                              <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                                {op.setsReadyForSewing || 0} sets ready
+                              </div>
+                            )}
+                          </div>
                       </div>
+                      {op.allPatternsCompleted && (
+                        <div className="mt-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          <CheckCircle size={14} />
+                          Ready for Sewing
+                        </div>
+                      )}
                     </div>
                   ))
                 )

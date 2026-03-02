@@ -111,7 +111,10 @@ export class CheckPanelService {
           const setsReady = Math.min(...allInspections.map(i => i.good));
           await tx.productionOrder.update({
             where: { id: opId },
-            data: { setsReadyForSewing: setsReady },
+            data: { 
+              setsReadyForSewing: setsReady,
+              allPatternsCompleted: true, // <-- tambahan field ini
+            },
           });
           console.log(`setsReadyForSewing updated to ${setsReady} for OP ${op.opNumber}`);
         }
