@@ -68,8 +68,8 @@ export class ProductionEngineService {
     return { success: true };
   }
 
-  // ================= SEWING RECEIVE (SCAN FROM CHECK PANEL) =================
-  async sewingReceive(qrCode: string, qty: number) {
+  // ================= SEND TO SEWING VIA SCANNER (PARSIAL) =================
+  async sendToSewingFromScan(qrCode: string, qty: number) {
     const parts = qrCode.split('-');
     const opNumber = parts.length > 1 ? parts[1] : qrCode;
 
@@ -78,36 +78,35 @@ export class ProductionEngineService {
     });
     if (!op) throw new NotFoundException('OP not found');
 
-    // Pastikan OP berada di Check Panel
     if (op.currentStation !== StationCode.CP) {
       throw new BadRequestException('OP is not at Check Panel');
     }
 
-    // 🔥 Validasi: harus ada set yang siap untuk sewing
-    if ((op.setsReadyForSewing ?? 0) <= 0) {
-      throw new BadRequestException(
-        'No sets ready for sewing. Possible cause: all patterns have 0 good pieces.'
-      );
+    if ((op.setsReadyForSewing ?? 0) < qty) {
+      throw new BadRequestException(`Insufficient sets ready. Available: ${op.setsReadyForSewing}`);
     }
 
-    // Pindahkan ke Sewing
-    await this.prisma.productionOrder.update({
-      where: { id: op.id },
-      data: { currentStation: StationCode.SEWING },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      await tx.productionOrder.update({
+        where: { id: op.id },
+        data: {
+          setsReadyForSewing: { decrement: qty },
+          qtySewingIn: { increment: qty },
+        },
+      });
 
-    // Catat log penerimaan
-    await this.prisma.productionLog.create({
-      data: {
-        opId: op.id,
-        station: StationCode.SEWING,
-        type: 'RECEIVED',
-        qty: qty,
-        note: `Received from Check Panel via scan`,
-      },
-    });
+      await tx.productionLog.create({
+        data: {
+          opId: op.id,
+          station: StationCode.CP,
+          type: 'SEND_TO_SEWING',
+          qty,
+          note: `Sent ${qty} sets to Sewing via scan`,
+        },
+      });
 
-    return { success: true, opNumber: op.opNumber, qty };
+      return { success: true, remaining: (op.setsReadyForSewing ?? 0) - qty };
+    });
   }
 
   // ================= SEWING START =================
@@ -124,9 +123,11 @@ export class ProductionEngineService {
       throw new BadRequestException('OP is not at Sewing station');
     }
 
-    const remaining = op.setsReadyForSewing - op.qtySewingIn;
+    // 🔥 Target setengah set = setsReadyForSewing * 2
+    const targetHalfSets = (op.setsReadyForSewing ?? 0) * 2;
+    const remaining = targetHalfSets - (op.qtySewingIn ?? 0);
     if (qty > remaining) {
-      throw new BadRequestException(`Cannot start more than remaining ${remaining} sets`);
+      throw new BadRequestException(`Cannot start more than remaining ${remaining} half-sets`);
     }
 
     const line = await this.prisma.lineMaster.findUnique({ where: { code: device.lineCode } });
@@ -322,7 +323,6 @@ export class ProductionEngineService {
     session.pondOps = freshOps;
     session.lastRefresh = Date.now();
 
-    // Jika tidak ada OP, reset session
     if (!session.pondOps || session.pondOps.length === 0) {
       session.pondOps = undefined;
       session.pondOpIndex = undefined;
@@ -338,14 +338,13 @@ export class ProductionEngineService {
       if (newIndex >= 0) {
         session.pondOpIndex = newIndex;
       } else {
-        // Jika OP yang dipilih sudah tidak ada (misal karena selesai), pilih OP pertama
+        // Jika OP yang dipilih sudah tidak ada, pilih OP pertama
         session.pondOpIndex = 0;
         session.pondSelectedOpId = session.pondOps[0].id;
         session.pondPatternIndex = 0;
         session.pondState = 'SELECT_OP';
       }
     } else {
-      // Belum ada pilihan, set ke OP pertama
       session.pondOpIndex = 0;
       session.pondSelectedOpId = session.pondOps[0].id;
       session.pondPatternIndex = 0;
@@ -357,7 +356,6 @@ export class ProductionEngineService {
     // ===== SELECT OP =====
     if (session.pondState === 'SELECT_OP') {
       if (button === 'YELLOW') {
-        // Pindah ke OP berikutnya
         session.pondOpIndex = ((session.pondOpIndex ?? 0) + 1) % session.pondOps.length;
         session.pondSelectedOpId = session.pondOps[session.pondOpIndex].id;
       } else if (button === 'RED') {
@@ -702,7 +700,7 @@ export class ProductionEngineService {
         id: op.id,
         opNumber: op.opNumber,
         style: op.styleCode,
-        itemNumberFG: op.itemNumberFG, // <-- ditambahkan
+        itemNumberFG: op.itemNumberFG,
         qtyEntan: op.qtyEntan,
         qtyPond: op.qtyPond,
         multiplier,

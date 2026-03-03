@@ -6,7 +6,7 @@ import {
   Body,
   Query,
   NotFoundException,
-  BadRequestException, // <-- ditambahkan
+  BadRequestException,
 } from '@nestjs/common';
 import { IotService } from './iot.service';
 import { ProductionEngineService } from '../mes/production-engine.service';
@@ -85,8 +85,8 @@ export class IotController {
     if (device.station === 'CP') {
       return this.productionEngine.cpScan(body.qrCode, body.qty || 1);
     } else if (device.station === 'SEWING') {
-      // Panggil sewingReceive, bukan sewingStart
-      return this.productionEngine.sewingReceive(body.qrCode, body.qty || 1);
+      // 🔥 Panggil method baru untuk pengiriman parsial dari Check Panel ke Sewing
+      return this.productionEngine.sendToSewingFromScan(body.qrCode, body.qty || 1);
     } else {
       throw new NotFoundException('Unsupported station for scanner');
     }

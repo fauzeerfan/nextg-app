@@ -16,8 +16,13 @@ export class ProductionOrdersService {
     });
   }
 
+  /**
+   * Mendapatkan daftar OP aktif untuk suatu stasiun.
+   * Untuk stasiun yang dapat berjalan paralel (SEWING, QC, PACKING),
+   * digunakan filter berdasarkan kuantitas, bukan currentStation.
+   */
   async findActiveForStation(station: string, includeProgress = false) {
-    // Khusus untuk QC: cari OP dengan output sewing yang belum diinspeksi
+    // ===== QUALITY CONTROL =====
     if (station === 'QC') {
       const ops = await this.prisma.productionOrder.findMany({
         where: {
@@ -33,32 +38,51 @@ export class ProductionOrdersService {
       return ops.filter(op => op.qtySewingOut > (op.qtyQC + op.qcNgQty));
     }
 
-    // Untuk station lain, tetap filter berdasarkan currentStation
-    const where: any = {
-      status: ProductionStatus.WIP,
-      currentStation: station as StationCode,
-    };
-
-    const includeOptions: any = {
-      line: true,
-    };
-    if (station === 'CUTTING_POND') {
-      includeOptions.patternProgress = true;
+    // ===== SEWING =====
+    if (station === 'SEWING') {
+      const ops = await this.prisma.productionOrder.findMany({
+        where: {
+          status: ProductionStatus.WIP,
+          setsReadyForSewing: { gt: 0 },
+        },
+        include: {
+          line: true,
+          sewingStartProgress: true,
+          sewingFinishProgress: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+      // Filter: masih ada set yang belum selesai (qtySewingOut < setsReadyForSewing)
+      return ops.filter(op => (op.qtySewingOut || 0) < (op.setsReadyForSewing || 0));
     }
-    // Jika station SEWING dan includeProgress true, sertakan progress
-    if (station === 'SEWING' && includeProgress) {
-      includeOptions.sewingStartProgress = true;
-      includeOptions.sewingFinishProgress = true;
+
+    // ===== PACKING =====
+    if (station === 'PACKING') {
+      const ops = await this.prisma.productionOrder.findMany({
+        where: {
+          status: ProductionStatus.WIP,
+        },
+        include: { line: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      return ops.filter(op => (op.qtyQC || 0) > (op.qtyPacking || 0));
     }
 
-    const ops = await this.prisma.productionOrder.findMany({
-      where,
-      include: includeOptions,
-      orderBy: { createdAt: 'asc' },
-    });
-
-    // Jika station CUTTING_POND, kita format ulang patternProgress menjadi array patterns
+    // ===== CUTTING POND =====
     if (station === 'CUTTING_POND') {
+      const ops = await this.prisma.productionOrder.findMany({
+        where: {
+          status: ProductionStatus.WIP,
+          currentStation: station as StationCode,
+          readyForCP: false,
+        },
+        include: {
+          line: true,
+          patternProgress: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+      // Format patternProgress menjadi array patterns
       return ops.map(op => ({
         ...op,
         patterns: op.patternProgress?.map(p => ({
@@ -70,11 +94,48 @@ export class ProductionOrdersService {
           current: p.good + p.ng,
           completed: p.completed,
         })) || [],
-        patternProgress: undefined, // hapus data mentah
+        patternProgress: undefined,
       }));
     }
 
-    return ops;
+    // ===== CHECK PANEL =====
+    if (station === 'CP') {
+      const ops = await this.prisma.productionOrder.findMany({
+        where: {
+          status: ProductionStatus.WIP,
+          currentStation: station as StationCode,
+          allPatternsCompleted: false,
+          setsReadyForSewing: { gt: 0 },
+        },
+        include: { line: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      return ops;
+    }
+
+    // ===== CUTTING ENTAN =====
+    if (station === 'CUTTING_ENTAN') {
+      const ops = await this.prisma.productionOrder.findMany({
+        where: {
+          status: ProductionStatus.WIP,
+          qtyEntan: { gt: this.prisma.productionOrder.fields.qtySentToPond },
+        },
+        include: { line: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      return ops;
+    }
+
+    // ===== STASIUN LAIN (FALLBACK) =====
+    const where: any = {
+      status: ProductionStatus.WIP,
+      currentStation: station as StationCode,
+    };
+    return this.prisma.productionOrder.findMany({
+      where,
+      include: { line: true },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
   async findHistoryForStation(station: string) {
@@ -106,7 +167,7 @@ export class ProductionOrdersService {
   }
 
   // ======================================================
-  // PATTERN PROGRESS (NEW)
+  // PATTERN PROGRESS
   // ======================================================
   async getPatternProgress(opId: string) {
     const progress = await this.prisma.patternProgress.findMany({
@@ -117,7 +178,7 @@ export class ProductionOrdersService {
   }
 
   // ======================================================
-  // CHECK PANEL INSPECTIONS (ADDED)
+  // CHECK PANEL INSPECTIONS
   // ======================================================
   async getCheckPanelInspections(opId: string) {
     return this.prisma.checkPanelInspection.findMany({
@@ -127,7 +188,7 @@ export class ProductionOrdersService {
   }
 
   // ======================================================
-  // SEWING PROGRESS (ADDED)
+  // SEWING PROGRESS
   // ======================================================
   async getSewingProgress(opId: string) {
     const startProgress = await this.prisma.sewingStartProgress.findMany({
@@ -144,86 +205,89 @@ export class ProductionOrdersService {
   // ======================================================
   // QC INSPECTION (MODIFIED)
   // ======================================================
-async qcInspect(opId: string, dto: { good: number; ng: number; ngReasons?: string[] }) {
-  const { good, ng, ngReasons } = dto;
+  async qcInspect(opId: string, dto: { good: number; ng: number; ngReasons?: string[] }) {
+    const { good, ng, ngReasons } = dto;
 
-  if (good < 0 || ng < 0) throw new BadRequestException('good and ng must be non-negative');
-  if (good + ng === 0) throw new BadRequestException('No quantity to process');
+    if (good < 0 || ng < 0) throw new BadRequestException('good and ng must be non-negative');
+    if (good + ng === 0) throw new BadRequestException('No quantity to process');
 
-  const op = await this.prisma.productionOrder.findUnique({
-    where: { id: opId },
-  });
-  if (!op) throw new NotFoundException('OP not found');
+    return this.prisma.$transaction(async (tx) => {
+      const op = await tx.productionOrder.findUnique({
+        where: { id: opId },
+      });
+      if (!op) throw new NotFoundException('OP not found');
 
-  // Validasi station: harus di QC
-  if (op.currentStation !== StationCode.QC) {
-    throw new BadRequestException(`OP is not at QC station (current: ${op.currentStation})`);
-  }
+      // 🔥 Validasi: izinkan jika OP di SEWING atau QC, asalkan sudah ada output
+      if (op.currentStation !== StationCode.SEWING && op.currentStation !== StationCode.QC) {
+        throw new BadRequestException(`OP is not at Sewing or QC station (current: ${op.currentStation})`);
+      }
+      if (op.qtySewingOut <= 0) {
+        throw new BadRequestException('No output from sewing yet');
+      }
 
-  // Hitung sisa output yang belum diinspeksi
-  const totalInspected = (op.qtyQC || 0) + (op.qcNgQty || 0);
-  const available = (op.qtySewingOut || 0) - totalInspected;
-  if (available <= 0) {
-    throw new BadRequestException('No remaining output to inspect');
-  }
-  if (good + ng > available) {
-    throw new BadRequestException(`Cannot inspect more than remaining ${available} sets`);
-  }
+      // Hitung sisa output yang belum diinspeksi
+      const totalInspected = (op.qtyQC || 0) + (op.qcNgQty || 0);
+      const available = (op.qtySewingOut || 0) - totalInspected;
+      if (available <= 0) {
+        throw new BadRequestException('No remaining output to inspect');
+      }
+      if (good + ng > available) {
+        throw new BadRequestException(`Cannot inspect more than remaining ${available} sets`);
+      }
 
-  return this.prisma.$transaction(async (tx) => {
-    // 1. Update ProductionTracking
-    await tx.productionTracking.upsert({
-      where: { opId_station: { opId, station: StationCode.QC } },
-      update: { goodQty: { increment: good }, ngQty: { increment: ng } },
-      create: { opId, station: StationCode.QC, goodQty: good, ngQty: ng },
-    });
+      // 1. Update ProductionTracking
+      await tx.productionTracking.upsert({
+        where: { opId_station: { opId, station: StationCode.QC } },
+        update: { goodQty: { increment: good }, ngQty: { increment: ng } },
+        create: { opId, station: StationCode.QC, goodQty: good, ngQty: ng },
+      });
 
-    // 2. Update ProductionOrder
-    await tx.productionOrder.update({
-      where: { id: opId },
-      data: {
-        qtyQC: { increment: good },
-        qcNgQty: { increment: ng },
-      },
-    });
-
-    // 3. Simpan ke QcInspection
-    await tx.qcInspection.create({
-      data: {
-        opId,
-        good,
-        ng,
-        ngReasons: ngReasons || [],
-      },
-    });
-
-    // 4. Buat ProductionLog
-    await tx.productionLog.create({
-      data: {
-        opId,
-        station: StationCode.QC,
-        type: 'INSPECT',
-        qty: good + ng,
-        note: ngReasons?.join(', ') || null,
-      },
-    });
-
-    // 5. Cek apakah semua set sudah diinspeksi
-    const allInspections = await tx.qcInspection.aggregate({
-      where: { opId },
-      _sum: { good: true, ng: true },
-    });
-    const totalInspectedNow = (allInspections._sum.good || 0) + (allInspections._sum.ng || 0);
-    if (totalInspectedNow >= (op.qtySewingOut || 0)) {
+      // 2. Update ProductionOrder
       await tx.productionOrder.update({
         where: { id: opId },
-        data: { currentStation: StationCode.PACKING },
+        data: {
+          qtyQC: { increment: good },
+          qcNgQty: { increment: ng },
+        },
       });
-    }
 
-    return { success: true };
-  });
-}
+      // 3. Simpan ke QcInspection
+      await tx.qcInspection.create({
+        data: {
+          opId,
+          good,
+          ng,
+          ngReasons: ngReasons || [],
+        },
+      });
+
+      // 4. Buat ProductionLog
+      await tx.productionLog.create({
+        data: {
+          opId,
+          station: StationCode.QC,
+          type: 'INSPECT',
+          qty: good + ng,
+          note: ngReasons?.join(', ') || null,
+        },
+      });
+
+      // 5. Cek apakah semua set sudah diinspeksi
+      const allInspections = await tx.qcInspection.aggregate({
+        where: { opId },
+        _sum: { good: true, ng: true },
+      });
+      const totalInspectedNow = (allInspections._sum.good || 0) + (allInspections._sum.ng || 0);
+      if (totalInspectedNow >= (op.qtySewingOut || 0)) {
+        await tx.productionOrder.update({
+          where: { id: opId },
+          data: { currentStation: StationCode.PACKING },
+        });
+      }
+
+      return { success: true };
+    });
+  }
 
   async getQcInspections(opId: string) {
     return this.prisma.qcInspection.findMany({
