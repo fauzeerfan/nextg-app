@@ -39,14 +39,15 @@ interface ShippingDocumentItem {
   qty: number;
 }
 
+// 🔥 Perbaiki interface ShipmentRecord sesuai data dari backend
 interface ShipmentRecord {
   id: string;
-  shippingNo: string;
-  shippingDate: string;
-  customerName?: string;
-  fgNumber: string;
-  qty: number;
-  status: 'DRAFT' | 'SHIPPED' | 'DELIVERED';
+  suratJalan: string;        // dari backend: suratJalan
+  tanggal: string;            // dari backend: createdAt
+  customerName?: string;      // opsional, bisa diisi dari data eksternal nanti
+  fgNumber: string;           // dari backend: fgNumber
+  totalQty: number;           // dari backend: totalQty
+  status: 'SHIPPED' | 'DELIVERED'; // default 'SHIPPED'
   items?: { opNumber: string; qty: number }[];
 }
 
@@ -76,7 +77,6 @@ const MetricCard = ({
     purple: { bg: 'from-purple-100 to-purple-50', icon: 'text-purple-600', darkBg: 'from-purple-900/20 to-purple-900/10' }
   };
   
-  // Fallback jika color tidak valid (seharusnya tidak terjadi karena sudah di-type)
   const selected = colors[color] || colors.emerald;
   
   return (
@@ -161,15 +161,30 @@ export const FinishedGoodsView = () => {
     }
   }, []);
 
+  // 🔥 Perbaiki fungsi fetchShipments
   const fetchShipments = useCallback(async () => {
     setLoadingHistory(true);
     try {
-      // Asumsikan ada endpoint untuk mengambil history shipment
       const res = await fetch(`${API_BASE_URL}/finished-goods/shipments`, {
         headers: getAuthHeaders(),
       });
       if (res.ok) {
-        setShipments(await res.json());
+        const data = await res.json();
+        // Mapping data dari backend ke format ShipmentRecord
+        const mapped: ShipmentRecord[] = data.map((item: any) => ({
+          id: item.id,
+          suratJalan: item.suratJalan,
+          tanggal: item.createdAt,
+          customerName: '-', // sementara, nanti bisa diisi dari relasi jika ada
+          fgNumber: item.fgNumber,
+          totalQty: item.totalQty,
+          status: 'SHIPPED', // default
+          items: item.items?.map((i: any) => ({
+            opNumber: i.op?.opNumber || '',
+            qty: i.qty,
+          })),
+        }));
+        setShipments(mapped);
       }
     } catch (error) {
       console.error('Gagal mengambil history shipment', error);
@@ -182,7 +197,7 @@ export const FinishedGoodsView = () => {
     fetchStocks();
     fetchShippingDocs();
     fetchShipments();
-    const interval = setInterval(fetchStocks, 10000); // refresh stok tiap 10 detik
+    const interval = setInterval(fetchStocks, 10000);
     return () => clearInterval(interval);
   }, [fetchStocks, fetchShippingDocs, fetchShipments]);
 
@@ -204,7 +219,7 @@ export const FinishedGoodsView = () => {
         const data = await res.json();
         setQrMessage({ type: 'success', text: `Berhasil menerima ${data.totalQty} pcs` });
         setQrInput('');
-        fetchStocks(); // refresh stok
+        fetchStocks();
       } else {
         const err = await res.json();
         setQrMessage({ type: 'error', text: err.message || 'Gagal memproses QR' });
@@ -232,7 +247,6 @@ export const FinishedGoodsView = () => {
       if (res.ok) {
         const items: ShippingDocumentItem[] = await res.json();
         setDocItems(items);
-        // Inisialisasi quantity per item dengan 0
         const initialQty: Record<string, number> = {};
         items.forEach(item => {
           initialQty[item.kode_item] = 0;
@@ -253,7 +267,6 @@ export const FinishedGoodsView = () => {
       return;
     }
 
-    // Kumpulkan item yang akan dikirim (yang quantity > 0)
     const itemsToShip = docItems
       .filter(item => (shippingQuantities[item.kode_item] || 0) > 0)
       .map(item => ({
@@ -268,7 +281,6 @@ export const FinishedGoodsView = () => {
 
     setProcessingShip(true);
     try {
-      // Lakukan pengiriman satu per satu atau bisa juga dibuat batch endpoint
       for (const item of itemsToShip) {
         const res = await fetch(`${API_BASE_URL}/finished-goods/ship`, {
           method: 'POST',
@@ -285,10 +297,8 @@ export const FinishedGoodsView = () => {
           break;
         }
       }
-      // Refresh data
       fetchStocks();
       fetchShipments();
-      // Reset form
       setSelectedDoc(null);
       setDocItems([]);
       setShippingQuantities({});
@@ -301,12 +311,12 @@ export const FinishedGoodsView = () => {
 
   // ========== RENDER ==========
 
-  // Hitung metrik
+  // 🔥 Perbaiki perhitungan totalShippedToday
   const totalStock = stocks.reduce((sum, s) => sum + s.totalQty, 0);
   const totalItems = stocks.reduce((sum, s) => sum + s.items.length, 0);
   const totalShippedToday = shipments
-    .filter(s => new Date(s.shippingDate).toDateString() === new Date().toDateString())
-    .reduce((sum, s) => sum + s.qty, 0);
+    .filter(s => new Date(s.tanggal).toDateString() === new Date().toDateString())
+    .reduce((sum, s) => sum + s.totalQty, 0);
 
   return (
     <div className="animate-in fade-in duration-300 p-6 space-y-8">
@@ -535,7 +545,6 @@ export const FinishedGoodsView = () => {
                   ) : (
                     <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
                       {docItems.map((item) => {
-                        // Cari stok untuk FG ini
                         const stock = stocks.find(s => s.fgNumber === item.kode_item);
                         const available = stock?.totalQty || 0;
                         const qty = shippingQuantities[item.kode_item] || 0;
@@ -588,7 +597,7 @@ export const FinishedGoodsView = () => {
             </div>
           </div>
 
-          {/* Ringkasan Stok (opsional) */}
+          {/* Ringkasan Stok */}
           <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
             <div className="p-6 border-b border-slate-100 dark:border-slate-700/50">
               <div className="flex items-center gap-3">
@@ -650,14 +659,16 @@ export const FinishedGoodsView = () => {
                   <tbody>
                     {shipments.map(ship => (
                       <tr key={ship.id} className="border-t border-slate-100 dark:border-slate-700">
-                        <td className="py-3">{new Date(ship.shippingDate).toLocaleDateString('id-ID')}</td>
-                        <td className="py-3">{ship.shippingNo}</td>
+                        <td className="py-3">{new Date(ship.tanggal).toLocaleDateString('id-ID')}</td>
+                        <td className="py-3">{ship.suratJalan}</td>
                         <td className="py-3">{ship.customerName || '-'}</td>
                         <td className="py-3">{ship.fgNumber}</td>
-                        <td className="py-3">{ship.qty}</td>
+                        <td className="py-3">{ship.totalQty}</td>
                         <td className="py-3">
                           <span className={`px-2 py-1 rounded-lg text-xs font-medium ${
-                            ship.status === 'SHIPPED' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                            ship.status === 'SHIPPED' 
+                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' 
+                              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
                           }`}>{ship.status}</span>
                         </td>
                       </tr>
