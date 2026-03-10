@@ -18,8 +18,8 @@ export class ProductionOrdersService {
 
   /**
    * Mendapatkan daftar OP aktif untuk suatu stasiun.
-   * Untuk stasiun yang dapat berjalan paralel (SEWING, QC, PACKING),
-   * digunakan filter berdasarkan kuantitas, bukan currentStation.
+   * Untuk stasiun yang dapat berjalan paralel (SEWING, QC, PACKING, CP),
+   * digunakan filter berdasarkan kuantitas atau kondisi logis, bukan currentStation.
    */
   async findActiveForStation(station: string, includeProgress = false) {
     // ===== QUALITY CONTROL =====
@@ -43,7 +43,7 @@ export class ProductionOrdersService {
       const ops = await this.prisma.productionOrder.findMany({
         where: {
           status: ProductionStatus.WIP,
-          setsReadyForSewing: { gt: 0 },
+          qtySewingIn: { gt: 0 }, // tampilkan OP yang sudah menerima set dari CP
         },
         include: {
           line: true,
@@ -52,8 +52,8 @@ export class ProductionOrdersService {
         },
         orderBy: { createdAt: 'asc' },
       });
-      // Filter: masih ada set yang belum selesai (qtySewingOut < setsReadyForSewing)
-      return ops.filter(op => (op.qtySewingOut || 0) < (op.setsReadyForSewing || 0));
+      // Filter yang masih memiliki set belum selesai (qtySewingOut < qtySewingIn)
+      return ops.filter(op => (op.qtySewingOut || 0) < (op.qtySewingIn || 0));
     }
 
     // ===== PACKING =====
@@ -68,13 +68,25 @@ export class ProductionOrdersService {
       return ops.filter(op => (op.qtyQC || 0) > (op.qtyPacking || 0));
     }
 
+    // ===== CHECK PANEL =====
+    if (station === 'CP') {
+      const ops = await this.prisma.productionOrder.findMany({
+        where: {
+          status: ProductionStatus.WIP,
+          currentStation: StationCode.CP, // ✅ HANYA yang sudah discan
+        },
+        include: { line: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      return ops;
+    }
+
     // ===== CUTTING POND =====
     if (station === 'CUTTING_POND') {
       const ops = await this.prisma.productionOrder.findMany({
         where: {
           status: ProductionStatus.WIP,
           currentStation: station as StationCode,
-          readyForCP: false,
         },
         include: {
           line: true,
@@ -96,21 +108,6 @@ export class ProductionOrdersService {
         })) || [],
         patternProgress: undefined,
       }));
-    }
-
-    // ===== CHECK PANEL =====
-    if (station === 'CP') {
-      const ops = await this.prisma.productionOrder.findMany({
-        where: {
-          status: ProductionStatus.WIP,
-          currentStation: station as StationCode,
-          allPatternsCompleted: false,
-          setsReadyForSewing: { gt: 0 },
-        },
-        include: { line: true },
-        orderBy: { createdAt: 'asc' },
-      });
-      return ops;
     }
 
     // ===== CUTTING ENTAN =====
@@ -203,7 +200,7 @@ export class ProductionOrdersService {
   }
 
   // ======================================================
-  // QC INSPECTION (MODIFIED)
+  // QC INSPECTION
   // ======================================================
   async qcInspect(opId: string, dto: { good: number; ng: number; ngReasons?: string[] }) {
     const { good, ng, ngReasons } = dto;
@@ -217,10 +214,7 @@ export class ProductionOrdersService {
       });
       if (!op) throw new NotFoundException('OP not found');
 
-      // 🔥 Validasi: izinkan jika OP di SEWING atau QC, asalkan sudah ada output
-      if (op.currentStation !== StationCode.SEWING && op.currentStation !== StationCode.QC) {
-        throw new BadRequestException(`OP is not at Sewing or QC station (current: ${op.currentStation})`);
-      }
+      // 🔥 Tidak perlu cek currentStation, karena OP bisa di banyak stasiun
       if (op.qtySewingOut <= 0) {
         throw new BadRequestException('No output from sewing yet');
       }

@@ -9932,103 +9932,6 @@ export class IotDeviceService {
 }
 </file>
 
-<file path="backend/src/iot/iot.controller.ts">
-// backend/src/iot/iot.controller.ts
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Query,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
-import { IotService } from './iot.service';
-import { ProductionEngineService } from '../mes/production-engine.service';
-import { PrismaService } from '../prisma/prisma.service';
-
-@Controller('iot')
-export class IotController {
-  constructor(
-    private readonly iot: IotService,
-    private readonly productionEngine: ProductionEngineService,
-    private readonly prisma: PrismaService,
-  ) {}
-
-  @Post('register')
-  register(@Body() body: any) {
-    return this.iot.register(body.deviceId);
-  }
-
-  @Get('config')
-  getConfig(@Query('deviceId') deviceId: string) {
-    return this.iot.getConfig(deviceId);
-  }
-
-  @Get('devices')
-  getAll() {
-    return this.iot.getAllDevices();
-  }
-
-  @Post('update')
-  update(@Body() body: any) {
-    return this.iot.updateDevice(body.deviceId, body);
-  }
-
-  @Post('pond/button')
-  async pondButton(@Body() body: { deviceId: string; button: 'YELLOW' | 'RED' | 'GREEN' }) {
-    return this.productionEngine.handlePondButton(body.deviceId, body.button);
-  }
-
-  /**
-   * Mendapatkan state tampilan LCD untuk Sparsha Pond
-   * Dipanggil secara periodik oleh ESP32 untuk refresh otomatis
-   */
-  @Get('pond/state')
-  async getPondState(@Query('deviceId') deviceId: string) {
-    if (!deviceId) {
-      throw new BadRequestException('deviceId is required');
-    }
-    return this.productionEngine.getPondDisplay(deviceId);
-  }
-
-  @Post('sewing/start')
-  async sewingStart(@Body() body: { deviceId: string; opId: string }) {
-    const device = await this.prisma.iotDevice.findUnique({
-      where: { deviceId: body.deviceId },
-    });
-    if (!device) throw new NotFoundException('Device not found');
-    return this.productionEngine.sewingStart(body.deviceId, body.opId, 1);
-  }
-
-  @Post('sewing/finish')
-  async sewingFinish(@Body() body: { deviceId: string; opId: string }) {
-    const device = await this.prisma.iotDevice.findUnique({
-      where: { deviceId: body.deviceId },
-    });
-    if (!device) throw new NotFoundException('Device not found');
-    return this.productionEngine.sewingFinish(body.deviceId, body.opId, 1);
-  }
-
-  @Post('scanner/scan')
-  async scannerScan(@Body() body: { deviceId: string; qrCode: string; qty: number }) {
-    const device = await this.prisma.iotDevice.findUnique({
-      where: { deviceId: body.deviceId },
-    });
-    if (!device) throw new NotFoundException('Device not registered');
-
-    if (device.station === 'CP') {
-      return this.productionEngine.cpScan(body.qrCode, body.qty || 1);
-    } else if (device.station === 'SEWING') {
-      // 🔥 Panggil method baru untuk pengiriman parsial dari Check Panel ke Sewing
-      return this.productionEngine.sendToSewingFromScan(body.qrCode, body.qty || 1);
-    } else {
-      throw new NotFoundException('Unsupported station for scanner');
-    }
-  }
-}
-</file>
-
 <file path="backend/src/station-logs/station-logs.service.ts">
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13559,6 +13462,103 @@ export class CheckPanelService {
 }
 </file>
 
+<file path="backend/src/iot/iot.controller.ts">
+// backend/src/iot/iot.controller.ts
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { IotService } from './iot.service';
+import { ProductionEngineService } from '../mes/production-engine.service';
+import { PrismaService } from '../prisma/prisma.service';
+
+@Controller('iot')
+export class IotController {
+  constructor(
+    private readonly iot: IotService,
+    private readonly productionEngine: ProductionEngineService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  @Post('register')
+  register(@Body() body: any) {
+    return this.iot.register(body.deviceId);
+  }
+
+  @Get('config')
+  getConfig(@Query('deviceId') deviceId: string) {
+    return this.iot.getConfig(deviceId);
+  }
+
+  @Get('devices')
+  getAll() {
+    return this.iot.getAllDevices();
+  }
+
+  @Post('update')
+  update(@Body() body: any) {
+    return this.iot.updateDevice(body.deviceId, body);
+  }
+
+  @Post('pond/button')
+  async pondButton(@Body() body: { deviceId: string; button: 'YELLOW' | 'RED' | 'GREEN' }) {
+    return this.productionEngine.handlePondButton(body.deviceId, body.button);
+  }
+
+  /**
+   * Mendapatkan state tampilan LCD untuk Sparsha Pond
+   * Dipanggil secara periodik oleh ESP32 untuk refresh otomatis
+   */
+  @Get('pond/state')
+  async getPondState(@Query('deviceId') deviceId: string) {
+    if (!deviceId) {
+      throw new BadRequestException('deviceId is required');
+    }
+    return this.productionEngine.getPondDisplay(deviceId);
+  }
+
+  @Post('sewing/start')
+  async sewingStart(@Body() body: { deviceId: string; opId: string }) {
+    const device = await this.prisma.iotDevice.findUnique({
+      where: { deviceId: body.deviceId },
+    });
+    if (!device) throw new NotFoundException('Device not found');
+    return this.productionEngine.sewingStart(body.deviceId, body.opId, 1);
+  }
+
+  @Post('sewing/finish')
+  async sewingFinish(@Body() body: { deviceId: string; opId: string }) {
+    const device = await this.prisma.iotDevice.findUnique({
+      where: { deviceId: body.deviceId },
+    });
+    if (!device) throw new NotFoundException('Device not found');
+    return this.productionEngine.sewingFinish(body.deviceId, body.opId, 1);
+  }
+
+  @Post('scanner/scan')
+  async scannerScan(@Body() body: { deviceId: string; qrCode: string; qty: number }) {
+    const device = await this.prisma.iotDevice.findUnique({
+      where: { deviceId: body.deviceId },
+    });
+    if (!device) throw new NotFoundException('Device not registered');
+
+    if (device.station === 'CP') {
+      return this.productionEngine.cpScan(body.qrCode, body.qty || 1);
+    } else if (device.station === 'SEWING') {
+      // 🔥 Panggil method baru untuk pengiriman parsial dari Check Panel ke Sewing
+      return this.productionEngine.sendToSewingFromScan(body.qrCode, body.qty || 1);
+    } else {
+      throw new NotFoundException('Unsupported station for scanner');
+    }
+  }
+}
+</file>
+
 <file path="frontend/src/features/stations/SewingView.tsx">
 import { useState, useEffect, useCallback } from 'react';
 import { Shirt, Activity, RefreshCw, Target, Package, Layers, ArrowRight, CheckCircle, Clock } from 'lucide-react';
@@ -14277,6 +14277,120 @@ model QcInspection {
 }
 </file>
 
+<file path="backend/src/production-orders/production-orders.controller.ts">
+import { Controller, Get, Post, Body, Param, Delete, Query } from '@nestjs/common';
+import { ProductionOrdersService } from './production-orders.service';
+
+@Controller('production-orders')
+export class ProductionOrdersController {
+  constructor(private readonly productionOrdersService: ProductionOrdersService) {}
+
+  // =========================================================
+  // 1. ACTION ENDPOINTS
+  // =========================================================
+
+  @Post('sync')
+  syncData() {
+    return this.productionOrdersService.syncExternalData();
+  }
+
+  @Post('simulate')
+  createSimulation(@Body() dto: any) {
+    return this.productionOrdersService.createSimulation(dto);
+  }
+
+  @Delete('reset-all-data')
+  resetData() {
+    return this.productionOrdersService.resetSystemData();
+  }
+
+  // =========================================================
+  // 2. CUTTING QUEUE ENDPOINTS (NEW)
+  // =========================================================
+
+  @Get('cutting-entan/queue')
+  async getCuttingEntanQueue() {
+    return this.productionOrdersService.findActiveForStation('CUTTING_ENTAN');
+  }
+
+  @Get('cutting-pond/queue')
+  async getCuttingPondQueue() {
+    return this.productionOrdersService.findActiveForStation('CUTTING_POND');
+  }
+
+  // =========================================================
+  // 3. STATS & QUERY
+  // =========================================================
+
+  @Get('dashboard-stats')
+  getDashboardStats() {
+    return this.productionOrdersService.getDashboardStats();
+  }
+
+  @Get()
+  findAll(
+    @Query('station') station?: string,
+    @Query('view') view?: string,
+    @Query('includeProgress') includeProgress?: string, // tambah
+  ) {
+    if (station) {
+      if (view === 'history') {
+        return this.productionOrdersService.findHistoryForStation(station);
+      }
+      // Ubah pemanggilan method dengan parameter includeProgress
+      return this.productionOrdersService.findActiveForStation(station, includeProgress === 'true');
+    }
+
+    return this.productionOrdersService.findAll();
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.productionOrdersService.findOne(id);
+  }
+
+  // =========================================================
+  // 4. PATTERN PROGRESS ENDPOINT (NEW)
+  // =========================================================
+  @Get(':id/pattern-progress')
+  async getPatternProgress(@Param('id') id: string) {
+    return this.productionOrdersService.getPatternProgress(id);
+  }
+
+  // =========================================================
+  // 5. CHECK PANEL INSPECTIONS ENDPOINT (ADDED)
+  // =========================================================
+  @Get(':id/check-panel-inspections')
+  async getCheckPanelInspections(@Param('id') id: string) {
+    return this.productionOrdersService.getCheckPanelInspections(id);
+  }
+
+  // =========================================================
+  // 6. SEWING PROGRESS ENDPOINT (ADDED)
+  // =========================================================
+  @Get(':id/sewing-progress')
+  async getSewingProgress(@Param('id') id: string) {
+    return this.productionOrdersService.getSewingProgress(id);
+  }
+
+  // =========================================================
+  // 7. QC INSPECTION ENDPOINTS (ADDED)
+  // =========================================================
+  @Post(':id/qc-inspect')
+  async qcInspect(
+    @Param('id') id: string,
+    @Body() body: { good: number; ng: number; ngReasons?: string[] }
+  ) {
+    return this.productionOrdersService.qcInspect(id, body);
+  }
+
+  @Get(':id/qc-inspections')
+  async getQcInspections(@Param('id') id: string) {
+    return this.productionOrdersService.getQcInspections(id);
+  }
+}
+</file>
+
 <file path="backend/src/mes/production-engine.service.ts">
 // backend/src/mes/production-engine.service.ts
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
@@ -14349,45 +14463,51 @@ export class ProductionEngineService {
   }
 
   // ================= SEND TO SEWING VIA SCANNER (PARSIAL) =================
-  async sendToSewingFromScan(qrCode: string, qty: number) {
-    const parts = qrCode.split('-');
-    const opNumber = parts.length > 1 ? parts[1] : qrCode;
+async sendToSewingFromScan(qrCode: string, qty: number) {
+  const parts = qrCode.split('-');
+  const opNumber = parts.length > 1 ? parts[1] : qrCode;
 
-    const op = await this.prisma.productionOrder.findUnique({
-      where: { opNumber },
-    });
-    if (!op) throw new NotFoundException('OP not found');
+  const op = await this.prisma.productionOrder.findUnique({
+    where: { opNumber },
+  });
+  if (!op) throw new NotFoundException('OP not found');
 
-    if (op.currentStation !== StationCode.CP) {
-      throw new BadRequestException('OP is not at Check Panel');
-    }
-
-    if ((op.setsReadyForSewing ?? 0) < qty) {
-      throw new BadRequestException(`Insufficient sets ready. Available: ${op.setsReadyForSewing}`);
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      await tx.productionOrder.update({
-        where: { id: op.id },
-        data: {
-          setsReadyForSewing: { decrement: qty },
-          qtySewingIn: { increment: qty },
-        },
-      });
-
-      await tx.productionLog.create({
-        data: {
-          opId: op.id,
-          station: StationCode.CP,
-          type: 'SEND_TO_SEWING',
-          qty,
-          note: `Sent ${qty} sets to Sewing via scan`,
-        },
-      });
-
-      return { success: true, remaining: (op.setsReadyForSewing ?? 0) - qty };
-    });
+  if (op.currentStation !== StationCode.CP) {
+    throw new BadRequestException('OP is not at Check Panel');
   }
+
+  if ((op.setsReadyForSewing ?? 0) < qty) {
+    throw new BadRequestException(`Insufficient sets ready. Available: ${op.setsReadyForSewing}`);
+  }
+
+  return this.prisma.$transaction(async (tx) => {
+    const newSetsReady = (op.setsReadyForSewing ?? 0) - qty;
+    const updates: any = {
+      setsReadyForSewing: { decrement: qty },
+      qtySewingIn: { increment: qty },
+    };
+    // Jika semua set sudah dikirim, pindahkan OP ke Sewing
+    if (newSetsReady === 0) {
+      updates.currentStation = StationCode.SEWING;
+    }
+    await tx.productionOrder.update({
+      where: { id: op.id },
+      data: updates,
+    });
+
+    await tx.productionLog.create({
+      data: {
+        opId: op.id,
+        station: StationCode.CP,
+        type: 'SEND_TO_SEWING',
+        qty,
+        note: `Sent ${qty} sets to Sewing via scan`,
+      },
+    });
+
+    return { success: true, remaining: newSetsReady };
+  });
+}
 
   // ================= SEWING START =================
   async sewingStart(deviceId: string, opId: string, qty: number) {
@@ -15001,120 +15121,6 @@ export class ProductionEngineService {
 }
 </file>
 
-<file path="backend/src/production-orders/production-orders.controller.ts">
-import { Controller, Get, Post, Body, Param, Delete, Query } from '@nestjs/common';
-import { ProductionOrdersService } from './production-orders.service';
-
-@Controller('production-orders')
-export class ProductionOrdersController {
-  constructor(private readonly productionOrdersService: ProductionOrdersService) {}
-
-  // =========================================================
-  // 1. ACTION ENDPOINTS
-  // =========================================================
-
-  @Post('sync')
-  syncData() {
-    return this.productionOrdersService.syncExternalData();
-  }
-
-  @Post('simulate')
-  createSimulation(@Body() dto: any) {
-    return this.productionOrdersService.createSimulation(dto);
-  }
-
-  @Delete('reset-all-data')
-  resetData() {
-    return this.productionOrdersService.resetSystemData();
-  }
-
-  // =========================================================
-  // 2. CUTTING QUEUE ENDPOINTS (NEW)
-  // =========================================================
-
-  @Get('cutting-entan/queue')
-  async getCuttingEntanQueue() {
-    return this.productionOrdersService.findActiveForStation('CUTTING_ENTAN');
-  }
-
-  @Get('cutting-pond/queue')
-  async getCuttingPondQueue() {
-    return this.productionOrdersService.findActiveForStation('CUTTING_POND');
-  }
-
-  // =========================================================
-  // 3. STATS & QUERY
-  // =========================================================
-
-  @Get('dashboard-stats')
-  getDashboardStats() {
-    return this.productionOrdersService.getDashboardStats();
-  }
-
-  @Get()
-  findAll(
-    @Query('station') station?: string,
-    @Query('view') view?: string,
-    @Query('includeProgress') includeProgress?: string, // tambah
-  ) {
-    if (station) {
-      if (view === 'history') {
-        return this.productionOrdersService.findHistoryForStation(station);
-      }
-      // Ubah pemanggilan method dengan parameter includeProgress
-      return this.productionOrdersService.findActiveForStation(station, includeProgress === 'true');
-    }
-
-    return this.productionOrdersService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.productionOrdersService.findOne(id);
-  }
-
-  // =========================================================
-  // 4. PATTERN PROGRESS ENDPOINT (NEW)
-  // =========================================================
-  @Get(':id/pattern-progress')
-  async getPatternProgress(@Param('id') id: string) {
-    return this.productionOrdersService.getPatternProgress(id);
-  }
-
-  // =========================================================
-  // 5. CHECK PANEL INSPECTIONS ENDPOINT (ADDED)
-  // =========================================================
-  @Get(':id/check-panel-inspections')
-  async getCheckPanelInspections(@Param('id') id: string) {
-    return this.productionOrdersService.getCheckPanelInspections(id);
-  }
-
-  // =========================================================
-  // 6. SEWING PROGRESS ENDPOINT (ADDED)
-  // =========================================================
-  @Get(':id/sewing-progress')
-  async getSewingProgress(@Param('id') id: string) {
-    return this.productionOrdersService.getSewingProgress(id);
-  }
-
-  // =========================================================
-  // 7. QC INSPECTION ENDPOINTS (ADDED)
-  // =========================================================
-  @Post(':id/qc-inspect')
-  async qcInspect(
-    @Param('id') id: string,
-    @Body() body: { good: number; ng: number; ngReasons?: string[] }
-  ) {
-    return this.productionOrdersService.qcInspect(id, body);
-  }
-
-  @Get(':id/qc-inspections')
-  async getQcInspections(@Param('id') id: string) {
-    return this.productionOrdersService.getQcInspections(id);
-  }
-}
-</file>
-
 <file path="backend/src/production-orders/production-orders.service.ts">
 import { Injectable, InternalServerErrorException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15158,21 +15164,21 @@ export class ProductionOrdersService {
 
     // ===== SEWING =====
     if (station === 'SEWING') {
-      const ops = await this.prisma.productionOrder.findMany({
-        where: {
-          status: ProductionStatus.WIP,
-          setsReadyForSewing: { gt: 0 },
-        },
-        include: {
-          line: true,
-          sewingStartProgress: true,
-          sewingFinishProgress: true,
-        },
-        orderBy: { createdAt: 'asc' },
-      });
-      // Filter: masih ada set yang belum selesai (qtySewingOut < setsReadyForSewing)
-      return ops.filter(op => (op.qtySewingOut || 0) < (op.setsReadyForSewing || 0));
-    }
+  const ops = await this.prisma.productionOrder.findMany({
+    where: {
+      status: ProductionStatus.WIP,
+      qtySewingIn: { gt: 0 }, // tampilkan OP yang sudah menerima set dari CP
+    },
+    include: {
+      line: true,
+      sewingStartProgress: true,
+      sewingFinishProgress: true,
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+  // Filter yang masih memiliki set belum selesai (qtySewingOut < qtySewingIn)
+  return ops.filter(op => (op.qtySewingOut || 0) < (op.qtySewingIn || 0));
+}
 
     // ===== PACKING =====
     if (station === 'PACKING') {
@@ -15192,7 +15198,6 @@ export class ProductionOrdersService {
         where: {
           status: ProductionStatus.WIP,
           currentStation: station as StationCode,
-          readyForCP: false,
         },
         include: {
           line: true,
@@ -15222,8 +15227,6 @@ export class ProductionOrdersService {
         where: {
           status: ProductionStatus.WIP,
           currentStation: station as StationCode,
-          allPatternsCompleted: false,
-          setsReadyForSewing: { gt: 0 },
         },
         include: { line: true },
         orderBy: { createdAt: 'asc' },

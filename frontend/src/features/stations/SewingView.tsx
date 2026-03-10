@@ -86,9 +86,9 @@ const FinishProgressBar = ({ finishIndex, current, target }: { finishIndex: numb
 };
 
 const SewingOpCard = ({ op, onSelect, isSelected }: { op: SewingOp; onSelect: () => void; isSelected: boolean }) => {
-  const target = op.setsReadyForSewing || 0;
-  const output = op.qtySewingOut || 0;   // total output
-  const remaining = target - output;
+const target = op.qtySewingIn || 0;
+const output = op.qtySewingOut || 0;
+const remaining = target - output;
   const isCompleted = remaining <= 0;
 
   const startMap = new Map(op.sewingStartProgress?.map(s => [s.startIndex, s.qty]) || []);

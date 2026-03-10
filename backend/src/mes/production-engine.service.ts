@@ -69,89 +69,97 @@ export class ProductionEngineService {
   }
 
   // ================= SEND TO SEWING VIA SCANNER (PARSIAL) =================
-  async sendToSewingFromScan(qrCode: string, qty: number) {
-    const parts = qrCode.split('-');
-    const opNumber = parts.length > 1 ? parts[1] : qrCode;
+async sendToSewingFromScan(qrCode: string, qty: number) {
+  const parts = qrCode.split('-');
+  const opNumber = parts.length > 1 ? parts[1] : qrCode;
 
-    const op = await this.prisma.productionOrder.findUnique({
-      where: { opNumber },
-    });
-    if (!op) throw new NotFoundException('OP not found');
+  const op = await this.prisma.productionOrder.findUnique({
+    where: { opNumber },
+  });
+  if (!op) throw new NotFoundException('OP not found');
 
-    if (op.currentStation !== StationCode.CP) {
-      throw new BadRequestException('OP is not at Check Panel');
-    }
-
-    if ((op.setsReadyForSewing ?? 0) < qty) {
-      throw new BadRequestException(`Insufficient sets ready. Available: ${op.setsReadyForSewing}`);
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      await tx.productionOrder.update({
-        where: { id: op.id },
-        data: {
-          setsReadyForSewing: { decrement: qty },
-          qtySewingIn: { increment: qty },
-        },
-      });
-
-      await tx.productionLog.create({
-        data: {
-          opId: op.id,
-          station: StationCode.CP,
-          type: 'SEND_TO_SEWING',
-          qty,
-          note: `Sent ${qty} sets to Sewing via scan`,
-        },
-      });
-
-      return { success: true, remaining: (op.setsReadyForSewing ?? 0) - qty };
-    });
+  if (op.currentStation !== StationCode.CP) {
+    throw new BadRequestException('OP is not at Check Panel');
   }
+
+  if ((op.setsReadyForSewing ?? 0) < qty) {
+    throw new BadRequestException(`Insufficient sets ready. Available: ${op.setsReadyForSewing}`);
+  }
+
+  return this.prisma.$transaction(async (tx) => {
+    const newSetsReady = (op.setsReadyForSewing ?? 0) - qty;
+    const updates: any = {
+      setsReadyForSewing: { decrement: qty },
+      qtySewingIn: { increment: qty },
+    };
+    // Jika semua set sudah dikirim, pindahkan OP ke Sewing
+    if (newSetsReady === 0) {
+      updates.currentStation = StationCode.SEWING;
+    }
+    await tx.productionOrder.update({
+      where: { id: op.id },
+      data: updates,
+    });
+
+    await tx.productionLog.create({
+      data: {
+        opId: op.id,
+        station: StationCode.CP,
+        type: 'SEND_TO_SEWING',
+        qty,
+        note: `Sent ${qty} sets to Sewing via scan`,
+      },
+    });
+
+    return { success: true, remaining: newSetsReady };
+  });
+}
 
   // ================= SEWING START =================
   async sewingStart(deviceId: string, opId: string, qty: number) {
-    const device = await this.prisma.iotDevice.findUnique({ where: { deviceId } });
-    if (!device) throw new NotFoundException('Device not found');
+  const device = await this.prisma.iotDevice.findUnique({ where: { deviceId } });
+  if (!device) throw new NotFoundException('Device not found');
 
-    const op = await this.prisma.productionOrder.findUnique({
-      where: { id: opId },
-      select: { setsReadyForSewing: true, qtySewingIn: true, currentStation: true }
-    });
-    if (!op) throw new NotFoundException('OP not found');
-    if (op.currentStation !== StationCode.SEWING) {
-      throw new BadRequestException('OP is not at Sewing station');
-    }
+  const op = await this.prisma.productionOrder.findUnique({
+    where: { id: opId },
+    include: { sewingStartProgress: true }
+  });
+  if (!op) throw new NotFoundException('OP not found');
 
-    // 🔥 Target setengah set = setsReadyForSewing * 2
-    const targetHalfSets = (op.setsReadyForSewing ?? 0) * 2;
-    const remaining = targetHalfSets - (op.qtySewingIn ?? 0);
-    if (qty > remaining) {
-      throw new BadRequestException(`Cannot start more than remaining ${remaining} half-sets`);
-    }
+  // Tentukan startIndex dari device (fungsi extractIndexFromDevice sudah ada)
+  const startIndex = this.extractIndexFromDevice(device, 'start');
+  if (startIndex !== 1 && startIndex !== 2) {
+    throw new BadRequestException('Invalid start index for this device');
+  }
 
-    const line = await this.prisma.lineMaster.findUnique({ where: { code: device.lineCode } });
-    const sewingConfig = line?.sewingConfig as any;
+  // Ambil nilai saat ini untuk startIndex tersebut
+  const startProgress = op.sewingStartProgress || [];
+  const currentStart = startProgress.find(s => s.startIndex === startIndex)?.qty || 0;
 
-    let startIndex = this.extractIndexFromDevice(device, 'start');
+  // Batas maksimum adalah qtySewingIn (dalam set utuh), karena setiap set utuh membutuhkan 1 setengah set dari start ini
+  if (currentStart + qty > op.qtySewingIn) {
+    throw new BadRequestException(`Cannot exceed available sets. Max: ${op.qtySewingIn - currentStart}`);
+  }
 
-    await this.prisma.sewingStartProgress.upsert({
+  // Lakukan update dengan transaksi untuk menghindari race condition
+  return this.prisma.$transaction(async (tx) => {
+    // Lock baris start progress yang akan diupdate
+    await tx.$executeRaw`
+      SELECT * FROM "SewingStartProgress"
+      WHERE "opId" = ${opId} AND "startIndex" = ${startIndex}
+      FOR UPDATE
+    `;
+
+    await tx.sewingStartProgress.upsert({
       where: { opId_startIndex: { opId, startIndex } },
       update: { qty: { increment: qty } },
       create: { opId, startIndex, qty },
     });
 
-    const totalIn = await this.prisma.sewingStartProgress.aggregate({
-      where: { opId },
-      _sum: { qty: true },
-    });
-    await this.prisma.productionOrder.update({
-      where: { id: opId },
-      data: { qtySewingIn: totalIn._sum.qty || 0 },
-    });
-
+    // Tidak perlu mengupdate qtySewingIn karena itu hanya bertambah saat pengiriman dari Check Panel
     return { success: true };
-  }
+  });
+}
 
   // ================= SEWING FINISH (dengan row locking) =================
   async sewingFinish(deviceId: string, opId: string, qty: number) {
