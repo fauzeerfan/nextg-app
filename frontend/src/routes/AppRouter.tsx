@@ -37,7 +37,7 @@ export const AppRouter: React.FC<AppRouterProps> = ({
     'cutting_pond': <CuttingPondView />,
     'cp': <CheckPanelView addLog={addLog} onNavigate={onNavigate} />,
     'sewing': <SewingView />,
-    'qc': <QualityControlView />,
+    'qc': <QualityControlView addLog={addLog} onNavigate={onNavigate} />,
     'packing': <PackingView />,
     'fg': <FinishedGoodsView />,
     'line_master': <LineMasterView onNavigate={onNavigate} />,

@@ -10,5 +10,9 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
+  },
+  "dependencies": {
+    "lucide-react": "^0.577.0",
+    "recharts": "^3.8.0"
   }
 }
