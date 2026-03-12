@@ -63,17 +63,17 @@ const MetricCard = ({ title, value, icon: Icon, color = 'blue', subtitle, suffix
   };
   const currentColor = colorClasses[color];
   return (
-    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-lg hover:shadow-xl transition-all duration-300">
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">{title}</div>
-        <div className={`w-10 h-10 bg-gradient-to-br ${currentColor.bg} dark:${currentColor.darkBg} rounded-lg flex items-center justify-center`}>
-          <Icon size={18} className={currentColor.icon} />
+    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg hover:shadow-xl transition-all duration-300">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{title}</div>
+        <div className={`w-8 h-8 bg-gradient-to-br ${currentColor.bg} dark:${currentColor.darkBg} rounded-lg flex items-center justify-center`}>
+          <Icon size={16} className={currentColor.icon} />
         </div>
       </div>
-      <div className="text-3xl font-bold text-slate-900 dark:text-white">
-        {value}{suffix && <span className="text-lg text-slate-500 dark:text-slate-400 ml-2">{suffix}</span>}
+      <div className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
+        {value}{suffix && <span className="text-sm text-slate-500 dark:text-slate-400 ml-1">{suffix}</span>}
       </div>
-      {subtitle && <div className="text-xs text-slate-500 dark:text-slate-400 mt-2">{subtitle}</div>}
+      {subtitle && <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{subtitle}</div>}
     </div>
   );
 };
@@ -241,17 +241,17 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
     if (!show) return null;
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
-        <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
-          <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-            <h3 className="text-xl font-bold">{title}</h3>
-            <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"><X size={20} /></button>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+            <h3 className="text-lg font-bold">{title}</h3>
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"><X size={18} /></button>
           </div>
-          <div className="p-6 overflow-y-auto">
-            <table className="w-full">
-              <thead><tr className="text-left text-sm font-semibold text-slate-600 dark:text-slate-300">{cols.map((c: any) => <th key={c.key} className="pb-3">{c.label}</th>)}</tr></thead>
+          <div className="p-4 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left font-semibold text-slate-600 dark:text-slate-300">{cols.map((c: any) => <th key={c.key} className="pb-2">{c.label}</th>)}</tr></thead>
               <tbody>
                 {data.length === 0 ? <tr><td colSpan={cols.length} className="py-8 text-center text-slate-500">No batches found.</td></tr> :
-                  data.map((item: any) => <tr key={item.id} className="border-t border-slate-100 dark:border-slate-700">{cols.map((c: any) => <td key={c.key} className="py-3">{c.render ? c.render(item) : item[c.key]}</td>)}</tr>)}
+                  data.map((item: any) => <tr key={item.id} className="border-t border-slate-100 dark:border-slate-700">{cols.map((c: any) => <td key={c.key} className="py-2">{c.render ? c.render(item) : item[c.key]}</td>)}</tr>)}
               </tbody>
             </table>
           </div>
@@ -324,33 +324,33 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
           {/* 2. VERSI LAYAR MODAL */}
           {/* ========================================================= */}
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 print:hidden">
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
               
               <div className="absolute top-4 right-4">
-                <CheckCircle size={24} className="text-emerald-500" />
+                <CheckCircle size={20} className="text-emerald-500" />
               </div>
 
               <div
-                className="label-container mx-auto border border-dashed border-slate-300 dark:border-slate-700 p-6 rounded bg-white"
-                style={{ width: '100%', maxWidth: '380px' }}
+                className="label-container mx-auto border border-dashed border-slate-300 dark:border-slate-700 p-4 rounded bg-white"
+                style={{ width: '100%', maxWidth: '340px' }}
               >
                 <div className="w-full bg-white text-black" style={{ fontFamily: "'Poppins', sans-serif" }}>
                   <div className="flex flex-col justify-center items-center">
                     <div className="flex flex-col">
-                      <div className="flex flex-row items-center gap-3">
+                      <div className="flex flex-row items-center gap-2">
                         <img
                           src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qr.code}`}
                           alt="QR Code"
-                          className="w-20 h-20 object-contain shrink-0"
+                          className="w-16 h-16 object-contain shrink-0"
                         />
-                        <div className="flex flex-col justify-center text-left font-semibold text-base leading-tight tracking-wide">
+                        <div className="flex flex-col justify-center text-left font-semibold text-sm leading-tight tracking-wide">
                           <div>{qr.itemNumberFG}</div>
                           <div>{qr.opNumber}</div>
                           <div>{qr.qtyOp} PCS</div>
                           <div>{formatDate(qr.createdAt ? new Date(qr.createdAt) : new Date())}</div>
                         </div>
                       </div>
-                      <div className="mt-2 font-semibold text-lg text-left uppercase leading-none tracking-wide whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
+                      <div className="mt-2 font-semibold text-base text-left uppercase leading-none tracking-wide whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
                         {qr.itemNameFG}
                       </div>
                     </div>
@@ -358,18 +358,18 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
                 </div>
               </div>
 
-              <div className="flex gap-3 mt-6">
+              <div className="flex gap-3 mt-4">
                 <button
                   onClick={() => setQr(null)}
-                  className="flex-1 py-3 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                  className="flex-1 py-2 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-sm"
                 >
                   Close
                 </button>
                 <button
                   onClick={handlePrint}
-                  className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl font-semibold flex justify-center items-center gap-2"
+                  className="flex-1 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl font-semibold flex justify-center items-center gap-2 text-sm"
                 >
-                  <Printer size={18} />
+                  <Printer size={16} />
                   Print Label
                 </button>
               </div>
@@ -386,64 +386,64 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
           { key: 'batchNumber', label: 'Batch', render: (i:any) => `#${i.batchNumber}` },
           { key: 'qty', label: 'Qty' },
           { key: 'createdAt', label: 'Date', render: (i:any) => new Date(i.createdAt).toLocaleString() },
-          { key: 'action', label: 'Action', render: (i:any) => <button onClick={() => { setShowHist(false); reprint(i.id); }} className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">Reprint</button> }
+          { key: 'action', label: 'Action', render: (i:any) => <button onClick={() => { setShowHist(false); reprint(i.id); }} className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">Reprint</button> }
         ]} />
         <BatchModal show={showAll} onClose={() => setShowAll(false)} title="All Batch History" data={all} cols={[
           { key: 'opNumber', label: 'OP Number' },
           { key: 'batchNumber', label: 'Batch', render: (i:any) => `#${i.batchNumber}` },
           { key: 'qty', label: 'Qty' },
           { key: 'createdAt', label: 'Date', render: (i:any) => new Date(i.createdAt).toLocaleString() },
-          { key: 'action', label: 'Action', render: (i:any) => <button onClick={() => { setShowAll(false); reprint(i.id); }} className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">Reprint</button> }
+          { key: 'action', label: 'Action', render: (i:any) => <button onClick={() => { setShowAll(false); reprint(i.id); }} className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">Reprint</button> }
         ]} />
 
-        <div className="bg-gradient-to-br from-white to-orange-50/30 dark:from-slate-900 dark:to-orange-900/10 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden mb-8">
-          <div className="p-8">
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-              <div className="flex items-center gap-4">
+        <div className="bg-gradient-to-br from-white to-orange-50/30 dark:from-slate-900 dark:to-orange-900/10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden mb-6">
+          <div className="p-6 md:p-8">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+              <div className="flex items-center gap-3">
                 <div className="relative">
-                  <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-400 rounded-2xl flex items-center justify-center shadow-lg"><Scissors size={28} className="text-white" /></div>
-                  <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-400 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-lg"><Database size={16} className="text-white" /></div>
+                  <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-orange-400 rounded-xl flex items-center justify-center shadow-lg"><Scissors size={24} className="text-white" /></div>
+                  <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-400 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-lg"><Database size={14} className="text-white" /></div>
                 </div>
-                <div><h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">Cutting Entan<span className="text-xs px-3 py-1.5 bg-gradient-to-r from-orange-500 to-orange-400 text-white rounded-full font-bold">BATCH SYSTEM</span></h1></div>
+                <div><h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">Cutting Entan<span className="text-xs px-2 py-1 bg-gradient-to-r from-orange-500 to-orange-400 text-white rounded-full font-bold">BATCH SYSTEM</span></h1></div>
               </div>
-              <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
-                <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl shadow-lg">
-                  <div className="flex flex-col"><div className="text-xs font-medium opacity-90">Pending Cut</div><div className="text-2xl font-bold">{totalPending}</div></div>
-                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm"><Package size={20} className="text-white" /></div>
+              <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl shadow-lg">
+                  <div className="flex flex-col"><div className="text-xs font-medium opacity-90">Pending Cut</div><div className="text-xl font-bold">{totalPending}</div></div>
+                  <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm"><Package size={18} className="text-white" /></div>
                 </div>
-                <button onClick={viewAll} className="px-5 py-3 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:from-purple-700 hover:to-purple-600 transition-all shadow-sm hover:shadow-md"><History size={18} />Batch History</button>
-                <button onClick={() => fetchOps(false)} disabled={refreshing} className="group px-5 py-3 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 hover:border-orange-300 dark:hover:border-orange-700">
-                  {refreshing ? <RefreshCw size={18} className="animate-spin" /> : <RefreshCw size={18} className="group-hover:rotate-180 transition-transform" />}Refresh
+                <button onClick={viewAll} className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:from-purple-700 hover:to-purple-600 transition-all shadow-sm text-sm"><History size={16} />Batch History</button>
+                <button onClick={() => fetchOps(false)} disabled={refreshing} className="group px-4 py-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 hover:border-orange-300 dark:hover:border-orange-700 text-sm">
+                  {refreshing ? <RefreshCw size={16} className="animate-spin" /> : <RefreshCw size={16} className="group-hover:rotate-180 transition-transform" />}Refresh
                 </button>
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-8 pb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 pb-6">
             <MetricCard title="Total OPs Loaded" value={ops.length} icon={Package} color="orange" subtitle="From external API" />
             <MetricCard title="Pending Cut" value={totalPending} icon={Scissors} color="blue" subtitle="Ready to generate" />
             <MetricCard title="Sent to Pond" value={totalSent} icon={Database} color="emerald" subtitle="Total all batches" />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
-            <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
-              <div className="p-6 border-b border-slate-100 dark:border-slate-700/50"><h3 className="font-bold text-slate-900 dark:text-white">Production Orders</h3><p className="text-sm text-slate-500 dark:text-slate-400">Select an OP to generate QR</p></div>
-              <div className="p-4 max-h-[500px] overflow-y-auto">
+            <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+              <div className="p-4 border-b border-slate-100 dark:border-slate-700/50"><h3 className="font-bold text-slate-900 dark:text-white">Production Orders</h3><p className="text-xs text-slate-500 dark:text-slate-400">Select an OP to generate QR</p></div>
+              <div className="p-3 max-h-[450px] overflow-y-auto">
                 {ops.length === 0 ? (
-                  <div className="text-center py-8"><div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4"><Package size={24} className="text-slate-400" /></div><p className="text-slate-500 dark:text-slate-400">No pending OPs</p></div>
+                  <div className="text-center py-6"><div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center mx-auto mb-3"><Package size={20} className="text-slate-400" /></div><p className="text-sm text-slate-500 dark:text-slate-400">No pending OPs</p></div>
                 ) : ops.map(op => (
-                  <div key={op.id} className={`p-4 mb-2 rounded-xl border-2 cursor-pointer transition-all ${selOp?.id === op.id ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-orange-300'}`} onClick={() => selectOp(op)}>
+                  <div key={op.id} className={`p-3 mb-2 rounded-xl border-2 cursor-pointer transition-all ${selOp?.id === op.id ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-orange-300'}`} onClick={() => selectOp(op)}>
                     <div className="flex justify-between items-start">
-                      <div><div className="font-mono font-bold text-lg">{op.opNumber}</div><div className="text-sm text-slate-600 dark:text-slate-400">{op.itemNameFG}</div></div>
+                      <div><div className="font-mono font-bold text-base">{op.opNumber}</div><div className="text-xs text-slate-600 dark:text-slate-400 truncate max-w-[150px]">{op.itemNameFG}</div></div>
                       <StatusBadge status={`${op.pending} pcs`} variant="warning" />
                     </div>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="mt-2 grid grid-cols-3 gap-1 text-center text-xs">
                       <div><div className="text-slate-500">Total Cut</div><div className="font-bold">{op.totalCut}</div></div>
                       <div><div className="text-slate-500">Sent</div><div className="font-bold">{op.sentToPond}</div></div>
                       <div><div className="text-slate-500">Pending</div><div className="font-bold text-orange-600">{op.pending}</div></div>
                     </div>
-                    {op.lastBatch && <div className="mt-2 flex justify-between items-center text-xs"><span className="text-slate-400">Last batch: #{op.lastBatch.batchNumber}</span><button onClick={(e) => { e.stopPropagation(); viewHistory(op); }} className="text-blue-600 hover:underline flex items-center gap-1"><History size={12} /> History</button></div>}
+                    {op.lastBatch && <div className="mt-2 flex justify-between items-center text-xs"><span className="text-slate-400">Last: #{op.lastBatch.batchNumber}</span><button onClick={(e) => { e.stopPropagation(); viewHistory(op); }} className="text-blue-600 hover:underline flex items-center gap-1"><History size={10} /> History</button></div>}
                   </div>
                 ))}
               </div>
@@ -452,31 +452,31 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
 
           <div className="lg:col-span-2">
             {selOp ? (
-              <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
-                <div className="p-8 border-b border-slate-100 dark:border-slate-700/50">
-                  <div className="flex items-center gap-4"><div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-400 rounded-2xl flex items-center justify-center shadow-lg"><ClipboardCheck size={28} className="text-white" /></div><div><h2 className="text-2xl font-bold">{selOp.opNumber}</h2><p className="text-lg text-slate-600 dark:text-slate-300">{selOp.itemNameFG}</p></div></div>
+              <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+                <div className="p-6 border-b border-slate-100 dark:border-slate-700/50">
+                  <div className="flex items-center gap-3"><div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-400 rounded-xl flex items-center justify-center shadow-lg"><ClipboardCheck size={22} className="text-white" /></div><div><h2 className="text-xl font-bold">{selOp.opNumber}</h2><p className="text-sm text-slate-600 dark:text-slate-300 truncate max-w-[250px]">{selOp.itemNameFG}</p></div></div>
                 </div>
-                <div className="p-8">
-                  <div className="grid grid-cols-3 gap-6 mb-8">
+                <div className="p-6">
+                  <div className="grid grid-cols-3 gap-4 mb-6">
                     <MetricCard title="OP Quantity" value={selOp.qtyOp} icon={Package} color="orange" suffix="sets" />
                     <MetricCard title="Total Cut" value={selOp.totalCut} icon={Scissors} color="blue" suffix="pcs" />
                     <MetricCard title="Pending" value={selOp.pending} icon={Target} color="emerald" suffix="pcs" />
                   </div>
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 rounded-2xl border border-blue-200 dark:border-blue-800/30 p-6 mb-6">
-                    <div className="flex gap-4">
-                      <div className="shrink-0"><div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-400 rounded-xl flex items-center justify-center"><AlertTriangle size={24} className="text-white" /></div></div>
-                      <div><h4 className="font-semibold mb-2">Batch Information</h4><p className="text-sm">This OP has <strong>{selOp.pending} pieces</strong> pending cutting.{selOp.lastBatch ? ` Last batch #${selOp.lastBatch.batchNumber} (${selOp.lastBatch.qty} pcs) was generated on ${new Date(selOp.lastBatch.createdAt).toLocaleString()}.` : ' No previous batches.'}</p></div>
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 rounded-xl border border-blue-200 dark:border-blue-800/30 p-4 mb-4">
+                    <div className="flex gap-3">
+                      <div className="shrink-0"><div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-400 rounded-lg flex items-center justify-center"><AlertTriangle size={18} className="text-white" /></div></div>
+                      <div><h4 className="font-semibold text-sm mb-1">Batch Information</h4><p className="text-xs">This OP has <strong>{selOp.pending} pieces</strong> pending cutting.{selOp.lastBatch ? ` Last batch #${selOp.lastBatch.batchNumber} (${selOp.lastBatch.qty} pcs) was generated on ${new Date(selOp.lastBatch.createdAt).toLocaleString()}.` : ' No previous batches.'}</p></div>
                     </div>
                   </div>
-                  <button onClick={generateQR} disabled={loading || selOp.pending === 0} className="w-full py-5 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white rounded-2xl font-bold text-lg flex justify-center items-center gap-3 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed">
-                    {loading ? <Loader2 className="animate-spin" size={24} /> : <><Printer size={24} />Generate QR for {selOp.pending} pieces<ArrowRight size={20} /></>}
+                  <button onClick={generateQR} disabled={loading || selOp.pending === 0} className="w-full py-4 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white rounded-xl font-bold text-base flex justify-center items-center gap-3 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                    {loading ? <Loader2 className="animate-spin" size={20} /> : <><Printer size={20} />Generate QR for {selOp.pending} pieces<ArrowRight size={18} /></>}
                   </button>
-                  {selOp.lastBatch && <div className="mt-4 text-center"><button onClick={() => viewHistory(selOp)} className="text-blue-600 hover:underline text-sm flex items-center gap-1 mx-auto"><History size={16} /> View all batches</button></div>}
+                  {selOp.lastBatch && <div className="mt-3 text-center"><button onClick={() => viewHistory(selOp)} className="text-blue-600 hover:underline text-xs flex items-center gap-1 mx-auto"><History size={14} /> View all batches</button></div>}
                 </div>
               </div>
             ) : (
-              <div className="h-full flex items-center justify-center bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl p-12">
-                <div className="text-center"><div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-6"><Scissors size={32} className="text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700 dark:text-slate-300 mb-2">Select an OP</h3><p className="text-slate-500 dark:text-slate-400">Choose an OP from the list to generate QR code</p></div>
+              <div className="h-full flex items-center justify-center bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl p-8">
+                <div className="text-center"><div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center mx-auto mb-4"><Scissors size={24} className="text-slate-400" /></div><h3 className="text-lg font-bold text-slate-700 dark:text-slate-300 mb-1">Select an OP</h3><p className="text-sm text-slate-500 dark:text-slate-400">Choose an OP from the list to generate QR code</p></div>
               </div>
             )}
           </div>

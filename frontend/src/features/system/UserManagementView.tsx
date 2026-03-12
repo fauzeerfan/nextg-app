@@ -52,27 +52,27 @@ const MetricCard = ({ title, value, icon: Icon, color = 'pink', subtitle, suffix
   }[color];
 
   return (
-    <div className="group relative bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+    <div className="group relative bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">{title}</p>
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">{title}</p>
           <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-bold text-slate-900 dark:text-white">{value}</span>
-            {suffix && <span className="text-sm text-slate-500 dark:text-slate-400">{suffix}</span>}
+            <span className="text-2xl font-bold text-slate-900 dark:text-white">{value}</span>
+            {suffix && <span className="text-xs text-slate-500 dark:text-slate-400">{suffix}</span>}
           </div>
-          {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{subtitle}</p>}
           {trend && (
-            <div className="flex items-center gap-1 mt-3 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              <TrendingUp size={14} />
+            <div className="flex items-center gap-1 mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <TrendingUp size={12} />
               <span>{trend}</span>
             </div>
           )}
         </div>
-        <div className={`p-3 rounded-xl ${colorStyles.lightBg} border ${colorStyles.border}`}>
-          <Icon size={20} className={colorStyles.text} />
+        <div className={`p-2 rounded-lg ${colorStyles.lightBg} border ${colorStyles.border}`}>
+          <Icon size={16} className={colorStyles.text} />
         </div>
       </div>
-      <div className={`absolute inset-x-0 bottom-0 h-1 rounded-b-2xl bg-gradient-to-r ${colorStyles.bg} scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left`} />
+      <div className={`absolute inset-x-0 bottom-0 h-0.5 rounded-b-xl bg-gradient-to-r ${colorStyles.bg} scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left`} />
     </div>
   );
 };
@@ -141,150 +141,150 @@ export const UserManagementView = () => {
   if (load && !us.length) return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-center">
-        <Loader2 className="w-12 h-12 animate-spin text-pink-600 mx-auto mb-4" />
-        <p className="text-slate-600 dark:text-slate-400">Loading user data...</p>
+        <Loader2 className="w-10 h-10 animate-spin text-pink-600 mx-auto mb-3" />
+        <p className="text-sm text-slate-600 dark:text-slate-400">Loading user data...</p>
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 space-y-6">
-      {/* HEADER - dipertahankan dengan sedikit polesan */}
-      <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
-        <div className="p-8">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 space-y-4">
+      {/* HEADER - compact */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden">
+        <div className="p-5">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex items-center gap-3">
               <div className="relative">
-                <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl flex items-center justify-center shadow-lg">
-                  <Users size={28} className="text-white" />
+                <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl flex items-center justify-center shadow-md">
+                  <Users size={22} className="text-white" />
                 </div>
-                <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-400 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-lg">
-                  <Shield size={16} className="text-white" />
+                <div className="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-gradient-to-br from-purple-500 to-purple-400 rounded-full flex items-center justify-center border-3 border-white dark:border-slate-900 shadow-md">
+                  <Shield size={12} className="text-white" />
                 </div>
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   User Management
-                  <span className="text-xs px-3 py-1.5 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-full font-bold">
+                  <span className="text-[10px] px-2 py-1 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-full font-bold">
                     ACCESS CONTROL
                   </span>
                 </h1>
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
-              <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-pink-600 to-pink-500 text-white rounded-xl shadow-lg">
+            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+              <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-pink-600 to-pink-500 text-white rounded-lg shadow-md">
                 <div className="flex flex-col">
-                  <div className="text-xs font-medium opacity-90">Active Users</div>
-                  <div className="text-2xl font-bold">{active}/{total}</div>
+                  <div className="text-[10px] font-medium opacity-90">Active Users</div>
+                  <div className="text-xl font-bold">{active}/{total}</div>
                 </div>
-                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
-                  <UserCheck size={20} className="text-white" />
+                <div className="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                  <UserCheck size={16} className="text-white" />
                 </div>
               </div>
               <button
                 onClick={newUser}
                 disabled={load}
-                className="group px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl font-bold flex items-center gap-2 hover:from-blue-700 hover:to-blue-600 transition-all shadow-lg hover:shadow-xl disabled:opacity-50"
+                className="group px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg font-bold flex items-center gap-2 hover:from-blue-700 hover:to-blue-600 transition-all shadow-md hover:shadow-lg disabled:opacity-50 text-sm"
               >
-                <UserPlus size={20} />
+                <UserPlus size={16} />
                 New User
-                <ArrowRight size={18} className="opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                <ArrowRight size={14} className="opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
               </button>
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-8 pb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-5 pb-5">
           <MetricCard title="Total Users" value={total} icon={Users} color="pink" suffix="users" subtitle={`${active} currently active`} />
           <MetricCard title="Operators" value={opCnt} icon={UserCheck} color="emerald" suffix="active" subtitle="Station operators" />
           <MetricCard title="Admin/Manager" value={admCnt} icon={Star} color="blue" suffix="users" subtitle="Management level" />
         </div>
       </div>
 
-      {/* QUICK ACTIONS */}
-      <div className="mb-8">
-        <div className="flex flex-col sm:flex-row gap-4">
+      {/* QUICK ACTIONS - compact */}
+      <div className="mb-4">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
               placeholder="Search users..."
-              className="w-full pl-10 pr-4 py-2.5 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-pink-500 focus:ring-2 focus:ring-pink-200 dark:focus:ring-pink-900/30 transition-all"
+              className="w-full pl-9 pr-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-pink-500 focus:ring-2 focus:ring-pink-200 dark:focus:ring-pink-900/30 transition-all"
               value={q}
               onChange={e => setQ(e.target.value)}
             />
           </div>
-          <div className="flex gap-3">
-            <button className="p-2.5 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded-xl hover:border-pink-300 dark:hover:border-pink-700 transition-all">
-              <Filter size={18} />
+          <div className="flex gap-2">
+            <button className="p-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded-lg hover:border-pink-300 dark:hover:border-pink-700 transition-all">
+              <Filter size={16} />
             </button>
-            <button className="p-2.5 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded-xl hover:border-pink-300 dark:hover:border-pink-700 transition-all">
-              <Download size={18} />
+            <button className="p-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded-lg hover:border-pink-300 dark:hover:border-pink-700 transition-all">
+              <Download size={16} />
             </button>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* LEFT COLUMN - USER LIST */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+        {/* LEFT COLUMN - USER LIST (compact) */}
         <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden sticky top-6">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-700/50">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden sticky top-4">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-700/50">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-bold text-slate-900 dark:text-white">System Users</h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">{filtered.length} of {total} users</p>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm">System Users</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{filtered.length} of {total} users</p>
                 </div>
-                <span className="px-3 py-1 bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400 text-xs font-bold rounded-full">
+                <span className="px-2 py-1 bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400 text-[10px] font-bold rounded-full">
                   {active} Active
                 </span>
               </div>
             </div>
-            <div className="p-4">
-              <div className="space-y-2 max-h-[calc(100vh-500px)] overflow-y-auto pr-1 custom-scrollbar">
+            <div className="p-3">
+              <div className="space-y-2 max-h-[calc(100vh-450px)] overflow-y-auto pr-1 custom-scrollbar">
                 {filtered.map(u => {
                   const isSel = sel?.id === u.id;
                   return (
                     <div
                       key={u.id}
-                      className={`group p-4 rounded-2xl cursor-pointer transition-all ${isSel
-                          ? 'bg-gradient-to-r from-pink-50 to-white dark:from-pink-900/20 dark:to-slate-800 border-l-4 border-pink-500 shadow-md'
+                      className={`group p-3 rounded-xl cursor-pointer transition-all ${isSel
+                          ? 'bg-gradient-to-r from-pink-50 to-white dark:from-pink-900/20 dark:to-slate-800 border-l-4 border-pink-500 shadow-sm'
                           : 'hover:bg-slate-50 dark:hover:bg-slate-900/30 border border-slate-200 dark:border-slate-700'
                         }`}
                       onClick={() => select(u)}
                     >
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-start gap-2">
                         <div className="relative flex-shrink-0">
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br ${roleColor(u.role)}`}>
-                            <span className="text-white font-bold text-lg">{u.fullName?.charAt(0) || '?'}</span>
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br ${roleColor(u.role)}`}>
+                            <span className="text-white font-bold text-base">{u.fullName?.charAt(0) || '?'}</span>
                           </div>
-                          <div className={`absolute -bottom-1 -right-1 w-4 h-4 ${u.isActive ? 'bg-emerald-500' : 'bg-rose-500'} rounded-full border-2 border-white dark:border-slate-900`} />
+                          <div className={`absolute -bottom-1 -right-1 w-3 h-3 ${u.isActive ? 'bg-emerald-500' : 'bg-rose-500'} rounded-full border-2 border-white dark:border-slate-900`} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-bold text-slate-900 dark:text-white truncate">{u.fullName}</div>
-                          <div className="text-sm text-slate-500 dark:text-slate-400">@{u.username}</div>
-                          <div className="flex items-center justify-between mt-2">
-                            <span className={`px-2 py-1 rounded text-xs ${roleBg(u.role)} ${roleTxt(u.role)}`}>
+                          <div className="font-bold text-sm text-slate-900 dark:text-white truncate">{u.fullName}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">@{u.username}</div>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${roleBg(u.role)} ${roleTxt(u.role)}`}>
                               {u.role}
                             </span>
-                            <div className="text-xs text-slate-500 flex items-center gap-1">
+                            <div className="text-[10px] text-slate-500 flex items-center gap-1">
                               <span>{u.lineCode}</span>
                             </div>
                           </div>
                           {(u.department || u.jobTitle) && (
-                            <div className="text-xs text-slate-500 mt-1">
+                            <div className="text-[10px] text-slate-500 mt-1 truncate">
                               {u.department && deptName(u.department)} • {u.jobTitle && jobName(u.jobTitle)}
                             </div>
                           )}
                           {u.allowedStations?.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {u.allowedStations.slice(0, 3).map(st => (
-                                <span key={st} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-xs text-slate-600 dark:text-slate-300">
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {u.allowedStations.slice(0, 2).map(st => (
+                                <span key={st} className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[9px] text-slate-600 dark:text-slate-300">
                                   {st}
                                 </span>
                               ))}
-                              {u.allowedStations.length > 3 && (
-                                <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-xs text-slate-600 dark:text-slate-300">
-                                  +{u.allowedStations.length - 3}
+                              {u.allowedStations.length > 2 && (
+                                <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[9px] text-slate-600 dark:text-slate-300">
+                                  +{u.allowedStations.length - 2}
                                 </span>
                               )}
                             </div>
@@ -295,20 +295,20 @@ export const UserManagementView = () => {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <div className="p-8 text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                      <Users size={24} className="text-slate-400" />
+                  <div className="p-5 text-center">
+                    <div className="w-12 h-12 bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl flex items-center justify-center mx-auto mb-3">
+                      <Users size={20} className="text-slate-400" />
                     </div>
-                    <h4 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">No Users Found</h4>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm">
+                    <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">No Users Found</h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       {q ? 'No results for "' + q + '"' : 'Create your first user'}
                     </p>
                     {!q && (
                       <button
                         onClick={newUser}
-                        className="mt-4 px-6 py-2 bg-gradient-to-r from-pink-600 to-pink-500 text-white rounded-xl font-medium flex items-center gap-2 mx-auto hover:from-pink-700 hover:to-pink-600 transition-all"
+                        className="mt-3 px-4 py-2 bg-gradient-to-r from-pink-600 to-pink-500 text-white rounded-lg text-xs font-medium flex items-center gap-2 mx-auto hover:from-pink-700 hover:to-pink-600 transition-all"
                       >
-                        <UserPlus size={16} />
+                        <UserPlus size={14} />
                         Create User
                       </button>
                     )}
@@ -319,201 +319,201 @@ export const UserManagementView = () => {
           </div>
         </div>
 
-        {/* RIGHT COLUMN - USER DETAIL / FORM */}
-        <div className="lg:col-span-3 space-y-8">
+        {/* RIGHT COLUMN - USER DETAIL / FORM (compact) */}
+        <div className="lg:col-span-3 space-y-5">
           {sel && !edit ? (
-            // VIEW MODE
-            <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
-              <div className="p-8 border-b border-slate-100 dark:border-slate-700/50">
-                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-                  <div className="flex items-center gap-4">
+            // VIEW MODE (compact)
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden">
+              <div className="p-5 border-b border-slate-100 dark:border-slate-700/50">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                  <div className="flex items-center gap-3">
                     <div className="relative">
-                      <div className={`w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg bg-gradient-to-br ${roleColor(sel.role)}`}>
-                        <span className="text-white font-bold text-2xl">{sel.fullName?.charAt(0) || '?'}</span>
+                      <div className={`w-14 h-14 rounded-xl flex items-center justify-center shadow-md bg-gradient-to-br ${roleColor(sel.role)}`}>
+                        <span className="text-white font-bold text-xl">{sel.fullName?.charAt(0) || '?'}</span>
                       </div>
-                      <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-400 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-lg">
-                        <Shield size={16} className="text-white" />
+                      <div className="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-gradient-to-br from-blue-500 to-blue-400 rounded-full flex items-center justify-center border-3 border-white dark:border-slate-900 shadow-md">
+                        <Shield size={12} className="text-white" />
                       </div>
                     </div>
                     <div>
-                      <h2 className="text-2xl font-bold text-slate-900 dark:text-white">{sel.fullName}</h2>
-                      <p className="text-slate-600 dark:text-slate-400 mt-1">@{sel.username}</p>
-                      <div className="flex items-center gap-4 mt-3 text-sm text-slate-500">
+                      <h2 className="text-xl font-bold text-slate-900 dark:text-white">{sel.fullName}</h2>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">@{sel.username}</p>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
                         <div className="flex items-center gap-1">
-                          <Mail size={12} />
+                          <Mail size={10} />
                           <span>{sel.email || 'No email set'}</span>
                         </div>
                         <div className="h-1 w-1 bg-slate-400 rounded-full"></div>
                         <div className="flex items-center gap-1">
-                          <Building size={12} />
+                          <Building size={10} />
                           <span>{sel.department ? deptName(sel.department) : 'No department'}</span>
                         </div>
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-3">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       onClick={editUser}
-                      className="group px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl font-bold flex items-center gap-2 hover:from-blue-700 hover:to-blue-600 transition-all"
+                      className="group px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg font-bold flex items-center gap-2 hover:from-blue-700 hover:to-blue-600 transition-all text-sm"
                     >
-                      <Edit size={18} />
+                      <Edit size={14} />
                       Edit User
                     </button>
                     <button
                       onClick={() => toggleStatus(sel.id)}
-                      className={`group px-5 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${sel.isActive
+                      className={`group px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-all text-sm ${sel.isActive
                           ? 'bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-700 hover:to-rose-600 text-white'
                           : 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white'
                         }`}
                     >
                       {sel.isActive ? (
                         <>
-                          <Lock size={18} />
+                          <Lock size={14} />
                           Disable
                         </>
                       ) : (
                         <>
-                          <Unlock size={18} />
+                          <Unlock size={14} />
                           Enable
                         </>
                       )}
                     </button>
                     <button
                       onClick={() => delUser(sel.id)}
-                      className="px-5 py-3 bg-gradient-to-r from-red-600 to-red-500 text-white rounded-xl font-bold flex items-center gap-2 hover:from-red-700 hover:to-red-600 transition-all"
+                      className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-500 text-white rounded-lg font-bold flex items-center gap-2 hover:from-red-700 hover:to-red-600 transition-all text-sm"
                     >
-                      <Trash2 size={18} />
+                      <Trash2 size={14} />
                       Delete
                     </button>
                   </div>
                 </div>
               </div>
 
-              <div className="p-8">
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm hover:shadow-md transition-all">
+              <div className="p-5">
+                {/* Stats Cards compact */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-all">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Role</p>
-                        <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2">{sel.role}</p>
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Role</p>
+                        <p className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">{sel.role}</p>
                       </div>
-                      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-                        <Shield size={24} className="text-blue-600 dark:text-blue-400" />
+                      <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <Shield size={18} className="text-blue-600 dark:text-blue-400" />
                       </div>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-4">Access level</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-3">Access level</p>
                   </div>
 
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm hover:shadow-md transition-all">
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-all">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Department</p>
-                        <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Department</p>
+                        <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1 truncate">
                           {sel.department ? deptName(sel.department) : 'Not set'}
                         </p>
                       </div>
-                      <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
-                        <Building size={24} className="text-emerald-600 dark:text-emerald-400" />
+                      <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                        <Building size={18} className="text-emerald-600 dark:text-emerald-400" />
                       </div>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-4">{sel.department || 'No code'}</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-3">{sel.department || 'No code'}</p>
                   </div>
 
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm hover:shadow-md transition-all">
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-all">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Line Assignment</p>
-                        <p className="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-2">
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Line Assignment</p>
+                        <p className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">
                           {sel.lineCode || 'Not assigned'}
                         </p>
                       </div>
-                      <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
-                        <Target size={24} className="text-amber-600 dark:text-amber-400" />
+                      <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                        <Target size={18} className="text-amber-600 dark:text-amber-400" />
                       </div>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-4">Production line</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-3">Production line</p>
                   </div>
 
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm hover:shadow-md transition-all">
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-all">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Last Login</p>
-                        <p className="text-3xl font-bold text-pink-600 dark:text-pink-400 mt-2">
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Last Login</p>
+                        <p className="text-xl font-bold text-pink-600 dark:text-pink-400 mt-1">
                           {sel.lastLogin ? new Date(sel.lastLogin).toLocaleDateString() : 'Never'}
                         </p>
                       </div>
-                      <div className="p-3 bg-pink-50 dark:bg-pink-900/20 rounded-xl border border-pink-200 dark:border-pink-800">
-                        <Calendar size={24} className="text-pink-600 dark:text-pink-400" />
+                      <div className="p-2 bg-pink-50 dark:bg-pink-900/20 rounded-lg border border-pink-200 dark:border-pink-800">
+                        <Calendar size={18} className="text-pink-600 dark:text-pink-400" />
                       </div>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-4">Last system access</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-3">Last system access</p>
                   </div>
 
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm hover:shadow-md transition-all">
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-all">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Job Title</p>
-                        <p className="text-3xl font-bold text-slate-600 dark:text-slate-400 mt-2">
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Job Title</p>
+                        <p className="text-xl font-bold text-slate-600 dark:text-slate-400 mt-1">
                           {sel.jobTitle ? jobName(sel.jobTitle) : 'Not set'}
                         </p>
                       </div>
-                      <div className="p-3 bg-slate-100 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-700">
-                        <UserCheck size={24} className="text-slate-600 dark:text-slate-400" />
+                      <div className="p-2 bg-slate-100 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <UserCheck size={18} className="text-slate-600 dark:text-slate-400" />
                       </div>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-4">{sel.jobTitle || 'No code'}</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-3">{sel.jobTitle || 'No code'}</p>
                   </div>
 
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm hover:shadow-md transition-all">
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-all">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Status</p>
-                        <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Status</p>
+                        <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
                           {sel.isActive ? 'Active' : 'Inactive'}
                         </p>
                       </div>
-                      <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
-                        <CheckCircle size={24} className="text-emerald-600 dark:text-emerald-400" />
+                      <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                        <CheckCircle size={18} className="text-emerald-600 dark:text-emerald-400" />
                       </div>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-4">Account status</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-3">Account status</p>
                   </div>
                 </div>
 
-                {/* Allowed Stations */}
-                <div className="bg-gradient-to-r from-pink-50 to-white dark:from-pink-900/10 dark:to-slate-800/30 rounded-2xl border border-pink-100 dark:border-pink-800/30 p-6">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 bg-pink-100 dark:bg-pink-900/40 rounded-lg">
-                      <Key size={20} className="text-pink-600 dark:text-pink-400" />
+                {/* Allowed Stations compact */}
+                <div className="bg-gradient-to-r from-pink-50 to-white dark:from-pink-900/10 dark:to-slate-800/30 rounded-xl border border-pink-100 dark:border-pink-800/30 p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="p-1.5 bg-pink-100 dark:bg-pink-900/40 rounded-lg">
+                      <Key size={16} className="text-pink-600 dark:text-pink-400" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-900 dark:text-white">Allowed Stations</h3>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                      <h3 className="font-bold text-sm text-slate-900 dark:text-white">Allowed Stations</h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         {(sel.allowedStations?.length || 0)} stations accessible
                       </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                     {stationOpts.map(o => {
                       const has = (sel.allowedStations || []).includes(o.value);
                       return (
                         <div
                           key={o.value}
-                          className={`p-4 rounded-xl border-2 transition-all ${has
+                          className={`p-3 rounded-lg border-2 transition-all ${has
                               ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
                               : 'border-slate-200 dark:border-slate-700'
                             }`}
                         >
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className={`p-2 rounded-lg ${has ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                              <Shield size={16} className={has ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'} />
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className={`p-1.5 rounded-lg ${has ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                              <Shield size={12} className={has ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'} />
                             </div>
-                            <div className="font-medium text-slate-900 dark:text-white">{o.label}</div>
+                            <div className="font-medium text-xs text-slate-900 dark:text-white">{o.label}</div>
                           </div>
                           {has && (
-                            <div className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                              <CheckCircle size={12} />
+                            <div className="mt-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                              <CheckCircle size={10} />
                               Granted
                             </div>
                           )}
@@ -525,90 +525,90 @@ export const UserManagementView = () => {
               </div>
             </div>
           ) : edit ? (
-            // EDIT/CREATE MODE
-            <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
-              <div className="p-8 border-b border-slate-100 dark:border-slate-700/50">
-                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
-                      {create ? <UserPlus size={28} className="text-white" /> : <Edit size={28} className="text-white" />}
+            // EDIT/CREATE MODE (compact)
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden">
+              <div className="p-5 border-b border-slate-100 dark:border-slate-700/50">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
+                      {create ? <UserPlus size={22} className="text-white" /> : <Edit size={22} className="text-white" />}
                     </div>
                     <div>
-                      <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                      <h2 className="text-xl font-bold text-slate-900 dark:text-white">
                         {create ? 'Create New User' : `Edit User: ${sel?.username}`}
                       </h2>
-                      <p className="text-slate-600 dark:text-slate-400 mt-1">
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                         {create ? 'Add new system user account' : 'Update user information and permissions'}
                       </p>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-3">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => { setEdit(false); setCreate(false); if (sel) setF({ username: sel.username, fullName: sel.fullName, email: sel.email || '', role: sel.role, department: sel.department || '', jobTitle: sel.jobTitle || '', lineCode: sel.lineCode || '', isActive: sel.isActive ?? true, allowedStations: sel.allowedStations || [], password: '' }); }}
-                      className="px-5 py-3 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:border-blue-300 dark:hover:border-blue-700 transition-all"
+                      className="px-4 py-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-bold hover:border-blue-300 dark:hover:border-blue-700 transition-all text-sm"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={saveUser}
                       disabled={load}
-                      className="group px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl font-bold flex items-center gap-2 hover:from-emerald-700 hover:to-emerald-600 transition-all disabled:opacity-50"
+                      className="group px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-lg font-bold flex items-center gap-2 hover:from-emerald-700 hover:to-emerald-600 transition-all disabled:opacity-50 text-sm"
                     >
-                      {load ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                      {load ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                       {create ? 'Create User' : 'Save Changes'}
                     </button>
                   </div>
                 </div>
               </div>
 
-              <div className="p-8 space-y-8">
+              <div className="p-5 space-y-5">
                 {/* Basic Information */}
-                <div className="bg-gradient-to-r from-blue-50 to-white dark:from-blue-900/10 dark:to-slate-800/30 rounded-2xl border border-blue-100 dark:border-blue-800/30 p-6">
-                  <h4 className="font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                    <UserCheck className="text-blue-600" size={20} />
+                <div className="bg-gradient-to-r from-blue-50 to-white dark:from-blue-900/10 dark:to-slate-800/30 rounded-xl border border-blue-100 dark:border-blue-800/30 p-4">
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                    <UserCheck className="text-blue-600" size={16} />
                     Basic Information
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                         Username <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="text"
-                        className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900/30 transition-all"
+                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900/30 transition-all"
                         value={f.username}
                         onChange={e => setF({ ...f, username: e.target.value })}
                         placeholder="Enter username"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                         Full Name <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="text"
-                        className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900/30 transition-all"
+                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900/30 transition-all"
                         value={f.fullName}
                         onChange={e => setF({ ...f, fullName: e.target.value })}
                         placeholder="Enter full name"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email Address</label>
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Email Address</label>
                       <input
                         type="email"
-                        className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900/30 transition-all"
+                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900/30 transition-all"
                         value={f.email}
                         onChange={e => setF({ ...f, email: e.target.value })}
                         placeholder="user@company.com"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                         Role <span className="text-rose-500">*</span>
                       </label>
                       <select
-                        className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900/30 transition-all"
+                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900/30 transition-all"
                         value={f.role}
                         onChange={e => setF({ ...f, role: e.target.value as SystemUser['role'] })}
                       >
@@ -621,16 +621,16 @@ export const UserManagementView = () => {
                 </div>
 
                 {/* Job Details */}
-                <div className="bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-900/10 dark:to-slate-800/30 rounded-2xl border border-emerald-100 dark:border-emerald-800/30 p-6">
-                  <h4 className="font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                    <Building className="text-emerald-600" size={20} />
+                <div className="bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-900/10 dark:to-slate-800/30 rounded-xl border border-emerald-100 dark:border-emerald-800/30 p-4">
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Building className="text-emerald-600" size={16} />
                     Job Details
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Department</label>
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Department</label>
                       <select
-                        className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all"
+                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all"
                         value={f.department || ''}
                         onChange={e => setF({ ...f, department: e.target.value })}
                       >
@@ -641,9 +641,9 @@ export const UserManagementView = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Job Title</label>
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Job Title</label>
                       <select
-                        className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all"
+                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all"
                         value={f.jobTitle || ''}
                         onChange={e => setF({ ...f, jobTitle: e.target.value })}
                       >
@@ -654,9 +654,9 @@ export const UserManagementView = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Line Assignment</label>
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Line Assignment</label>
                       <select
-                        className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all"
+                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all"
                         value={f.lineCode || ''}
                         onChange={e => setF({ ...f, lineCode: e.target.value })}
                       >
@@ -667,9 +667,9 @@ export const UserManagementView = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Status</label>
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Status</label>
                       <select
-                        className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all"
+                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all"
                         value={f.isActive ? 'active' : 'inactive'}
                         onChange={e => setF({ ...f, isActive: e.target.value === 'active' })}
                       >
@@ -681,42 +681,42 @@ export const UserManagementView = () => {
                 </div>
 
                 {/* Account Security */}
-                <div className="bg-gradient-to-r from-amber-50 to-white dark:from-amber-900/10 dark:to-slate-800/30 rounded-2xl border border-amber-100 dark:border-amber-800/30 p-6">
-                  <h4 className="font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                    <Key className="text-amber-600" size={20} />
+                <div className="bg-gradient-to-r from-amber-50 to-white dark:from-amber-900/10 dark:to-slate-800/30 rounded-xl border border-amber-100 dark:border-amber-800/30 p-4">
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Key className="text-amber-600" size={16} />
                     Account Security
                   </h4>
                   {create ? (
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                         Password <span className="text-rose-500">*</span>
                       </label>
                       <div className="relative">
                         <input
                           type={showPw ? "text" : "password"}
-                          className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-900/30 transition-all pr-12"
+                          className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-900/30 transition-all pr-10"
                           placeholder="Enter password (min. 8 characters)"
                           value={f.password}
                           onChange={e => setF({ ...f, password: e.target.value })}
                         />
                         <button
                           type="button"
-                          className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg"
                           onClick={() => setShowPw(!showPw)}
                         >
-                          {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+                          {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
                       </div>
-                      <div className="mt-3 p-3 bg-slate-100 dark:bg-slate-800/50 rounded-lg">
-                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                          <AlertCircle size={14} />
+                      <div className="mt-2 p-2 bg-slate-100 dark:bg-slate-800/50 rounded-lg">
+                        <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                          <AlertCircle size={12} />
                           <span>Default password will be 'password123' if left empty</span>
                         </div>
                       </div>
                     </div>
                   ) : (
                     <div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
                             type="checkbox"
@@ -724,30 +724,30 @@ export const UserManagementView = () => {
                             onChange={e => setChPw(e.target.checked)}
                             className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
                           />
-                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
                             Change password
                           </span>
                         </label>
                       </div>
                       {chPw && (
-                        <div className="mt-4">
-                          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        <div className="mt-3">
+                          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                             New Password
                           </label>
                           <div className="relative">
                             <input
                               type={showPw ? "text" : "password"}
-                              className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-900/30 transition-all pr-12"
+                              className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-900/30 transition-all pr-10"
                               placeholder="Enter new password"
                               value={f.password}
                               onChange={e => setF({ ...f, password: e.target.value })}
                             />
                             <button
                               type="button"
-                              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg"
+                              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg"
                               onClick={() => setShowPw(!showPw)}
                             >
-                              {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+                              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                             </button>
                           </div>
                         </div>
@@ -757,24 +757,24 @@ export const UserManagementView = () => {
                 </div>
 
                 {/* Allowed Stations */}
-                <div className="bg-gradient-to-r from-purple-50 to-white dark:from-purple-900/10 dark:to-slate-800/30 rounded-2xl border border-purple-100 dark:border-purple-800/30 p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-purple-100 dark:bg-purple-900/40 rounded-lg">
-                        <Shield size={20} className="text-purple-600 dark:text-purple-400" />
+                <div className="bg-gradient-to-r from-purple-50 to-white dark:from-purple-900/10 dark:to-slate-800/30 rounded-xl border border-purple-100 dark:border-purple-800/30 p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-purple-100 dark:bg-purple-900/40 rounded-lg">
+                        <Shield size={16} className="text-purple-600 dark:text-purple-400" />
                       </div>
                       <div>
-                        <h4 className="font-bold text-slate-900 dark:text-white">Allowed Stations</h4>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">Allowed Stations</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
                           Select stations this user can access
                         </p>
                       </div>
                     </div>
-                    <div className="text-sm text-slate-500">
+                    <div className="text-xs text-slate-500">
                       {(f.allowedStations?.length || 0)} selected
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                     {stationOpts.map(o => {
                       const has = (f.allowedStations || []).includes(o.value);
                       return (
@@ -782,21 +782,21 @@ export const UserManagementView = () => {
                           key={o.value}
                           type="button"
                           onClick={() => toggleStation(o.value)}
-                          className={`group p-4 rounded-xl border-2 transition-all text-left ${has
+                          className={`group p-3 rounded-lg border-2 transition-all text-left ${has
                               ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
                               : 'border-slate-200 dark:border-slate-700 hover:border-purple-300 dark:hover:border-purple-700'
                             }`}
                         >
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className={`p-2 rounded-lg ${has ? 'bg-purple-100 dark:bg-purple-900/40' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                              <Shield size={16} className={has ? 'text-purple-600 dark:text-purple-400' : 'text-slate-400'} />
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className={`p-1.5 rounded-lg ${has ? 'bg-purple-100 dark:bg-purple-900/40' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                              <Shield size={12} className={has ? 'text-purple-600 dark:text-purple-400' : 'text-slate-400'} />
                             </div>
-                            <div className="font-medium text-slate-900 dark:text-white">{o.label}</div>
-                            <div className={`w-5 h-5 rounded-full ml-auto flex items-center justify-center ${has ? 'bg-purple-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                              {has && <CheckCircle size={12} />}
+                            <div className="font-medium text-xs text-slate-900 dark:text-white">{o.label}</div>
+                            <div className={`w-4 h-4 rounded-full ml-auto flex items-center justify-center ${has ? 'bg-purple-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                              {has && <CheckCircle size={10} />}
                             </div>
                           </div>
-                          <div className="text-xs text-slate-500">{o.value}</div>
+                          <div className="text-[10px] text-slate-500">{o.value}</div>
                         </button>
                       );
                     })}
@@ -805,21 +805,21 @@ export const UserManagementView = () => {
               </div>
             </div>
           ) : (
-            // NO USER SELECTED
-            <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
-              <div className="p-16 text-center">
-                <div className="w-24 h-24 bg-gradient-to-br from-pink-500 to-pink-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-lg">
-                  <Users size={40} className="text-white" />
+            // NO USER SELECTED (compact)
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden">
+              <div className="p-12 text-center">
+                <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-md">
+                  <Users size={28} className="text-white" />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">No User Selected</h3>
-                <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-md mx-auto">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">No User Selected</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mb-5 max-w-sm mx-auto">
                   Select a user from the list to view details, edit permissions, or manage account settings.
                 </p>
                 <button
                   onClick={newUser}
-                  className="group px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl font-bold flex items-center gap-2 mx-auto hover:from-blue-700 hover:to-blue-600 transition-all"
+                  className="group px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg font-bold flex items-center gap-2 mx-auto hover:from-blue-700 hover:to-blue-600 transition-all text-sm"
                 >
-                  <UserPlus size={20} />
+                  <UserPlus size={16} />
                   Create New User
                 </button>
               </div>

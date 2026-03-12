@@ -221,19 +221,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
       className={`fixed inset-y-0 left-0 z-50 bg-gradient-to-b from-slate-50 to-white dark:from-slate-900 dark:to-slate-950 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 ease-in-out shadow-xl h-screen flex flex-col ${
         isMobile
           ? (isOpen ? 'translate-x-0' : '-translate-x-full')
-          : (isOpen ? 'w-64' : 'w-20')
+          : (isOpen ? 'w-56 lg:w-64' : 'w-16 lg:w-20') // Lebih compact di tablet
       }`}
     >
-      {/* HEADER SIDEBAR */}
-      <div className="flex items-center h-24 border-b border-slate-100 dark:border-slate-800/50 transition-colors duration-300 shrink-0 px-4">
+      {/* HEADER SIDEBAR - lebih compact */}
+      <div className="flex items-center h-20 lg:h-24 border-b border-slate-100 dark:border-slate-800/50 transition-colors duration-300 shrink-0 px-3 lg:px-4">
         <div className={`flex items-center w-full transition-all duration-300 ${
-          isCollapsed ? 'justify-center' : 'gap-3'
+          isCollapsed ? 'justify-center' : 'gap-2 lg:gap-3'
         }`}>
-          <NextGLogo className="h-16 w-auto text-blue-600 dark:text-white drop-shadow-sm transition-colors duration-300 shrink-0" />
+          <NextGLogo className="h-14 lg:h-16 w-auto text-blue-600 dark:text-white drop-shadow-sm transition-colors duration-300 shrink-0" />
 
           {!isCollapsed && (
             <div className="flex flex-col">
-              <span className="text-2xl font-bold italic tracking-wider text-slate-800 dark:text-white">
+              <span className="text-xl lg:text-2xl font-bold italic tracking-wider text-slate-800 dark:text-white truncate max-w-[100px] lg:max-w-none">
                 NextG
                 <span className="text-blue-600 dark:text-blue-500">App</span>
               </span>
@@ -244,15 +244,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* SIDEBAR CONTENT */}
       <div className="flex-1 overflow-hidden flex flex-col">
-        <nav className="flex-1 overflow-y-auto py-4 px-3">
+        <nav className="flex-1 overflow-y-auto py-3 px-2 lg:px-3">
           {filteredGroups.map((group, idx) => (
-            <div key={idx} className="mb-6">
+            <div key={idx} className="mb-4 lg:mb-6">
               {!isCollapsed && (
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 px-3">
+                <div className="text-[8px] lg:text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 lg:mb-2 px-2 lg:px-3">
                   {group.title}
                 </div>
               )}
-              <div className="space-y-1">
+              <div className="space-y-0.5 lg:space-y-1">
                 {group.items.map((item) => {
                   const Icon = item.icon;
                   const isActive = activeTab === item.id;
@@ -261,7 +261,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       key={item.id}
                       type="button"
                       onClick={() => handleTabClick(item.id)}
-                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative overflow-hidden cursor-pointer
+                      className={`w-full flex items-center gap-2 lg:gap-3 px-2 lg:px-3 py-2 lg:py-3 rounded-xl transition-all duration-200 group relative overflow-hidden cursor-pointer
                         ${isActive
                           ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30'
                           : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white'
@@ -270,19 +270,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       `}
                       title={isCollapsed ? item.label : ''}
                     >
-                      <div className={`p-2 rounded-lg transition-colors ${
+                      <div className={`p-1.5 lg:p-2 rounded-lg transition-colors ${
                         isActive ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-800 group-hover:bg-slate-200 dark:group-hover:bg-slate-700'
                       }`}>
-                        <Icon size={20} className={isActive ? 'text-white' : item.color} />
+                        <Icon size={18} className={isActive ? 'text-white' : item.color} />
                       </div>
                       {!isCollapsed && (
                         <div className="flex-1 text-left">
-                          <div className="font-semibold text-sm">{item.label}</div>
+                          <div className="font-semibold text-xs lg:text-sm truncate">{item.label}</div>
                         </div>
                       )}
 
                       {isActive && !isCollapsed && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-white rounded-full"></div>
+                        <div className="absolute right-2 lg:right-3 top-1/2 transform -translate-y-1/2 w-1.5 h-1.5 bg-white rounded-full"></div>
                       )}
                     </button>
                   );
@@ -292,29 +292,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ))}
         </nav>
 
-        {/* USER PROFILE & SETTINGS */}
+        {/* USER PROFILE & SETTINGS - lebih compact */}
         <div className={`border-t border-slate-100 dark:border-slate-800/50 transition-all duration-300 shrink-0 ${
-          isCollapsed ? 'px-2' : 'px-4'
+          isCollapsed ? 'px-1 lg:px-2' : 'px-3 lg:px-4'
         }`}>
           {!isCollapsed && (
-            <div className="flex items-center gap-3 mb-4 pt-4">
+            <div className="flex items-center gap-2 lg:gap-3 mb-3 lg:mb-4 pt-3 lg:pt-4">
               <div className="relative">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm">
+                <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-xs lg:text-sm">
                   {currentUser?.fullName?.charAt(0) || 'U'}
                 </div>
                 {currentUser?.role === 'ADMINISTRATOR' && (
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full border-2 border-white dark:border-slate-900"></div>
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border-2 border-white dark:border-slate-900"></div>
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-sm text-slate-800 dark:text-white truncate">
+                <div className="font-bold text-xs lg:text-sm text-slate-800 dark:text-white truncate">
                   {currentUser?.fullName || 'User'}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 capitalize">
+                <div className="text-[10px] lg:text-xs text-slate-500 dark:text-slate-400 capitalize truncate">
                   {currentUser?.role?.toLowerCase().replace('_', ' ') || 'Operator'}
                 </div>
                 {currentUser?.lineCode && (
-                  <div className="text-xs text-slate-400 mt-0.5">
+                  <div className="text-[9px] lg:text-xs text-slate-400 mt-0.5 truncate">
                     Line {currentUser.lineCode}
                   </div>
                 )}
@@ -322,32 +322,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
 
-          <div className={`flex gap-2 pb-4 ${isCollapsed ? 'flex-col items-center' : 'justify-center'}`}>
+          <div className={`flex gap-1 lg:gap-2 pb-3 lg:pb-4 ${isCollapsed ? 'flex-col items-center' : 'justify-center'}`}>
             <button
               type="button"
               onClick={toggleTheme}
-              className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors w-10 h-10 flex items-center justify-center"
+              className="p-1.5 lg:p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors w-8 h-8 lg:w-10 lg:h-10 flex items-center justify-center"
               title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
-              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
             </button>
 
             <button
               type="button"
               onClick={toggleSidebar}
-              className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors w-10 h-10 flex items-center justify-center"
+              className="p-1.5 lg:p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors w-8 h-8 lg:w-10 lg:h-10 flex items-center justify-center"
               title={isOpen ? 'Collapse Sidebar' : 'Expand Sidebar'}
             >
-              {isOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+              {isOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
             </button>
 
             <button
               type="button"
               onClick={onLogout}
-              className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors w-10 h-10 flex items-center justify-center"
+              className="p-1.5 lg:p-2 rounded-lg bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors w-8 h-8 lg:w-10 lg:h-10 flex items-center justify-center"
               title="Logout"
             >
-              <LogOut size={18} className="text-red-600 dark:text-red-400" />
+              <LogOut size={16} className="text-red-600 dark:text-red-400" />
             </button>
           </div>
         </div>
