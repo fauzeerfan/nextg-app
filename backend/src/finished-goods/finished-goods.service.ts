@@ -47,10 +47,10 @@ export class FinishedGoodsService {
         create: { fgNumber: session.fgNumber, totalQty },
       });
 
-      // 3. Tandai session sebagai RECEIVED
+      // 3. Tandai session sudah diterima (receivedAt) -- PERUBAHAN DI SINI
       await tx.packingSession.update({
         where: { id: sessionId },
-        data: { status: 'RECEIVED' },
+        data: { receivedAt: new Date() },
       });
 
       return { success: true, totalQty };

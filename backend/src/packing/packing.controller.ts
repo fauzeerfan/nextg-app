@@ -46,4 +46,11 @@ export class PackingController {
   async cancelSession(@Param('sessionId') sessionId: string) {
     return this.service.cancelSession(sessionId);
   }
+
+  // ========== NEW ENDPOINT: packed-boxes ==========
+  @Get('packed-boxes')
+  @UseGuards(JwtAuthGuard)
+  async getPackedBoxes() {
+    return this.service.getPackedBoxes();
+  }
 }

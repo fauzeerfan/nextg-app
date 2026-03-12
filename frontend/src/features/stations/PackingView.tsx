@@ -43,14 +43,24 @@ interface PackingOp extends ProductionOrder {
 
 interface PackingSessionHistory extends PackingSession {}
 
-// Interface Baru untuk Data QR yang terstruktur
+// Interface untuk Packed Box (hasil packing yang menunggu diterima di Finished Goods)
+interface PackedBox {
+  id: string;
+  fgNumber: string;
+  totalQty: number;
+  items: { opNumber: string; qty: number }[];
+  qrCode: string;
+  createdAt: string;
+}
+
+// Interface untuk Data QR
 interface QrData {
   code: string;
-  opNumbers: string; // Bisa berisi beberapa OP digabung (misal: "OP1, OP2")
+  opNumbers: string;
   itemNumberFG: string;
   itemNameFG: string;
   qtyOp: number;
-  createdAt?: string; 
+  createdAt?: string;
 }
 
 // Metric Card Component
@@ -103,7 +113,6 @@ const SimpleNumpad = ({ value, onChange, max }: { value: number; onChange: (val:
   const quickAmounts = [1, 5, 10, 50];
 
   const handleSet = (amt: number) => {
-    // Jika nilai sekarang + amt <= max, maka tambah; jika melebihi max, set ke max
     const newVal = value + amt;
     if (newVal <= max) {
       onChange(newVal);
@@ -122,8 +131,6 @@ const SimpleNumpad = ({ value, onChange, max }: { value: number; onChange: (val:
           {value}
         </div>
       </div>
-
-      {/* Quick buttons grid 2x2 */}
       <div className="grid grid-cols-2 gap-2 mb-2">
         {quickAmounts.map(amt => (
           <button
@@ -135,8 +142,6 @@ const SimpleNumpad = ({ value, onChange, max }: { value: number; onChange: (val:
           </button>
         ))}
       </div>
-
-      {/* Clear button */}
       <button
         onClick={handleClear}
         className="w-full py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg text-slate-800 dark:text-white font-bold flex items-center justify-center gap-2 text-sm"
@@ -147,7 +152,7 @@ const SimpleNumpad = ({ value, onChange, max }: { value: number; onChange: (val:
   );
 };
 
-// History Modal (Dimodifikasi agar close otomatis saat reprint)
+// History Modal
 const HistoryModal = ({ show, onClose, history, onReprint, loading }: any) => {
   if (!show) return null;
   return (
@@ -203,6 +208,33 @@ const HistoryModal = ({ show, onClose, history, onReprint, loading }: any) => {
   );
 };
 
+// Komponen untuk menampilkan Packed Box (hasil packing yang menunggu)
+const PackedBoxCard = ({ box, onReprint }: { box: PackedBox; onReprint: (qrCode: string) => void }) => {
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3 shadow hover:shadow-md transition">
+      <div className="flex justify-between items-start mb-2">
+        <div>
+          <div className="font-mono font-bold text-sm text-slate-900 dark:text-white">{box.fgNumber}</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">{box.totalQty} sets</div>
+        </div>
+        <button
+          onClick={() => onReprint(box.qrCode)}
+          className="p-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50"
+          title="Cetak ulang QR"
+        >
+          <Printer size={14} />
+        </button>
+      </div>
+      <div className="text-xs text-slate-600 dark:text-slate-400 mb-2">
+        {box.items.map(item => `${item.opNumber} (${item.qty})`).join(', ')}
+      </div>
+      <div className="text-[10px] text-slate-400">
+        {new Date(box.createdAt).toLocaleString()}
+      </div>
+    </div>
+  );
+};
+
 export const PackingView = () => {
   const [ops, setOps] = useState<PackingOp[]>([]);
   const [search, setSearch] = useState('');
@@ -218,12 +250,16 @@ export const PackingView = () => {
   const [inputQty, setInputQty] = useState<number>(0);
   const [adding, setAdding] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [qr, setQr] = useState<QrData | null>(null); // Diubah dari string menjadi object QrData
+  const [qr, setQr] = useState<QrData | null>(null);
 
   // History
   const [history, setHistory] = useState<PackingSessionHistory[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // ===== NEW: Packed boxes (menunggu diterima di Finished Goods) =====
+  const [packedBoxes, setPackedBoxes] = useState<PackedBox[]>([]);
+  const [loadingPacked, setLoadingPacked] = useState(false);
 
   // Ref untuk scroll & data sebelumnya
   const prevOpsRef = useRef<PackingOp[]>([]);
@@ -241,7 +277,7 @@ export const PackingView = () => {
     };
   };
 
-  // FUNGSI BARU: Menyimpan dan Mengingat OP ke LocalStorage untuk History Label
+  // Cache OP untuk history label
   const updateOpCache = useCallback((opsData: any[]) => {
     try {
       const cache = JSON.parse(localStorage.getItem('packing_op_cache') || '{}');
@@ -272,7 +308,6 @@ export const PackingView = () => {
       if (res.ok) {
         const data: ProductionOrder[] = await res.json();
         
-        // Simpan cache agar nama barang tidak hilang saat buka history
         updateOpCache(data);
 
         const withRemaining: PackingOp[] = data.map(op => ({
@@ -280,7 +315,6 @@ export const PackingView = () => {
           remainingPacking: (op.qtyQC || 0) - (op.qtyPacking || 0)
         })).filter(op => op.remainingPacking > 0);
 
-        // Only update if data changed
         if (JSON.stringify(prevOpsRef.current) !== JSON.stringify(withRemaining)) {
           setOps(withRemaining);
           prevOpsRef.current = withRemaining;
@@ -311,7 +345,6 @@ export const PackingView = () => {
         setActiveSession(session);
         if (session) setSelectedFG(session.fgNumber);
         
-        // Simpan ke memori cache juga jika ada items
         if (session && session.items) {
           const sessionOps = session.items.map((i: any) => i.op).filter(Boolean);
           updateOpCache(sessionOps);
@@ -344,6 +377,23 @@ export const PackingView = () => {
     }
   }, []);
 
+  // ===== NEW: Fetch packed boxes (menunggu diterima di Finished Goods) =====
+  const fetchPackedBoxes = useCallback(async () => {
+    setLoadingPacked(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/packing/packed-boxes`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        setPackedBoxes(await res.json());
+      }
+    } catch (error) {
+      console.error('Failed to fetch packed boxes', error);
+    } finally {
+      setLoadingPacked(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (activeSession && activeSession.items && activeSession.items.length > 0) {
       const firstOp = activeSession.items[0].op;
@@ -366,12 +416,14 @@ export const PackingView = () => {
     fetchOps();
     fetchActiveSession();
     fetchHistory();
+    fetchPackedBoxes(); // <-- fetch packed boxes
     const interval = setInterval(() => {
       fetchOps();
       fetchActiveSession();
+      fetchPackedBoxes(); // <-- update packed boxes setiap 10 detik
     }, 10000);
     return () => clearInterval(interval);
-  }, [fetchOps, fetchActiveSession, fetchHistory]);
+  }, [fetchOps, fetchActiveSession, fetchHistory, fetchPackedBoxes]);
 
   const filteredOps = useMemo(() => {
     if (search.trim() === '') return ops;
@@ -447,8 +499,8 @@ export const PackingView = () => {
         setActiveSession(updatedSession);
         setSelectedOpId('');
         setInputQty(0);
-        await fetchOps(); // refresh remaining
-        await fetchActiveSession(); // refresh session data
+        await fetchOps();
+        await fetchActiveSession();
       } else {
         const err = await res.json();
         alert(`Gagal: ${err.message}`);
@@ -480,7 +532,6 @@ export const PackingView = () => {
       if (res.ok) {
         const result = await res.json();
         
-        // Susun daftar OP (Bisa multiple / berjejer)
         const opNumbers = activeSession.items.map(i => i.op?.opNumber).filter(Boolean).join(', ');
         const itemNameFG = activeSession.items[0]?.op?.itemNameFG || '-';
 
@@ -498,6 +549,7 @@ export const PackingView = () => {
         await fetchOps(); 
         await fetchActiveSession(); 
         fetchHistory(); 
+        fetchPackedBoxes(); // <-- perbarui daftar packed boxes
       } else {
         alert('Gagal menutup sesi');
       }
@@ -520,7 +572,6 @@ export const PackingView = () => {
         const data = await res.json();
         const session = history.find(s => s.id === sessionId);
         
-        // Ambil ingatan dari LocalStorage jika di history kosong
         const cache = JSON.parse(localStorage.getItem('packing_op_cache') || '{}');
         const firstOpNum = session?.items?.[0]?.op?.opNumber;
         const cachedItemName = firstOpNum ? cache[firstOpNum]?.itemNameFG : null;
@@ -544,6 +595,21 @@ export const PackingView = () => {
     }
   };
 
+  // Fungsi untuk mencetak ulang dari packed box
+  const reprintPackedBox = (qrCode: string) => {
+    // Cari box berdasarkan qrCode di packedBoxes
+    const box = packedBoxes.find(b => b.qrCode === qrCode);
+    if (!box) return;
+    setQr({
+      code: box.qrCode,
+      opNumbers: box.items.map(i => i.opNumber).join(', '),
+      itemNumberFG: box.fgNumber,
+      itemNameFG: box.items.map(i => i.opNumber).join(', '), // Nama item tidak tersedia, gunakan opNumbers sementara
+      qtyOp: box.totalQty,
+      createdAt: box.createdAt
+    });
+  };
+
   const formatDate = (date: Date) => {
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -560,10 +626,6 @@ export const PackingView = () => {
   return (
     <div className="animate-in fade-in duration-300">
       
-      {/* SANGAT PENTING: Print CSS Khusus 
-        Memaksa tinggi body hanya sebesar kertas printer (3.8cm) 
-        sehingga mustahil Chrome membuat kertas halaman ke-2, ke-3, dst.
-      */}
       <style dangerouslySetInnerHTML={{__html: `
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap');
         
@@ -580,7 +642,6 @@ export const PackingView = () => {
             overflow: hidden !important;
             background-color: white !important;
           }
-          /* Pastikan warna tinta tercetak solid black */
           * {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
@@ -590,9 +651,6 @@ export const PackingView = () => {
 
       {qr && (
         <>
-          {/* ========================================================= */}
-          {/* 1. VERSI CETAK MESIN (Tersembunyi di layar, Muncul di Print) */}
-          {/* ========================================================= */}
           <div className="hidden print:flex w-[7.9cm] h-[3.8cm] bg-white text-black m-0 p-0 box-border flex-col items-center justify-center overflow-hidden fixed top-0 left-0 z-[9999]">
             <div className="flex flex-col h-full justify-center items-center w-full" style={{ fontFamily: "'Poppins', sans-serif" }}>
               <div className="flex flex-col">
@@ -616,9 +674,6 @@ export const PackingView = () => {
             </div>
           </div>
 
-          {/* ========================================================= */}
-          {/* 2. VERSI LAYAR MODAL (Muncul di Layar, Lenyap saat Print)   */}
-          {/* ========================================================= */}
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 print:hidden">
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
               
@@ -626,7 +681,6 @@ export const PackingView = () => {
                 <CheckCircle size={24} className="text-emerald-500" />
               </div>
 
-              {/* Preview Label untuk UI */}
               <div
                 className="label-container mx-auto border border-dashed border-slate-300 dark:border-slate-700 p-6 rounded bg-white"
                 style={{ width: '100%', maxWidth: '380px' }}
@@ -655,7 +709,6 @@ export const PackingView = () => {
                 </div>
               </div>
 
-              {/* Tombol aksi */}
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setQr(null)}
@@ -676,11 +729,7 @@ export const PackingView = () => {
         </>
       )}
 
-      {/* ========================================================= */}
-      {/* 3. APLIKASI UTAMA BACKGROUND (Lenyap saat proses Print)     */}
-      {/* ========================================================= */}
       <div className="print:hidden">
-        {/* History Modal */}
         <HistoryModal
           show={showHistory}
           onClose={() => setShowHistory(false)}
@@ -722,7 +771,7 @@ export const PackingView = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => { fetchOps(); fetchActiveSession(); }}
+                  onClick={() => { fetchOps(); fetchActiveSession(); fetchPackedBoxes(); }}
                   disabled={refreshing}
                   className="group px-4 py-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-sm text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all duration-300 shadow-sm hover:shadow-md"
                 >
@@ -852,7 +901,6 @@ export const PackingView = () => {
                     <Loader2 className="animate-spin text-indigo-600" size={24} />
                   </div>
                 ) : !activeSession ? (
-                  // Form buat sesi baru
                   <div className="space-y-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Pilih Finished Goods Number</label>
@@ -877,9 +925,7 @@ export const PackingView = () => {
                     </button>
                   </div>
                 ) : (
-                  // Tampilkan sesi aktif dengan tata letak compact
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Kolom kiri: informasi sesi dan daftar item */}
                     <div className="space-y-3">
                       <div>
                         <div className="flex justify-between text-xs mb-1">
@@ -911,11 +957,9 @@ export const PackingView = () => {
                       </div>
                     </div>
 
-                    {/* Kolom kanan: form tambah item dengan simple numpad */}
                     <div className="bg-slate-50 dark:bg-slate-800/30 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
                       <h4 className="font-semibold text-xs text-slate-800 dark:text-slate-200 mb-3">Tambah Item</h4>
                       
-                      {/* Pilih OP */}
                       <div className="mb-3">
                         <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Pilih OP</label>
                         <select
@@ -932,14 +976,12 @@ export const PackingView = () => {
                         </select>
                       </div>
 
-                      {/* Simple Numpad */}
                       <SimpleNumpad
                         value={inputQty}
                         onChange={setInputQty}
                         max={maxQty}
                       />
 
-                      {/* Tombol tambah */}
                       <button
                         onClick={addItem}
                         disabled={adding || !selectedOpId || inputQty <= 0}
@@ -953,7 +995,6 @@ export const PackingView = () => {
                 )}
               </div>
 
-              {/* Tombol tutup sesi (hanya muncul jika ada sesi aktif) */}
               {activeSession && (
                 <div className="p-4 border-t border-slate-100 dark:border-slate-700/50">
                   <button
@@ -967,6 +1008,41 @@ export const PackingView = () => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* ===== NEW SECTION: Packed Boxes (Menunggu Diterima di Finished Goods) ===== */}
+        <div className="mt-6 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg overflow-hidden">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-700/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/30 dark:to-amber-900/10 rounded-lg flex items-center justify-center">
+                  <Package size={16} className="text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">Packed Boxes (Menunggu Diterima di Finished Goods)</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Box yang sudah di-pack dan siap dikirim</p>
+                </div>
+              </div>
+              <div className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-full">
+                <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{packedBoxes.length}</span>
+              </div>
+            </div>
+          </div>
+          <div className="p-4">
+            {loadingPacked ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="animate-spin text-amber-600" size={24} />
+              </div>
+            ) : packedBoxes.length === 0 ? (
+              <p className="text-center text-slate-500 py-4">Tidak ada box yang menunggu diterima.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {packedBoxes.map(box => (
+                  <PackedBoxCard key={box.id} box={box} onReprint={reprintPackedBox} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

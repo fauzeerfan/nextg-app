@@ -261,6 +261,7 @@ model PackingSession {
   status    String   @default("OPEN")   // OPEN, CLOSED
   qrCode    String?                      // menyimpan kode QR untuk box
   printed   Boolean  @default(false)     // status cetak ulang
+  receivedAt DateTime?                    // <-- TANDAI SAAT DITERIMA DI FINISHED GOODS
   items     PackingItem[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
