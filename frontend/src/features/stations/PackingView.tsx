@@ -1020,8 +1020,8 @@ export const PackingView = () => {
                   <Package size={16} className="text-amber-600 dark:text-amber-400" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">Packed Boxes (Menunggu Diterima di Finished Goods)</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Box yang sudah di-pack dan siap dikirim</p>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">Packed Boxes</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Boxes that have been packed and ready to be moved</p>
                 </div>
               </div>
               <div className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-full">
@@ -1035,7 +1035,7 @@ export const PackingView = () => {
                 <Loader2 className="animate-spin text-amber-600" size={24} />
               </div>
             ) : packedBoxes.length === 0 ? (
-              <p className="text-center text-slate-500 py-4">Tidak ada box yang menunggu diterima.</p>
+              <p className="text-center text-slate-500 py-4">There are no pre-packed boxes</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {packedBoxes.map(box => (
