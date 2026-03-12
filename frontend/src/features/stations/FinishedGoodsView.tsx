@@ -378,7 +378,7 @@ export const FinishedGoodsView = () => {
                 placeholder="Contoh: PACK-123456"
                 value={qrInput}
                 onChange={(e) => setQrInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleConfirmQr()}
+                // PERBAIKAN: Hapus onKeyDown agar tidak otomatis submit saat scanner mengirim Enter
               />
               <button
                 onClick={handleConfirmQr}
