@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Activity, Layers, Users, Shirt, RefreshCw, Loader2,
-  TrendingUp, AlertCircle, Clock, CheckCircle, Target, Gauge,
-  Cpu, Wifi, Factory
+  Activity, Layers, Shirt, RefreshCw, Loader2,
+  TrendingUp, AlertCircle, Clock, Gauge,
+  Cpu
 } from 'lucide-react';
 import type { ProductionOrder } from '../../types/production';
 
