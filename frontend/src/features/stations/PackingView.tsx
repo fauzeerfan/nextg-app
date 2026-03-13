@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Package, Box, RefreshCw, Search, Plus, Printer, X, CheckCircle,
-  Layers, Save, Loader2, QrCode, History, Delete, Minus
+  Layers, Save, Loader2, QrCode, History, Delete, Activity
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:3000';
@@ -38,12 +38,11 @@ interface PackingItem {
 }
 
 interface PackingOp extends ProductionOrder {
-  remainingPacking: number; // qtyQC - qtyPacking
+  remainingPacking: number;
 }
 
 interface PackingSessionHistory extends PackingSession {}
 
-// Interface untuk Packed Box (hasil packing yang menunggu diterima di Finished Goods)
 interface PackedBox {
   id: string;
   fgNumber: string;
@@ -53,7 +52,6 @@ interface PackedBox {
   createdAt: string;
 }
 
-// Interface untuk Data QR
 interface QrData {
   code: string;
   opNumbers: string;
@@ -108,8 +106,8 @@ const SessionItemRow = ({ item, onRemove }: { item: PackingItem; onRemove: () =>
   </div>
 );
 
-// Simple Numpad with only 1,5,10,50
-const SimpleNumpad = ({ value, onChange, max }: { value: number; onChange: (val: number) => void; max: number }) => {
+// Compact Numpad (lebih kecil, 4 kolom)
+const CompactNumpad = ({ value, onChange, max }: { value: number; onChange: (val: number) => void; max: number }) => {
   const quickAmounts = [1, 5, 10, 50];
 
   const handleSet = (amt: number) => {
@@ -124,19 +122,19 @@ const SimpleNumpad = ({ value, onChange, max }: { value: number; onChange: (val:
   const handleClear = () => onChange(0);
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3 shadow-lg">
-      <div className="mb-2">
-        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Quantity</div>
-        <div className="text-3xl font-bold text-slate-900 dark:text-white text-center py-2 bg-slate-100 dark:bg-slate-900 rounded-lg">
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-2 shadow">
+      <div className="mb-1">
+        <div className="text-[10px] text-slate-500 dark:text-slate-400 mb-0.5">Quantity</div>
+        <div className="text-xl font-bold text-slate-900 dark:text-white text-center py-1 bg-slate-100 dark:bg-slate-900 rounded-lg">
           {value}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 mb-2">
+      <div className="grid grid-cols-4 gap-1 mb-1">
         {quickAmounts.map(amt => (
           <button
             key={amt}
             onClick={() => handleSet(amt)}
-            className="py-3 bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-lg font-bold text-xl hover:from-indigo-600 hover:to-indigo-700 transition-all shadow-md"
+            className="py-1.5 bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-lg font-bold text-sm hover:from-indigo-600 hover:to-indigo-700 transition-all shadow"
           >
             +{amt}
           </button>
@@ -144,15 +142,15 @@ const SimpleNumpad = ({ value, onChange, max }: { value: number; onChange: (val:
       </div>
       <button
         onClick={handleClear}
-        className="w-full py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg text-slate-800 dark:text-white font-bold flex items-center justify-center gap-2 text-sm"
+        className="w-full py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg text-slate-800 dark:text-white font-bold flex items-center justify-center gap-1 text-xs"
       >
-        <Delete size={16} /> Clear
+        <Delete size={14} /> Clear
       </button>
     </div>
   );
 };
 
-// History Modal
+// History Modal (tetap sama)
 const HistoryModal = ({ show, onClose, history, onReprint, loading }: any) => {
   if (!show) return null;
   return (
@@ -208,7 +206,7 @@ const HistoryModal = ({ show, onClose, history, onReprint, loading }: any) => {
   );
 };
 
-// Komponen untuk menampilkan Packed Box (hasil packing yang menunggu)
+// Packed Box Card (tetap sama)
 const PackedBoxCard = ({ box, onReprint }: { box: PackedBox; onReprint: (qrCode: string) => void }) => {
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3 shadow hover:shadow-md transition">
@@ -220,7 +218,7 @@ const PackedBoxCard = ({ box, onReprint }: { box: PackedBox; onReprint: (qrCode:
         <button
           onClick={() => onReprint(box.qrCode)}
           className="p-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50"
-          title="Cetak ulang QR"
+          title="Reprint QR"
         >
           <Printer size={14} />
         </button>
@@ -236,6 +234,7 @@ const PackedBoxCard = ({ box, onReprint }: { box: PackedBox; onReprint: (qrCode:
 };
 
 export const PackingView = () => {
+  const [allQcOps, setAllQcOps] = useState<ProductionOrder[]>([]);
   const [ops, setOps] = useState<PackingOp[]>([]);
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -250,21 +249,21 @@ export const PackingView = () => {
   const [inputQty, setInputQty] = useState<number>(0);
   const [adding, setAdding] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [qr, setQr] = useState<QrData | null>(null);
 
-  // History
   const [history, setHistory] = useState<PackingSessionHistory[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // ===== NEW: Packed boxes (menunggu diterima di Finished Goods) =====
   const [packedBoxes, setPackedBoxes] = useState<PackedBox[]>([]);
   const [loadingPacked, setLoadingPacked] = useState(false);
 
-  // Ref untuk scroll & data sebelumnya
+  // Ref untuk membandingkan data sebelumnya
   const prevOpsRef = useRef<PackingOp[]>([]);
-  const leftListRef = useRef<HTMLDivElement>(null);
-  const prevScrollTop = useRef(0);
+  const prevAllQcOpsRef = useRef<ProductionOrder[]>([]);
+  const prevActiveSessionRef = useRef<PackingSession | null>(null);
+  const prevPackedBoxesRef = useRef<PackedBox[]>([]);
 
   // ========== PACK SIZE ==========
   const [packSize, setPackSize] = useState<number>(50);
@@ -277,7 +276,6 @@ export const PackingView = () => {
     };
   };
 
-  // Cache OP untuk history label
   const updateOpCache = useCallback((opsData: any[]) => {
     try {
       const cache = JSON.parse(localStorage.getItem('packing_op_cache') || '{}');
@@ -299,8 +297,9 @@ export const PackingView = () => {
     }
   }, []);
 
-  const fetchOps = useCallback(async () => {
-    setRefreshing(true);
+  // ========== FETCH FUNCTIONS WITH showLoading PARAM ==========
+  const fetchOps = useCallback(async (showLoading = true) => {
+    if (showLoading) setRefreshing(true);
     try {
       const res = await fetch(`${API_BASE_URL}/production-orders?station=QC`, {
         headers: getAuthHeaders(),
@@ -308,6 +307,11 @@ export const PackingView = () => {
       if (res.ok) {
         const data: ProductionOrder[] = await res.json();
         
+        if (JSON.stringify(prevAllQcOpsRef.current) !== JSON.stringify(data)) {
+          setAllQcOps(data);
+          prevAllQcOpsRef.current = data;
+        }
+
         updateOpCache(data);
 
         const withRemaining: PackingOp[] = data.map(op => ({
@@ -323,27 +327,37 @@ export const PackingView = () => {
         setLastUpdate(new Date().toLocaleTimeString());
 
         const fgs = [...new Set(withRemaining.map(op => op.itemNumberFG))];
-        setFgOptions(fgs);
+        if (JSON.stringify(fgOptions) !== JSON.stringify(fgs)) {
+          setFgOptions(fgs);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch packing OPs', error);
     } finally {
-      setRefreshing(false);
+      if (showLoading) setRefreshing(false);
     }
-  }, [updateOpCache]);
+  }, [updateOpCache, fgOptions]);
 
-  const fetchActiveSession = useCallback(async () => {
-    setLoadingSession(true);
+  const fetchActiveSession = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoadingSession(true);
     try {
       const res = await fetch(`${API_BASE_URL}/packing/sessions/active`, {
         headers: getAuthHeaders(),
       });
       if (res.status === 404) {
-        setActiveSession(null);
+        if (prevActiveSessionRef.current !== null) {
+          setActiveSession(null);
+          prevActiveSessionRef.current = null;
+        }
       } else if (res.ok) {
         const session = await res.json();
-        setActiveSession(session);
-        if (session) setSelectedFG(session.fgNumber);
+        if (JSON.stringify(prevActiveSessionRef.current) !== JSON.stringify(session)) {
+          setActiveSession(session);
+          prevActiveSessionRef.current = session;
+        }
+        if (session && session.fgNumber !== selectedFG) {
+          setSelectedFG(session.fgNumber);
+        }
         
         if (session && session.items) {
           const sessionOps = session.items.map((i: any) => i.op).filter(Boolean);
@@ -351,18 +365,24 @@ export const PackingView = () => {
         }
       } else {
         console.error('Failed to fetch active session', res.status);
-        setActiveSession(null);
+        if (prevActiveSessionRef.current !== null) {
+          setActiveSession(null);
+          prevActiveSessionRef.current = null;
+        }
       }
     } catch (error) {
       console.error('Failed to fetch active session', error);
-      setActiveSession(null);
+      if (prevActiveSessionRef.current !== null) {
+        setActiveSession(null);
+        prevActiveSessionRef.current = null;
+      }
     } finally {
-      setLoadingSession(false);
+      if (showLoading) setLoadingSession(false);
     }
-  }, [updateOpCache]);
+  }, [updateOpCache, selectedFG]);
 
-  const fetchHistory = useCallback(async () => {
-    setLoadingHistory(true);
+  const fetchHistory = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoadingHistory(true);
     try {
       const res = await fetch(`${API_BASE_URL}/packing/history`, {
         headers: getAuthHeaders(),
@@ -373,27 +393,31 @@ export const PackingView = () => {
     } catch (error) {
       console.error('Failed to fetch packing history', error);
     } finally {
-      setLoadingHistory(false);
+      if (showLoading) setLoadingHistory(false);
     }
   }, []);
 
-  // ===== NEW: Fetch packed boxes (menunggu diterima di Finished Goods) =====
-  const fetchPackedBoxes = useCallback(async () => {
-    setLoadingPacked(true);
+  const fetchPackedBoxes = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoadingPacked(true);
     try {
       const res = await fetch(`${API_BASE_URL}/packing/packed-boxes`, {
         headers: getAuthHeaders(),
       });
       if (res.ok) {
-        setPackedBoxes(await res.json());
+        const data = await res.json();
+        if (JSON.stringify(prevPackedBoxesRef.current) !== JSON.stringify(data)) {
+          setPackedBoxes(data);
+          prevPackedBoxesRef.current = data;
+        }
       }
     } catch (error) {
       console.error('Failed to fetch packed boxes', error);
     } finally {
-      setLoadingPacked(false);
+      if (showLoading) setLoadingPacked(false);
     }
   }, []);
 
+  // Effect untuk pack size
   useEffect(() => {
     if (activeSession && activeSession.items && activeSession.items.length > 0) {
       const firstOp = activeSession.items[0].op;
@@ -412,15 +436,19 @@ export const PackingView = () => {
     }
   }, [activeSession]);
 
+  // Initial fetch dan interval
   useEffect(() => {
-    fetchOps();
-    fetchActiveSession();
-    fetchHistory();
-    fetchPackedBoxes(); // <-- fetch packed boxes
+    // Panggil pertama kali dengan loading
+    fetchOps(true);
+    fetchActiveSession(true);
+    fetchHistory(true);
+    fetchPackedBoxes(true);
+
     const interval = setInterval(() => {
-      fetchOps();
-      fetchActiveSession();
-      fetchPackedBoxes(); // <-- update packed boxes setiap 10 detik
+      // Polling otomatis tanpa loading state
+      fetchOps(false);
+      fetchActiveSession(false);
+      fetchPackedBoxes(false);
     }, 10000);
     return () => clearInterval(interval);
   }, [fetchOps, fetchActiveSession, fetchHistory, fetchPackedBoxes]);
@@ -435,22 +463,6 @@ export const PackingView = () => {
     );
   }, [ops, search]);
 
-  useLayoutEffect(() => {
-    if (leftListRef.current) {
-      prevScrollTop.current = leftListRef.current.scrollTop;
-    }
-  });
-
-  useEffect(() => {
-    if (leftListRef.current && prevScrollTop.current > 0) {
-      leftListRef.current.scrollTop = prevScrollTop.current;
-    }
-  }, [filteredOps]);
-
-  const handleLeftScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    prevScrollTop.current = e.currentTarget.scrollTop;
-  };
-
   const createSession = async () => {
     if (!selectedFG) return;
     setLoadingSession(true);
@@ -463,13 +475,14 @@ export const PackingView = () => {
       if (res.ok) {
         const session = await res.json();
         setActiveSession(session);
+        prevActiveSessionRef.current = session;
       } else {
         const err = await res.json();
-        alert(`Gagal membuat sesi: ${err.message || res.status}`);
+        alert(`Failed to create session: ${err.message || res.status}`);
       }
     } catch (error) {
       console.error(error);
-      alert('Network error saat membuat sesi');
+      alert('Network error while creating session');
     } finally {
       setLoadingSession(false);
     }
@@ -480,7 +493,7 @@ export const PackingView = () => {
     const op = ops.find(o => o.id === selectedOpId);
     if (!op) return;
     if (inputQty > op.remainingPacking) {
-      alert(`Maksimal ${op.remainingPacking} sets tersisa`);
+      alert(`Maximum ${op.remainingPacking} sets remaining`);
       return;
     }
     setAdding(true);
@@ -497,13 +510,15 @@ export const PackingView = () => {
       if (res.ok) {
         const updatedSession = await res.json();
         setActiveSession(updatedSession);
+        prevActiveSessionRef.current = updatedSession;
         setSelectedOpId('');
         setInputQty(0);
-        await fetchOps();
-        await fetchActiveSession();
+        // Refresh data di background
+        await fetchOps(false);
+        await fetchActiveSession(false);
       } else {
         const err = await res.json();
-        alert(`Gagal: ${err.message}`);
+        alert(`Failed: ${err.message}`);
       }
     } catch (error) {
       console.error(error);
@@ -513,13 +528,13 @@ export const PackingView = () => {
   };
 
   const removeItem = async (itemId: string) => {
-    alert('Fungsi hapus item belum tersedia');
+    alert('Remove item function not yet available');
   };
 
   const closeSession = async () => {
     if (!activeSession) return;
     if (activeSession.totalQty !== packSize) {
-      alert(`Sesi harus mencapai ${packSize} sets untuk ditutup`);
+      alert(`Session must reach ${packSize} sets to close`);
       return;
     }
     setClosing(true);
@@ -545,18 +560,48 @@ export const PackingView = () => {
         });
 
         setActiveSession(null);
+        prevActiveSessionRef.current = null;
         setSelectedFG('');
-        await fetchOps(); 
-        await fetchActiveSession(); 
-        fetchHistory(); 
-        fetchPackedBoxes(); // <-- perbarui daftar packed boxes
+        // Refresh di background
+        await fetchOps(false);
+        await fetchActiveSession(false);
+        fetchHistory(false); // history mungkin perlu di-refresh tanpa loading
+        fetchPackedBoxes(false);
       } else {
-        alert('Gagal menutup sesi');
+        alert('Failed to close session');
       }
     } catch (error) {
       console.error(error);
     } finally {
       setClosing(false);
+    }
+  };
+
+  const cancelSession = async () => {
+    if (!activeSession) return;
+    if (!confirm('Are you sure you want to cancel this packing session? All items will be removed.')) return;
+    setCancelling(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/packing/session/${activeSession.id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        setActiveSession(null);
+        prevActiveSessionRef.current = null;
+        setSelectedFG('');
+        await fetchOps(false);
+        await fetchActiveSession(false);
+        await fetchPackedBoxes(false);
+      } else {
+        const err = await res.json();
+        alert(`Failed to cancel session: ${err.message || res.status}`);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Network error while cancelling session');
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -588,23 +633,21 @@ export const PackingView = () => {
           createdAt: session?.createdAt || new Date().toISOString()
         });
       } else {
-        alert('Gagal mencetak ulang');
+        alert('Failed to reprint');
       }
     } catch (error) {
       console.error(error);
     }
   };
 
-  // Fungsi untuk mencetak ulang dari packed box
   const reprintPackedBox = (qrCode: string) => {
-    // Cari box berdasarkan qrCode di packedBoxes
     const box = packedBoxes.find(b => b.qrCode === qrCode);
     if (!box) return;
     setQr({
       code: box.qrCode,
       opNumbers: box.items.map(i => i.opNumber).join(', '),
       itemNumberFG: box.fgNumber,
-      itemNameFG: box.items.map(i => i.opNumber).join(', '), // Nama item tidak tersedia, gunakan opNumbers sementara
+      itemNameFG: box.items.map(i => i.opNumber).join(', '),
       qtyOp: box.totalQty,
       createdAt: box.createdAt
     });
@@ -619,6 +662,10 @@ export const PackingView = () => {
 
   const totalRemaining = ops.reduce((sum, op) => sum + op.remainingPacking, 0);
   const totalPackedToday = history.filter(s => new Date(s.createdAt).toDateString() === new Date().toDateString()).reduce((sum, s) => sum + s.totalQty, 0);
+
+  const totalTarget = allQcOps.reduce((sum, op) => sum + (op.qtyQC || 0), 0);
+  const totalPacked = allQcOps.reduce((sum, op) => sum + (op.qtyPacking || 0), 0);
+  const overallProgress = totalTarget > 0 ? Math.round((totalPacked / totalTarget) * 100) : 0;
 
   const selectedOp = ops.find(o => o.id === selectedOpId);
   const maxQty = selectedOp?.remainingPacking || 0;
@@ -755,7 +802,7 @@ export const PackingView = () => {
                   <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     Packing
                     <span className="text-xs px-2 py-1 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-full font-bold">
-                      BOXING SYSTEM
+                      PACKING SYSTEM
                     </span>
                   </h1>
                 </div>
@@ -771,7 +818,11 @@ export const PackingView = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => { fetchOps(); fetchActiveSession(); fetchPackedBoxes(); }}
+                  onClick={() => { 
+                    fetchOps(true); 
+                    fetchActiveSession(true); 
+                    fetchPackedBoxes(true); 
+                  }}
                   disabled={refreshing}
                   className="group px-4 py-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-sm text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all duration-300 shadow-sm hover:shadow-md"
                 >
@@ -779,7 +830,7 @@ export const PackingView = () => {
                   Refresh
                 </button>
                 <button
-                  onClick={() => { fetchHistory(); setShowHistory(true); }}
+                  onClick={() => { fetchHistory(true); setShowHistory(true); }}
                   className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl font-semibold text-sm flex items-center gap-2 hover:from-purple-700 hover:to-purple-600 transition-all"
                 >
                   <History size={16} />
@@ -788,15 +839,28 @@ export const PackingView = () => {
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 px-6 pb-6">
+          {/* Header Metrics */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 pb-6">
             <MetricCard title="Remaining to Pack" value={totalRemaining} icon={Package} color="indigo" suffix="sets" subtitle="From QC" />
             <MetricCard title="Packed Today" value={totalPackedToday} icon={Box} color="emerald" suffix="sets" />
             <MetricCard title="Active Session" value={activeSession ? `${activeSession.totalQty}/${packSize}` : 'None'} icon={Layers} color="amber" subtitle={activeSession ? `FG: ${activeSession.fgNumber}` : 'No active session'} />
+            <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Overall Progress</div>
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-900/20 dark:to-blue-900/10 rounded-lg flex items-center justify-center">
+                  <Activity size={16} className="text-blue-600 dark:text-blue-400" />
+                </div>
+              </div>
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">{overallProgress}%</div>
+              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mt-2 overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-1000" style={{ width: `${overallProgress}%` }} />
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Main Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           {/* Left Column - Available OPs */}
           <div className="lg:col-span-1">
             <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden h-full">
@@ -827,11 +891,7 @@ export const PackingView = () => {
                     onChange={e => setSearch(e.target.value)}
                   />
                 </div>
-                <div
-                  className="space-y-2 max-h-[400px] overflow-y-auto pr-1"
-                  ref={leftListRef}
-                  onScroll={handleLeftScroll}
-                >
+                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
                   {filteredOps.length === 0 ? (
                     <div className="text-center py-6">
                       <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center mx-auto mb-3">
@@ -862,7 +922,7 @@ export const PackingView = () => {
                           <div className="mt-2 flex items-center justify-between">
                             <div className="flex items-center gap-1">
                               <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
-                              <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Sisa: {op.remainingPacking}</span>
+                              <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Remaining: {op.remainingPacking}</span>
                             </div>
                             <div className="text-right">
                               <div className="text-base font-bold text-slate-900 dark:text-white">{op.qtyQC || 0}</div>
@@ -879,7 +939,7 @@ export const PackingView = () => {
           </div>
 
           {/* Right Column - Packing Session */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-4">
             <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
               <div className="p-4 border-b border-slate-100 dark:border-slate-700/50">
                 <div className="flex items-center gap-2">
@@ -903,13 +963,13 @@ export const PackingView = () => {
                 ) : !activeSession ? (
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Pilih Finished Goods Number</label>
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Select Finished Goods Number</label>
                       <select
                         className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/30 transition-all"
                         value={selectedFG}
                         onChange={e => setSelectedFG(e.target.value)}
                       >
-                        <option value="">-- Pilih FG --</option>
+                        <option value="">-- Select FG --</option>
                         {fgOptions.map(fg => (
                           <option key={fg} value={fg}>{fg}</option>
                         ))}
@@ -921,15 +981,18 @@ export const PackingView = () => {
                       className="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white rounded-lg font-bold flex items-center justify-center gap-2 text-sm disabled:opacity-50"
                     >
                       <Plus size={18} />
-                      Buat Sesi Baru
+                      Create New Session
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="space-y-3">
+                  // ===== PERBAIKAN TATA LETAK DI SINI =====
+                  // Grid dengan proporsi 2/3 (kiri) dan 1/3 (kanan) agar add item lebih compact
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* Kolom kiri: Progress & Items */}
+                    <div className="lg:col-span-2 space-y-3">
                       <div>
                         <div className="flex justify-between text-xs mb-1">
-                          <span className="font-medium text-slate-700 dark:text-slate-300">Progress Box</span>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">Box Progress</span>
                           <span className="text-slate-600 dark:text-slate-400">{activeSession.totalQty} / {packSize} sets</span>
                         </div>
                         <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
@@ -951,59 +1014,71 @@ export const PackingView = () => {
                             />
                           ))}
                           {(!activeSession.items || activeSession.items.length === 0) && (
-                            <p className="text-center text-xs text-slate-500 py-3">Belum ada item</p>
+                            <p className="text-center text-xs text-slate-500 py-3">No items yet</p>
                           )}
                         </div>
                       </div>
                     </div>
 
-                    <div className="bg-slate-50 dark:bg-slate-800/30 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-                      <h4 className="font-semibold text-xs text-slate-800 dark:text-slate-200 mb-3">Tambah Item</h4>
-                      
-                      <div className="mb-3">
-                        <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Pilih OP</label>
-                        <select
-                          className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/30 transition-all"
-                          value={selectedOpId}
-                          onChange={e => setSelectedOpId(e.target.value)}
+                    {/* Kolom kanan: Add Item (compact) */}
+                    <div className="lg:col-span-1">
+                      <div className="bg-slate-50 dark:bg-slate-800/30 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+                        <h4 className="font-semibold text-xs text-slate-800 dark:text-slate-200 mb-2">Add Item</h4>
+                        
+                        <div className="mb-2">
+                          <label className="block text-[10px] font-medium text-slate-700 dark:text-slate-300 mb-0.5">Select OP</label>
+                          <select
+                            className="w-full px-2 py-1.5 text-xs border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/30 transition-all"
+                            value={selectedOpId}
+                            onChange={e => setSelectedOpId(e.target.value)}
+                          >
+                            <option value="">-- OP --</option>
+                            {ops.map(op => (
+                              <option key={op.id} value={op.id}>
+                                {op.opNumber} (rem {op.remainingPacking})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <CompactNumpad
+                          value={inputQty}
+                          onChange={setInputQty}
+                          max={maxQty}
+                        />
+
+                        <button
+                          onClick={addItem}
+                          disabled={adding || !selectedOpId || inputQty <= 0}
+                          className="mt-2 w-full py-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-lg font-bold flex items-center justify-center gap-2 text-xs disabled:opacity-50"
                         >
-                          <option value="">-- Pilih OP --</option>
-                          {ops.map(op => (
-                            <option key={op.id} value={op.id}>
-                              {op.opNumber} (sisa {op.remainingPacking})
-                            </option>
-                          ))}
-                        </select>
+                          {adding ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                          Add
+                        </button>
                       </div>
-
-                      <SimpleNumpad
-                        value={inputQty}
-                        onChange={setInputQty}
-                        max={maxQty}
-                      />
-
-                      <button
-                        onClick={addItem}
-                        disabled={adding || !selectedOpId || inputQty <= 0}
-                        className="mt-3 w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-lg font-bold flex items-center justify-center gap-2 text-sm disabled:opacity-50"
-                      >
-                        {adding ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                        Tambah ke Sesi
-                      </button>
                     </div>
                   </div>
                 )}
               </div>
 
               {activeSession && (
-                <div className="p-4 border-t border-slate-100 dark:border-slate-700/50">
+                <div className="p-4 border-t border-slate-100 dark:border-slate-700/50 space-y-2">
                   <button
                     onClick={closeSession}
                     disabled={closing || activeSession.totalQty !== packSize}
                     className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-lg font-bold flex items-center justify-center gap-2 text-sm disabled:opacity-50"
                   >
                     {closing ? <Loader2 size={18} className="animate-spin" /> : <QrCode size={18} />}
-                    Tutup Sesi & Generate QR
+                    Close Session & Generate QR
+                  </button>
+                  
+                  <button
+                    onClick={cancelSession}
+                    disabled={cancelling}
+                    className="w-full py-3 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-700 hover:to-rose-600 text-white rounded-lg font-bold flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                  >
+                    {cancelling ? <Loader2 size={18} className="animate-spin" /> : <X size={18} />}
+                    Cancel Session
                   </button>
                 </div>
               )}
@@ -1011,7 +1086,7 @@ export const PackingView = () => {
           </div>
         </div>
 
-        {/* ===== NEW SECTION: Packed Boxes (Menunggu Diterima di Finished Goods) ===== */}
+        {/* Packed Boxes */}
         <div className="mt-6 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg overflow-hidden">
           <div className="p-4 border-b border-slate-100 dark:border-slate-700/50">
             <div className="flex items-center justify-between">
@@ -1035,7 +1110,7 @@ export const PackingView = () => {
                 <Loader2 className="animate-spin text-amber-600" size={24} />
               </div>
             ) : packedBoxes.length === 0 ? (
-              <p className="text-center text-slate-500 py-4">There are no pre-packed boxes</p>
+              <p className="text-center text-slate-500 py-4">No packed boxes awaiting transfer</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {packedBoxes.map(box => (

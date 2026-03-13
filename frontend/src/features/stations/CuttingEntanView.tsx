@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Scissors, Printer, CheckCircle, Loader2, RefreshCw, Package,
-  ClipboardCheck, ArrowRight, Database, Target, AlertTriangle, History, X
+  ClipboardCheck, ArrowRight, Database, Target, AlertTriangle, History, X,
+  Activity
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:3000';
@@ -236,6 +237,8 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
   };
 
   const totalPending = ops.reduce((sum, op) => sum + op.pending, 0);
+  const totalTarget = totalSent + totalPending;
+  const overallProgress = totalTarget > 0 ? Math.round((totalSent / totalTarget) * 100) : 0;
 
   const BatchModal = ({ show, onClose, title, data, cols }: any) => {
     if (!show) return null;
@@ -422,6 +425,19 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
             <MetricCard title="Total OPs Loaded" value={ops.length} icon={Package} color="orange" subtitle="From external API" />
             <MetricCard title="Pending Cut" value={totalPending} icon={Scissors} color="blue" subtitle="Ready to generate" />
             <MetricCard title="Sent to Pond" value={totalSent} icon={Database} color="emerald" subtitle="Total all batches" />
+            {/* Overall Progress Card */}
+            <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Overall Progress</div>
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-900/20 dark:to-blue-900/10 rounded-lg flex items-center justify-center">
+                  <Activity size={16} className="text-blue-600 dark:text-blue-400" />
+                </div>
+              </div>
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">{overallProgress}%</div>
+              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mt-2 overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-1000" style={{ width: `${overallProgress}%` }} />
+              </div>
+            </div>
           </div>
         </div>
 

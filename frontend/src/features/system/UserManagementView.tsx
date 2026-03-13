@@ -1,12 +1,9 @@
 import { useState, useEffect } from 'react';
 import {
   Users, UserPlus, Edit, Save, Shield, Lock, Unlock, Mail, Building,
-  Search, CheckCircle, Eye, EyeOff, Key, Filter, Download, Trash2,
+  CheckCircle, Eye, EyeOff, Key, Trash2,
   Calendar, Loader2, UserCheck, Target, TrendingUp, Star, AlertCircle,
-  ArrowRight, X, Briefcase, MapPin, Clock, Globe, Award, PlusCircle,
-  MinusCircle, Settings, UserCog, BadgeCheck, Fingerprint, Server,
-  Layers, Activity, Zap, Cpu, HardDrive, Network, Database, LockKeyhole,
-  UserRound, UserCircle, UserSquare, UserX, UserPlus as UserPlusIcon
+  ArrowRight, UserCog
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:3000';
@@ -96,8 +93,20 @@ export const UserManagementView = () => {
   const fetchLines = async () => { try { const res = await fetch(`${API_BASE_URL}/line-masters`); if (res.ok) setLineOpts((await res.json()).map((l: any) => l.code)); } catch { console.error('Failed to fetch lines'); } };
   const fetchUsers = async () => { setLoad(true); try { const res = await fetch(`${API_BASE_URL}/users`); setUs(await res.json()); } catch { alert('Gagal load user'); } finally { setLoad(false); } };
 
+  // Fungsi untuk mendapatkan URL avatar dari DiceBear (gaya identicon)
+  const getAvatarUrl = (seed: string) => {
+    return `https://api.dicebear.com/9.x/identicon/svg?seed=${encodeURIComponent(seed)}`;
+  };
+
+  // Filter berdasarkan pencarian (search) masih ada di state q, tapi inputnya sudah dihapus
   const filtered = us.filter(u => u?.username?.toLowerCase().includes(q.toLowerCase()) || u?.fullName?.toLowerCase().includes(q.toLowerCase()) || u?.email?.toLowerCase().includes(q.toLowerCase()) || u?.role?.toLowerCase().includes(q.toLowerCase()));
-  const total = us.length, active = us.filter(u => u?.isActive).length, opCnt = us.filter(u => u?.role === 'OPERATOR').length, admCnt = us.filter(u => ['MANAGER', 'ADMINISTRATOR'].includes(u?.role || '')).length;
+
+  // Perhitungan metrik terpisah
+  const total = us.length;
+  const active = us.filter(u => u?.isActive).length;
+  const opCnt = us.filter(u => u?.role === 'OPERATOR').length;
+  const admCnt = us.filter(u => u?.role === 'ADMINISTRATOR').length;
+  const mgrCnt = us.filter(u => u?.role === 'MANAGER').length;
 
   const select = (u: SystemUser) => { setSel(u); setEdit(false); setCreate(false); };
   const newUser = () => {
@@ -193,36 +202,17 @@ export const UserManagementView = () => {
             </div>
           </div>
         </div>
+
+        {/* METRIC CARDS - 4 kolom dengan pemisahan Admin & Manager */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-5 pb-5">
           <MetricCard title="Total Users" value={total} icon={Users} color="pink" suffix="users" subtitle={`${active} currently active`} />
           <MetricCard title="Operators" value={opCnt} icon={UserCheck} color="emerald" suffix="active" subtitle="Station operators" />
-          <MetricCard title="Admin/Manager" value={admCnt} icon={Star} color="blue" suffix="users" subtitle="Management level" />
+          <MetricCard title="Administrators" value={admCnt} icon={Star} color="purple" suffix="users" subtitle="Full access" />
+          <MetricCard title="Managers" value={mgrCnt} icon={UserCog} color="blue" suffix="users" subtitle="Management level" />
         </div>
       </div>
 
-      {/* QUICK ACTIONS - compact */}
-      <div className="mb-4">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input
-              type="text"
-              placeholder="Search users..."
-              className="w-full pl-9 pr-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-pink-500 focus:ring-2 focus:ring-pink-200 dark:focus:ring-pink-900/30 transition-all"
-              value={q}
-              onChange={e => setQ(e.target.value)}
-            />
-          </div>
-          <div className="flex gap-2">
-            <button className="p-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded-lg hover:border-pink-300 dark:hover:border-pink-700 transition-all">
-              <Filter size={16} />
-            </button>
-            <button className="p-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded-lg hover:border-pink-300 dark:hover:border-pink-700 transition-all">
-              <Download size={16} />
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* QUICK ACTIONS (SEARCH) - DIHAPUS SESUAI PERMINTAAN */}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
         {/* LEFT COLUMN - USER LIST (compact) */}
@@ -254,9 +244,11 @@ export const UserManagementView = () => {
                     >
                       <div className="flex items-start gap-2">
                         <div className="relative flex-shrink-0">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br ${roleColor(u.role)}`}>
-                            <span className="text-white font-bold text-base">{u.fullName?.charAt(0) || '?'}</span>
-                          </div>
+                          <img
+                            src={getAvatarUrl(u.username)}
+                            alt={u.fullName}
+                            className="w-10 h-10 rounded-lg bg-slate-200 dark:bg-slate-700 object-cover"
+                          />
                           <div className={`absolute -bottom-1 -right-1 w-3 h-3 ${u.isActive ? 'bg-emerald-500' : 'bg-rose-500'} rounded-full border-2 border-white dark:border-slate-900`} />
                         </div>
                         <div className="flex-1 min-w-0">
@@ -328,9 +320,11 @@ export const UserManagementView = () => {
                 <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                   <div className="flex items-center gap-3">
                     <div className="relative">
-                      <div className={`w-14 h-14 rounded-xl flex items-center justify-center shadow-md bg-gradient-to-br ${roleColor(sel.role)}`}>
-                        <span className="text-white font-bold text-xl">{sel.fullName?.charAt(0) || '?'}</span>
-                      </div>
+                      <img
+                        src={getAvatarUrl(sel.username)}
+                        alt={sel.fullName}
+                        className="w-14 h-14 rounded-xl bg-slate-200 dark:bg-slate-700 object-cover"
+                      />
                       <div className="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-gradient-to-br from-blue-500 to-blue-400 rounded-full flex items-center justify-center border-3 border-white dark:border-slate-900 shadow-md">
                         <Shield size={12} className="text-white" />
                       </div>

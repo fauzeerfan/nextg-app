@@ -21,7 +21,7 @@ interface SewingOp extends ProductionOrder {
   setsReadyForSewing: number;
 }
 
-// Props type untuk MetricCard
+// Props type for MetricCard
 interface MetricCardProps {
   title: string;
   value: number | string;
@@ -188,7 +188,7 @@ export const SewingView = () => {
       const res = await fetch(`${API_BASE_URL}/production-orders?station=SEWING`);
       if (res.ok) {
         const data = await res.json();
-        // Ambil detail progress untuk setiap OP
+        // Fetch progress details for each OP
         const opsWithProgress = await Promise.all(
           data.map(async (op: ProductionOrder) => {
             const progressRes = await fetch(`${API_BASE_URL}/production-orders/${op.id}/sewing-progress`);
@@ -217,7 +217,8 @@ export const SewingView = () => {
 
   const totalOps = ops.length;
   const totalOutput = ops.reduce((sum, op) => sum + (op.qtySewingOut || 0), 0);
-  const totalTarget = ops.reduce((sum, op) => sum + (op.setsReadyForSewing || 0), 0);
+  // Perbaikan: gunakan qtySewingIn sebagai target agar konsisten dengan kartu OP
+  const totalTarget = ops.reduce((sum, op) => sum + (op.qtySewingIn || 0), 0);
   const overallProgress = totalTarget > 0 ? Math.round((totalOutput / totalTarget) * 100) : 0;
 
   return (
@@ -283,8 +284,8 @@ export const SewingView = () => {
         </div>
       </div>
 
-      {/* Grid OP Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Grid OP Cards - Diubah dari lg:grid-cols-3 menjadi lg:grid-cols-4 agar card lebih kecil */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {ops.map(op => (
           <SewingOpCard
             key={op.id}

@@ -106,6 +106,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
     }
   };
 
+  // Handler untuk Forgot Password
+  const handleForgotPassword = (e: React.MouseEvent) => {
+    e.preventDefault();
+    alert('Cobi taroskeun ka Tim MSDC 😁');
+  };
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden font-sans">
       
@@ -249,7 +255,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
                 <span className="text-sm text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200 transition-colors font-medium">Remember me</span>
               </label>
               
-              <a href="#" className="text-sm font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
+              {/* Forgot Password dengan popup alert */}
+              <a 
+                href="#" 
+                onClick={handleForgotPassword}
+                className="text-sm font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+              >
                 Forgot Password?
               </a>
             </div>
@@ -267,9 +278,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
             </button>
           </form>
 
+          {/* FOOTER - Ukuran teks disesuaikan menjadi text-sm (sama dengan tombol Sign In) */}
           <div className="mt-10 pt-6 border-t border-slate-200 dark:border-slate-700 text-center">
-            <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-bold">
-              &copy; 2025 PT Seikou Seat Cover<br/>
+            <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-bold">
+              &copy; 2026 PT Seikou Seat Cover<br/>
               <span className="text-slate-600 dark:text-slate-400 font-medium">Developed by MSDC Team</span>
             </p>
           </div>

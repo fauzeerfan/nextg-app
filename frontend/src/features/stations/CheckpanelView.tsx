@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle, XCircle, RefreshCw, ImageIcon, ImageOff, AlertTriangle,
   ClipboardCheck, ThumbsUp, Layers, Package, ArrowLeft, Wifi, Eye, Award,
-  Shield, CheckSquare, XSquare
+  Shield,
 } from 'lucide-react';
 import type { ProductionOrder, PatternPart } from '../../types/production';
 import { NG_REASONS as FALLBACK_NG_REASONS } from '../../lib/data';
@@ -207,6 +207,31 @@ export const CheckPanelView = ({
     }
   };
 
+  // 🔄 Fungsi baru untuk me-refresh data OP aktif dan progres pola dari server
+  const refreshActiveOp = useCallback(async () => {
+    if (!actOp) return;
+    try {
+      const [opRes, progRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/production-orders/${actOp.id}`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/production-orders/${actOp.id}/check-panel-inspections`, { headers: getAuthHeaders() })
+      ]);
+      if (opRes.ok) {
+        const opData = await opRes.json();
+        setActOp(opData);
+      }
+      if (progRes.ok) {
+        const progData = await progRes.json();
+        const m: Record<number, { good: number; ng: number; completed: boolean }> = {};
+        progData.forEach((p: any) => {
+          m[p.patternIndex] = { good: p.good, ng: p.ng, completed: p.completed };
+        });
+        setProg(m);
+      }
+    } catch (error) {
+      console.error('Failed to refresh active op', error);
+    }
+  }, [actOp, getAuthHeaders]);
+
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY_OP);
     if (saved) {
@@ -235,9 +260,9 @@ export const CheckPanelView = ({
   };
 
   const selectOp = (op: ProductionOrder) => {
-    // 🔥 Cegah jika OP sudah selesai (allPatternsCompleted = true)
+    // 🔥 Prevent if OP is already completed (allPatternsCompleted = true)
     if (op.allPatternsCompleted) {
-      showToast('OP sudah selesai dan siap dikirim ke sewing', 'error');
+      showToast('OP is already completed and ready for sewing', 'error');
       return;
     }
 
@@ -260,18 +285,18 @@ export const CheckPanelView = ({
 
   const submitInspection = async (isGood: boolean, reason: string = '') => {
     if (isSubmittingRef.current) return;
-    if (!actOp || !actPtrn) return showToast('Pilih OP dan pola terlebih dahulu', 'error');
+    if (!actOp || !actPtrn) return showToast('Select OP and pattern first', 'error');
     const idx = patterns.findIndex((p) => p.name === actPtrn.name);
-    if (idx === -1) return showToast('Pola tidak ditemukan', 'error');
+    if (idx === -1) return showToast('Pattern not found', 'error');
 
     const cur = prog[idx] || { good: 0, ng: 0, completed: false };
     if (cur.completed) {
-      showToast('Pola ini sudah selesai', 'error');
+      showToast('This pattern is already completed', 'error');
       return;
     }
 
     const token = localStorage.getItem('nextg_token');
-    if (!token) return showToast('Token tidak ditemukan', 'error');
+    if (!token) return showToast('Token not found', 'error');
 
     isSubmittingRef.current = true;
     setSubmitting(true);
@@ -312,9 +337,11 @@ export const CheckPanelView = ({
 
         showToast(isGood ? 'Good +1' : 'NG Recorded', isGood ? 'success' : 'error');
         
-        // 🔄 Refresh data dari server
-        await fetchOps(); // panggil fungsi refresh
-        setRefTrigger((prev) => prev + 1);
+        // 🔄 Refresh data dari server (daftar OP dan detail OP aktif + progres)
+        await Promise.all([
+          fetchOps(),
+          refreshActiveOp()
+        ]);
 
         if (completed) {
           const nextIdx = patterns.findIndex((_, i) => i !== idx && !(prog[i]?.completed));
@@ -328,9 +355,9 @@ export const CheckPanelView = ({
         const err = await res.json();
         if (err.message === 'Pattern already completed') {
           await fetchProg(actOp.id);
-          showToast('Pola ini sudah selesai (sinkronisasi data)', 'error');
+          showToast('This pattern is already completed (data sync)', 'error');
         } else {
-          showToast(`Gagal (${res.status}): ${err.message}`, 'error');
+          showToast(`Failed (${res.status}): ${err.message}`, 'error');
         }
       }
     } catch {
@@ -446,9 +473,9 @@ export const CheckPanelView = ({
         </div>
       </div>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Left Column - OP List */}
+      {/* Main Grid - Menggunakan 5 kolom pada layar large, kolom kiri 1/5, kanan 4/5 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        {/* Left Column - OP List (1 dari 5 bagian) */}
         <div className="lg:col-span-1">
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden h-full">
             <div className="p-4 border-b border-slate-100 dark:border-slate-700/50">
@@ -578,7 +605,7 @@ export const CheckPanelView = ({
                       <div className="mt-1 flex items-center justify-between text-xs">
                         <span className="text-emerald-600">G:{p.good}</span>
                         <span className="text-rose-600">NG:{p.ng}</span>
-                        <span className="text-slate-500">Sisa:{rem}</span>
+                        <span className="text-slate-500">Rem:{rem}</span>
                       </div>
                       <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1 mt-1.5 overflow-hidden">
                         <div
@@ -596,8 +623,8 @@ export const CheckPanelView = ({
           </div>
         </div>
 
-        {/* Right Column - Inspection Interface */}
-        <div className="lg:col-span-2">
+        {/* Right Column - Inspection Interface (3 dari 5 bagian) */}
+        <div className="lg:col-span-4">
           {!actOp ? (
             <div className="h-full flex flex-col items-center justify-center bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 p-8">
               <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-900/10 dark:to-blue-900/5 rounded-xl flex items-center justify-center mx-auto mb-4">
@@ -688,28 +715,28 @@ export const CheckPanelView = ({
                       </div>
                       <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1">All Patterns Completed!</h3>
                       <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                        OP siap dikirim ke Sewing ({sets} set)
+                        OP ready for Sewing ({sets} sets)
                       </p>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-2xl mx-auto mb-3">
                         <div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg">
-                          <div className="text-xs text-emerald-700 dark:text-emerald-400">Total Good Pola</div>
+                          <div className="text-xs text-emerald-700 dark:text-emerald-400">Total Pattern Good</div>
                           <div className="text-xl font-bold text-emerald-600">{totalGoodPola}</div>
                         </div>
                         <div className="bg-rose-50 dark:bg-rose-900/20 p-3 rounded-lg">
-                          <div className="text-xs text-rose-700 dark:text-rose-400">Total NG Pola</div>
+                          <div className="text-xs text-rose-700 dark:text-rose-400">Total Pattern NG</div>
                           <div className="text-xl font-bold text-rose-600">{totalNgPola}</div>
                         </div>
                         <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg">
-                          <div className="text-xs text-amber-700 dark:text-amber-400">Pola Good Tidak Terpakai</div>
+                          <div className="text-xs text-amber-700 dark:text-amber-400">Unused Good Patterns</div>
                           <div className="text-xl font-bold text-amber-600">{polaSisa}</div>
                         </div>
                       </div>
                       <p className="text-xs text-slate-600 dark:text-slate-400 max-w-xl mx-auto">
-                        Dari total {totalGoodPola} pola good, hanya {sets * patterns.length} pola yang dapat membentuk{' '}
-                        {sets} set utuh. Sisanya {polaSisa} pola good tidak dapat membentuk set dan akan dianggap NG.
+                        Out of {totalGoodPola} good patterns, only {sets * patterns.length} patterns can form{' '}
+                        {sets} complete sets. The remaining {polaSisa} good patterns cannot form a set and will be considered NG.
                       </p>
                       <p className="text-xs font-semibold text-rose-600 dark:text-rose-400 mt-2">
-                        Total NG efektif: {totalNgEfektif} pola ({setNgEfektif} set)
+                        Effective NG: {totalNgEfektif} patterns ({setNgEfektif} sets)
                       </p>
                       <button
                         onClick={back}

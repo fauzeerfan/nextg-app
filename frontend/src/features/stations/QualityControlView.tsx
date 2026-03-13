@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle, XCircle, RefreshCw, AlertTriangle,
   ClipboardCheck, ThumbsUp, Layers, Package, ArrowLeft, Eye, Award,
-  Shield, CheckSquare, XSquare, Loader2, Info
+  Shield, Info
 } from 'lucide-react';
 import type { ProductionOrder } from '../../types/production';
 
@@ -22,7 +22,7 @@ interface QcInspection {
 interface QcOp extends ProductionOrder {
   inspected: number; // total inspected (qtyQC + qcNgQty)
   remaining: number; // qtySewingOut - inspected
-  progress: number;  // persentase
+  progress: number;  // percentage
 }
 
 const MetricCard = ({ 
@@ -47,7 +47,6 @@ const MetricCard = ({
     blue: { bg: 'from-blue-100 to-blue-50', icon: 'text-blue-600', darkBg: 'from-blue-900/20 to-blue-900/10' }
   };
   
-  // Fallback jika color tidak valid
   const selected = colors[color] || colors.amber;
 
   return (
@@ -79,8 +78,8 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
   const [submitting, setSubmitting] = useState(false);
   const [setGoodImg, setSetGoodImg] = useState<string | null>(null);
   const [setNgImg, setSetNgImg] = useState<string | null>(null);
-  const [inspections, setInspections] = useState<QcInspection[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [historyOps, setHistoryOps] = useState<QcOp[]>([]); // State untuk menyimpan OP yang sudah selesai
   const isSubmittingRef = useRef(false);
 
   const getAuthHeaders = () => {
@@ -97,7 +96,6 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
       const res = await fetch(`${API_BASE_URL}/production-orders?station=QC`);
       if (res.ok) {
         const data: ProductionOrder[] = await res.json();
-        // Hitung inspected, remaining, progress
         const enriched: QcOp[] = data.map(op => {
           const inspected = (op.qtyQC || 0) + (op.qcNgQty || 0);
           const total = op.qtySewingOut || 0;
@@ -107,12 +105,14 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
         });
         setOps(enriched);
         setLastUpd(new Date().toLocaleTimeString());
+        return enriched;
       }
     } catch {
       console.error('Failed to fetch QC ops');
     } finally {
       setRefreshing(false);
     }
+    return [];
   }, []);
 
   useEffect(() => {
@@ -153,14 +153,29 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
     }
   };
 
-  const fetchInspections = async (opId: string) => {
+  // Fungsi untuk mengambil history OP yang sudah selesai (closed)
+  const fetchHistoryOps = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/production-orders/${opId}/qc-inspections`, {
+      // Asumsi endpoint: /production-orders?status=closed (sesuaikan dengan backend)
+      const res = await fetch(`${API_BASE_URL}/production-orders?status=closed`, {
         headers: getAuthHeaders(),
       });
-      if (res.ok) setInspections(await res.json());
-    } catch {
-      setInspections([]);
+      if (res.ok) {
+        const data: ProductionOrder[] = await res.json();
+        const enriched: QcOp[] = data.map(op => {
+          const inspected = (op.qtyQC || 0) + (op.qcNgQty || 0);
+          const total = op.qtySewingOut || 0;
+          const remaining = total - inspected;
+          const progress = total > 0 ? Math.round((inspected / total) * 100) : 0;
+          return { ...op, inspected, remaining, progress };
+        });
+        setHistoryOps(enriched);
+      } else {
+        setHistoryOps([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch history ops', error);
+      setHistoryOps([]);
     }
   };
 
@@ -173,7 +188,6 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
           setActOp(parsed);
           loadSetImages(parsed);
           fetchQcCategories(parsed.lineCode || 'K1YH');
-          fetchInspections(parsed.id);
           addLog(`Session restored: ${parsed.opNumber}`, 'info');
         }
       } catch {
@@ -191,7 +205,6 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
     setActOp(op);
     loadSetImages(op);
     fetchQcCategories(op.lineCode || 'K1YH');
-    fetchInspections(op.id);
     localStorage.setItem(STORAGE_KEY_OP, JSON.stringify(op));
     addLog(`Inspecting: ${op.opNumber}`, 'info');
     setNgReason('');
@@ -202,16 +215,15 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
     setActOp(null);
     setSetGoodImg(null);
     setSetNgImg(null);
-    setInspections([]);
     fetchOps();
   };
 
   const submitInspection = async (isGood: boolean, reason: string = '') => {
     if (isSubmittingRef.current) return;
-    if (!actOp) return showToast('Pilih OP terlebih dahulu', 'error');
+    if (!actOp) return showToast('Select OP first', 'error');
 
     const token = localStorage.getItem('nextg_token');
-    if (!token) return showToast('Token tidak ditemukan', 'error');
+    if (!token) return showToast('Token not found', 'error');
 
     isSubmittingRef.current = true;
     setSubmitting(true);
@@ -229,21 +241,20 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
 
       if (res.ok) {
         showToast(isGood ? 'Good +1' : 'NG Recorded', isGood ? 'success' : 'error');
-        // Refresh data
-        await fetchOps();
-        // Update active op jika masih sama
+        
+        const updatedOps = await fetchOps(); 
+
         if (actOp) {
-          const updated = ops.find(o => o.id === actOp.id);
+          const updated = updatedOps.find(o => o.id === actOp.id);
           if (updated) {
             setActOp(updated);
-            fetchInspections(updated.id);
           } else {
-            back(); // OP sudah tidak ada di list (selesai)
+            back();
           }
         }
       } else {
         const err = await res.json();
-        showToast(`Gagal (${res.status}): ${err.message}`, 'error');
+        showToast(`Failed (${res.status}): ${err.message}`, 'error');
       }
     } catch {
       showToast('Network error', 'error');
@@ -334,6 +345,18 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
                 {refreshing ? <RefreshCw size={16} className="animate-spin" /> : <RefreshCw size={16} className="group-hover:rotate-180 transition-transform" />}
                 Refresh
               </button>
+              {/* Tombol History sekarang selalu ada dan memuat data OP yang sudah selesai */}
+              <button
+                onClick={() => {
+                  fetchHistoryOps();
+                  setShowHistory(true);
+                }}
+                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl font-semibold flex items-center gap-2 hover:from-purple-700 hover:to-purple-600 transition-all text-sm shadow-lg"
+                title="Lihat riwayat OP yang sudah selesai"
+              >
+                <Info size={16} />
+                <span className="hidden sm:inline">History OP</span>
+              </button>
             </div>
           </div>
         </div>
@@ -356,8 +379,8 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
         </div>
       </div>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Main Grid - 5 kolom */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {/* Left Column - OP List */}
         <div className="lg:col-span-1">
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden h-full">
@@ -373,97 +396,80 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
                   </div>
                   <div>
                     <h3 className="font-bold text-slate-900 dark:text-white text-sm">
-                      {actOp ? 'Set Inspection' : 'Production Orders'}
+                      Production Orders
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {actOp ? `OP: ${actOp.opNumber}` : `${totalOps} orders ready`}
+                      {totalOps} orders ready
                     </p>
                   </div>
                 </div>
                 <div className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs">
-                  <span className="font-semibold text-slate-600 dark:text-slate-300">{actOp ? 1 : totalOps}</span>
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">{totalOps}</span>
                 </div>
               </div>
             </div>
             <div className="p-3 max-h-[500px] overflow-y-auto">
-              {!actOp ? (
-                totalOps === 0 ? (
-                  <div className="text-center py-8">
-                    <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl flex items-center justify-center mx-auto mb-3">
-                      <CheckCircle size={24} className="text-slate-400" />
-                    </div>
-                    <h4 className="text-base font-medium text-slate-700 dark:text-slate-300 mb-1">No Orders</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Waiting for incoming orders...</p>
-                  </div>
-                ) : (
-                  ops.map((op) => (
-                    <div
-                      key={op.id}
-                      className={`group p-3 rounded-xl border-2 transition-all duration-300 cursor-pointer mb-2 ${
-                        actOp?.id === op.id
-                          ? 'border-amber-500 bg-gradient-to-r from-amber-50 to-white dark:from-amber-900/20 dark:to-slate-800 shadow-lg'
-                          : 'border-slate-200 dark:border-slate-700 hover:border-amber-300 dark:hover:border-amber-700 hover:shadow-lg'
-                      }`}
-                      onClick={() => selectOp(op)}
-                    >
-                      <div className="flex items-start justify-between mb-1">
-                        <div>
-                          <div className="font-mono font-bold text-base text-slate-900 dark:text-white">{op.opNumber}</div>
-                          <div className="text-xs text-slate-600 dark:text-slate-400">Style: {op.styleCode}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-1">
-                          <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></div>
-                          <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Sisa: {op.remaining}</span>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-base font-bold text-slate-900 dark:text-white">{op.qtySewingOut || 0}</div>
-                          <div className="text-[10px] text-slate-500">sets</div>
-                        </div>
-                      </div>
-                      {/* Progress bar */}
-                      <div className="mt-1">
-                        <div className="flex justify-between text-[10px] mb-0.5">
-                          <span className="text-slate-500">Progress</span>
-                          <span className="font-medium text-slate-700 dark:text-slate-300">{op.progress}%</span>
-                        </div>
-                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1 overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all"
-                            style={{ width: `${op.progress}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="mt-1 flex justify-between text-[10px]">
-                        <span className="text-emerald-600">G:{op.qtyQC || 0}</span>
-                        <span className="text-rose-600">NG:{op.qcNgQty || 0}</span>
-                      </div>
-                    </div>
-                  ))
-                )
-              ) : (
+              {totalOps === 0 ? (
                 <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-purple-50 dark:from-purple-900/10 dark:to-purple-900/5 rounded-xl flex items-center justify-center mx-auto mb-3">
-                    <Eye size={24} className="text-purple-400" />
+                  <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <CheckCircle size={24} className="text-slate-400" />
                   </div>
-                  <h4 className="text-base font-medium text-slate-700 dark:text-slate-300 mb-1">Ready to Inspect</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Klik tombol GOOD atau NOT GOOD.</p>
-                  <button
-                    onClick={() => setShowHistory(true)}
-                    className="mt-3 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-medium flex items-center gap-2 mx-auto hover:bg-purple-700"
-                  >
-                    <Info size={14} />
-                    Lihat History Inspeksi
-                  </button>
+                  <h4 className="text-base font-medium text-slate-700 dark:text-slate-300 mb-1">No Orders</h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Waiting for incoming orders...</p>
                 </div>
+              ) : (
+                ops.map((op) => (
+                  <div
+                    key={op.id}
+                    className={`group p-3 rounded-xl border-2 transition-all duration-300 cursor-pointer mb-2 ${
+                      actOp?.id === op.id
+                        ? 'border-amber-500 bg-gradient-to-r from-amber-50 to-white dark:from-amber-900/20 dark:to-slate-800 shadow-lg'
+                        : 'border-slate-200 dark:border-slate-700 hover:border-amber-300 dark:hover:border-amber-700 hover:shadow-lg'
+                    }`}
+                    onClick={() => selectOp(op)}
+                  >
+                    <div className="flex items-start justify-between mb-1">
+                      <div>
+                        <div className="font-mono font-bold text-base text-slate-900 dark:text-white">{op.opNumber}</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400">Style: {op.styleCode}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <div className="flex items-center gap-1">
+                        <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></div>
+                        <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Remaining: {op.remaining}</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-base font-bold text-slate-900 dark:text-white">{op.qtySewingOut || 0}</div>
+                        <div className="text-[10px] text-slate-500">sets</div>
+                      </div>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="mt-1">
+                      <div className="flex justify-between text-[10px] mb-0.5">
+                        <span className="text-slate-500">Progress</span>
+                        <span className="font-medium text-slate-700 dark:text-slate-300">{op.progress}%</span>
+                      </div>
+                      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all"
+                          style={{ width: `${op.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-1 flex justify-between text-[10px]">
+                      <span className="text-emerald-600">G:{op.qtyQC || 0}</span>
+                      <span className="text-rose-600">NG:{op.qcNgQty || 0}</span>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </div>
         </div>
 
         {/* Right Column - Inspection Interface */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-4">
           {!actOp ? (
             <div className="h-full flex flex-col items-center justify-center bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 p-8">
               <div className="w-20 h-20 bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/10 dark:to-amber-900/5 rounded-xl flex items-center justify-center mx-auto mb-4">
@@ -471,16 +477,16 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
               </div>
               <h3 className="text-xl font-bold text-slate-700 dark:text-slate-300 mb-2">Select an Order to Inspect</h3>
               <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6 max-w-md mx-auto">
-                Pilih production order dari daftar untuk memulai inspeksi set.
+                Select a production order from the list to start set inspection.
               </p>
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></div>
-                <span>Klik pada order untuk memulai</span>
+                <span>Click on an order to start</span>
               </div>
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Info OP dan progress */}
+              {/* OP Info and progress */}
               <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
                 <div className="p-6 border-b border-slate-100 dark:border-slate-700/50">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -507,19 +513,19 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <div className="text-xs text-slate-500 dark:text-slate-400">Sudah Diinspeksi</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">Inspected</div>
                         <div className="text-xl font-bold text-emerald-600">{actOp.inspected}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-xs text-slate-500 dark:text-slate-400">Sisa</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">Remaining</div>
                         <div className="text-xl font-bold text-amber-600">{actOp.remaining}</div>
                       </div>
                     </div>
                   </div>
-                  {/* Progress bar besar */}
+                  {/* Large progress bar */}
                   <div className="mt-4">
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-slate-600 dark:text-slate-400">Progress Inspeksi</span>
+                      <span className="text-slate-600 dark:text-slate-400">Inspection Progress</span>
                       <span className="font-bold text-slate-900 dark:text-white">{actOp.progress}%</span>
                     </div>
                     <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
@@ -537,9 +543,9 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
                       <Eye size={20} className="text-purple-600 dark:text-purple-400" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-slate-900 dark:text-white">Inspeksi Set</h3>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white">Set Inspection</h3>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Klik GOOD atau NOT GOOD untuk merekam inspeksi
+                        Click GOOD or NOT GOOD to record inspection
                       </p>
                     </div>
                   </div>
@@ -657,8 +663,8 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
                 <AlertTriangle size={20} className="text-white" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Pilih Alasan Defect</h3>
-                <p className="text-xs text-slate-600 dark:text-slate-300">Pilih alasan utama penolakan</p>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Select Defect Reason</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300">Choose the primary reason for rejection</p>
               </div>
             </div>
             <div className="grid gap-1.5 max-h-[250px] overflow-y-auto mb-4">
@@ -681,50 +687,58 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
                 onClick={() => setNgOpen(false)}
                 className="flex-1 py-3 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm"
               >
-                Batal
+                Cancel
               </button>
               <button
                 onClick={confirmNg}
                 disabled={!ngReason}
                 className="flex-1 py-3 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-700 hover:to-rose-600 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm"
               >
-                Konfirmasi NG
+                Confirm NG
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* History Modal */}
-      {showHistory && actOp && (
+      {/* History Modal - sekarang menampilkan daftar OP yang sudah selesai */}
+      {showHistory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
             <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-              <h3 className="text-lg font-bold">History Inspeksi {actOp.opNumber}</h3>
+              <h3 className="text-lg font-bold">Riwayat OP Selesai (Closed)</h3>
               <button onClick={() => setShowHistory(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
                 <XCircle size={18} />
               </button>
             </div>
             <div className="p-4 overflow-y-auto">
-              {inspections.length === 0 ? (
-                <p className="text-center text-slate-500 py-6">Belum ada inspeksi</p>
+              {historyOps.length === 0 ? (
+                <p className="text-center text-slate-500 py-6">Belum ada OP yang selesai</p>
               ) : (
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs text-slate-500">
-                      <th className="pb-2">Waktu</th>
+                      <th className="pb-2">No. OP</th>
+                      <th className="pb-2">Style</th>
+                      <th className="pb-2">Line</th>
+                      <th className="pb-2">Total Sets</th>
                       <th className="pb-2">Good</th>
                       <th className="pb-2">NG</th>
-                      <th className="pb-2">Alasan</th>
+                      <th className="pb-2">Selesai</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {inspections.map((ins) => (
-                      <tr key={ins.id} className="border-t border-slate-100 dark:border-slate-700">
-                        <td className="py-2">{new Date(ins.createdAt).toLocaleTimeString()}</td>
-                        <td className="py-2 text-emerald-600 font-bold">{ins.good}</td>
-                        <td className="py-2 text-rose-600 font-bold">{ins.ng}</td>
-                        <td className="py-2 text-xs">{ins.ngReasons?.join(', ') || '-'}</td>
+                    {historyOps.map((op) => (
+                      <tr key={op.id} className="border-t border-slate-100 dark:border-slate-700">
+                        <td className="py-2 font-mono font-medium">{op.opNumber}</td>
+                        <td className="py-2">{op.styleCode}</td>
+                        <td className="py-2">{op.lineCode || '-'}</td>
+                        <td className="py-2">{op.qtySewingOut || 0}</td>
+                        <td className="py-2 text-emerald-600 font-bold">{op.qtyQC || 0}</td>
+                        <td className="py-2 text-rose-600 font-bold">{op.qcNgQty || 0}</td>
+                        <td className="py-2 text-xs">
+                          {op.updatedAt ? new Date(op.updatedAt).toLocaleString() : '-'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

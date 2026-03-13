@@ -58,7 +58,7 @@ const PatternMiniCard = ({ pattern }: { pattern: PatternProgress }) => {
         <div className={`absolute inset-y-0 left-0 rounded-full ${pattern.completed ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }} />
       </div>
       <div className="flex justify-between text-[8px] text-slate-500 dark:text-slate-400">
-        <span>sisa {remaining}</span><span>{Math.round(progress)}%</span>
+        <span>Remaining {remaining}</span><span>{Math.round(progress)}%</span>
       </div>
     </div>
   );
@@ -87,7 +87,7 @@ const JobCard = ({ op, lastUpdated }: { op: ProductionOrderWithLine; lastUpdated
           </div>
         </div>
         <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700 pt-2">
-          <span>Menunggu scan Dhristi</span><span>Last: {lastUpdated}</span>
+          <span>Awaiting Dhristi scan</span><span>Last: {lastUpdated}</span>
         </div>
       </div>
     );
@@ -101,7 +101,7 @@ const JobCard = ({ op, lastUpdated }: { op: ProductionOrderWithLine; lastUpdated
   const done = remain === 0;
   const highPrio = remain > 0 && prog < 50;
   const patterns = (op.patterns && op.patterns.length) ? op.patterns : Array.from({ length: mul }, (_, i) => ({
-    index: i, name: `Pola ${i+1}`, target: op.qtyEntan, good: 0, ng: 0, current: 0, completed: false
+    index: i, name: `Pattern ${i+1}`, target: op.qtyEntan, good: 0, ng: 0, current: 0, completed: false
   }));
 
   return (
@@ -136,12 +136,12 @@ const JobCard = ({ op, lastUpdated }: { op: ProductionOrderWithLine; lastUpdated
             <div className={`h-full rounded-full transition-all duration-1000 ${done ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${prog}%` }} />
           </div>
           <div className="flex justify-between text-[10px] mt-0.5">
-            <span className="text-slate-500 dark:text-slate-400">Sisa {remain} pcs</span>
-            <span className="text-slate-500 dark:text-slate-400">{done ? 'Selesai' : `${Math.round(prog)}%`}</span>
+            <span className="text-slate-500 dark:text-slate-400">Remaining {remain} pcs</span>
+            <span className="text-slate-500 dark:text-slate-400">{done ? 'Completed' : `${Math.round(prog)}%`}</span>
           </div>
         </div>
         <div className="mb-2">
-          <div className="flex items-center gap-1 mb-1.5"><Layers size={12} className="text-indigo-500" /><span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300">Detail Pola</span></div>
+          <div className="flex items-center gap-1 mb-1.5"><Layers size={12} className="text-indigo-500" /><span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300">Pattern Details</span></div>
           <div className="grid grid-cols-2 gap-1.5">{patterns.map(p => <PatternMiniCard key={p.index} pattern={p} />)}</div>
         </div>
         <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-700 pt-2 mt-1">
@@ -194,7 +194,7 @@ export const CuttingPondView = () => {
             </div>
             <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
               <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl shadow-lg">
-                <div className="flex flex-col"><div className="text-xs font-medium opacity-90">Active Queues</div><div className="text-xl font-bold">{ops.length}</div></div>
+                <div className="flex flex-col"><div className="text-xs font-medium opacity-90">Active Jobs</div><div className="text-xl font-bold">{ops.length}</div></div>
                 <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm"><Activity size={18} className="text-white"/></div>
               </div>
               <button onClick={fetchOps} disabled={refreshing} className="group px-4 py-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-300 shadow-sm hover:shadow-md text-sm">
@@ -204,7 +204,7 @@ export const CuttingPondView = () => {
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 pb-6">
-          <MetricCard title="Total Target" value={totalSupply.toLocaleString()} icon={Package} color="orange" suffix="pcs" subtitle="Total pola dari Entan" />
+          <MetricCard title="Total Target" value={totalSupply.toLocaleString()} icon={Package} color="orange" suffix="pcs" subtitle="Total patterns from Entan" />
           <MetricCard title="Processed" value={totalCut.toLocaleString()} icon={Scissors} color="blue" suffix="pcs" subtitle="Fine cut completed" />
           <MetricCard title="Total NG" value={totalNg.toLocaleString()} icon={AlertCircle} color="rose" suffix="pcs" subtitle="Not good pieces" />
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg">
@@ -222,7 +222,7 @@ export const CuttingPondView = () => {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-900/30 dark:to-blue-900/10 rounded-lg flex items-center justify-center"><Target size={16} className="text-blue-600 dark:text-blue-400"/></div>
-            <div><h2 className="text-base font-bold text-slate-900 dark:text-white">Active Production Queues</h2><p className="text-xs text-slate-500 dark:text-slate-400">{ops.length} job{ops.length !== 1 ? 's' : ''} in progress • {totalRemaining.toLocaleString()} pieces remaining</p></div>
+            <div><h2 className="text-base font-bold text-slate-900 dark:text-white">Active Production Orders</h2><p className="text-xs text-slate-500 dark:text-slate-400">{ops.length} job{ops.length !== 1 ? 's' : ''} in progress • {totalRemaining.toLocaleString()} pieces remaining</p></div>
           </div>
           <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 rounded-full"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div><span className="text-[10px] font-semibold text-blue-700 dark:text-blue-300">LIVE IoT STREAM</span></div>
         </div>
@@ -231,7 +231,7 @@ export const CuttingPondView = () => {
             <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/5 to-transparent animate-pulse"></div>
             <div className="relative z-10">
               <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-900/10 dark:to-blue-900/5 rounded-xl flex items-center justify-center mx-auto mb-4"><Wifi size={32} className="text-blue-300 dark:text-blue-700"/></div>
-              <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300 mb-1">Awaiting Entan Output</h3>
+              <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300 mb-1">Awaiting Cutting Entan Output</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 max-w-md mx-auto">No active jobs in Cutting Pond station. New jobs will appear automatically from Cutting Entan.</p>
               <div className="flex items-center justify-center gap-1.5 text-xs"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div><span className="text-blue-600 dark:text-blue-400 font-medium">Listening for IoT data...</span></div>
             </div>
