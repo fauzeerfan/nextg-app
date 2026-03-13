@@ -41,6 +41,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Fungsi untuk mendapatkan URL avatar identicon (sama seperti di UserManagement)
+  const getAvatarUrl = (seed: string) => {
+    return `https://api.dicebear.com/9.x/identicon/svg?seed=${encodeURIComponent(seed)}`;
+  };
+
   // Menu Structure - Organized by categories
   const menuGroups = [
     {
@@ -221,7 +226,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       className={`fixed inset-y-0 left-0 z-50 bg-gradient-to-b from-slate-50 to-white dark:from-slate-900 dark:to-slate-950 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 ease-in-out shadow-xl h-screen flex flex-col ${
         isMobile
           ? (isOpen ? 'translate-x-0' : '-translate-x-full')
-          : (isOpen ? 'w-56 lg:w-64' : 'w-16 lg:w-20') // Lebih compact di tablet
+          : (isOpen ? 'w-56 lg:w-64' : 'w-16 lg:w-20')
       }`}
     >
       {/* HEADER SIDEBAR - lebih compact */}
@@ -299,9 +304,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {!isCollapsed && (
             <div className="flex items-center gap-2 lg:gap-3 mb-3 lg:mb-4 pt-3 lg:pt-4">
               <div className="relative">
-                <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-xs lg:text-sm">
-                  {currentUser?.fullName?.charAt(0) || 'U'}
-                </div>
+                {/* AVATAR IDENTICON - SAMA SEPERTI DI USER MANAGEMENT */}
+                <img
+                  src={getAvatarUrl(currentUser?.username || 'default')}
+                  alt={currentUser?.fullName || 'User'}
+                  className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-slate-200 dark:bg-slate-700 object-cover"
+                  onError={(e) => {
+                    // Fallback jika gambar gagal dimuat (misal offline)
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
                 {currentUser?.role === 'ADMINISTRATOR' && (
                   <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border-2 border-white dark:border-slate-900"></div>
                 )}
@@ -343,7 +356,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             <button
               type="button"
-              onClick={onLogout}
+              onClick={() => {
+                if (window.confirm('Are you sure you want to log out?')) {
+                  onLogout();
+                }
+              }}
               className="p-1.5 lg:p-2 rounded-lg bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors w-8 h-8 lg:w-10 lg:h-10 flex items-center justify-center"
               title="Logout"
             >
