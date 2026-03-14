@@ -283,3 +283,57 @@ export interface LineMaster {
   userCount?: number;
   productionOrders?: ProductionOrder[];
 }
+
+// ==========================================
+// 9. DASHBOARD COMPREHENSIVE (REAL DATA)
+// ==========================================
+export interface DashboardComprehensive {
+  kpi: {
+    totalOps: number;
+    todayOutput: number;
+    totalWip: number;
+    overallEfficiency: number;
+    defectRate: number;
+    onTimeDelivery: number;
+    targetOutput: number;
+    achievement: number;
+  };
+  hourlyProduction: Array<{ 
+    hour: string; 
+    output: number;
+    target: number;
+  }>;
+  statusDistribution: Array<{ 
+    status: string; 
+    count: number; 
+  }>;
+  slowMovingOps: Array<{ 
+    opNumber: string; 
+    currentStation: string; 
+    hoursInStation: number; 
+  }>;
+  recentActivities: Array<{ 
+    time: string; 
+    opNumber: string; 
+    station: string; 
+    action: string; 
+    qty: number; 
+  }>;
+  lineSummaries: Array<{ 
+    lineCode: string; 
+    output: number; 
+    efficiency: number; 
+    defectRate: number;
+    target: number;
+  }>;
+  stationFlow: Array<{           // 🔥 NEW: Station flow progress
+    station: string;
+    count: number;
+    wipQty: number;
+    progress: number;
+  }>;
+  qualityTrend: Array<{          // 🔥 NEW: 7-day quality trend
+    date: string;
+    defectRate: number;
+  }>;
+}

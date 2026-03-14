@@ -47,6 +47,11 @@ export class ProductionOrdersController {
     return this.productionOrdersService.getDashboardStats();
   }
 
+  @Get('dashboard-comprehensive')
+  async getDashboardComprehensive() {
+    return this.productionOrdersService.getDashboardComprehensive();
+  }
+
   @Get()
   findAll(
     @Query('station') station?: string,
