@@ -16,6 +16,16 @@ export class ProductionEngineController {
     return { success: true };
   }
 
+  // =====================================================
+  // TAMBAHKAN ENDPOINT BARU - Transfer dari Pond ke CP
+  // =====================================================
+
+  @Post('pond-to-cp-transfer')
+  async pondToCPTransfer(@Body() body: { qrCode: string; qty: number }) {
+    await this.engine.pondToCPTransfer(body.qrCode, body.qty);
+    return { success: true, message: 'OP transferred to Check Panel' };
+  }
+
   //////////////////////////////////////////////////////
   // CHECK PANEL SCAN (DHRISTI CP)
   //////////////////////////////////////////////////////

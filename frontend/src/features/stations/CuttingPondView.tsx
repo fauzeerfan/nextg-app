@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Activity, Wifi, RefreshCw, Scissors, Layers, Target, TrendingUp, Package, AlertCircle, CheckSquare, XSquare } from 'lucide-react';
+import { Activity, Wifi, RefreshCw, Scissors, Layers, Target, TrendingUp, Package, AlertCircle, CheckSquare, XSquare, CheckCircle } from 'lucide-react';
 import type { ProductionOrder } from '../../types/production';
 
 const API_BASE_URL = 'http://localhost:3000';
@@ -65,29 +65,72 @@ const PatternMiniCard = ({ pattern }: { pattern: PatternProgress }) => {
 };
 
 const JobCard = ({ op, lastUpdated }: { op: ProductionOrderWithLine; lastUpdated: string }) => {
-  if (op.readyForCP) {
+  // ✅ Cek apakah OP sudah selesai di Pond tapi belum transfer
+  const isReadyForTransfer = op.allPatternsCompleted && op.readyForCP;
+  
+  if (isReadyForTransfer) {
     return (
-      <div className="bg-gradient-to-br from-white to-emerald-50 dark:from-slate-800 dark:to-emerald-900/20 rounded-xl border-2 border-emerald-300 dark:border-emerald-700 shadow-lg p-4">
-        <div className="flex justify-between items-start mb-2">
-          <div>
-            <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">READY FOR CHECK PANEL</div>
-            <div className="font-mono font-bold text-base text-slate-900 dark:text-white">{op.opNumber}</div>
-            <div className="text-xs text-slate-600 dark:text-slate-300">{op.styleCode}</div>
+      <div className="group relative bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/10 dark:to-slate-900 rounded-xl border-2 border-emerald-500 shadow-lg overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-emerald-400" />
+        
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">
+                READY FOR CHECK PANEL
+              </div>
+              <div className="font-mono font-bold text-lg text-slate-900 dark:text-white">
+                {op.opNumber}
+              </div>
+              <div className="text-xs text-slate-600 dark:text-slate-400">
+                {op.styleCode}
+              </div>
+            </div>
+            <div className="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full text-xs font-bold flex items-center gap-1">
+              <CheckCircle size={12} />
+              READY
+            </div>
           </div>
-          <div className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full text-[10px] font-bold">READY</div>
-        </div>
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-center">
-            <div className="text-[10px] text-slate-500 dark:text-slate-400">Total Good</div>
-            <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{op.qtyPond}</div>
+          
+          {/* ✅ FIX 3B: Job Card - Label Sets vs Pieces */}
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg">
+              <div className="text-xs text-emerald-700 dark:text-emerald-400">Sets Ready</div>
+              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                {op.setsReadyForSewing || 0}
+              </div>
+              <div className="text-[10px] text-emerald-600 dark:text-emerald-500">
+                {op.qtyPond || 0} patterns ({op.line?.patternMultiplier || 4} patterns/set)
+              </div>
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg">
+              <div className="text-xs text-slate-700 dark:text-slate-400">Total NG</div>
+              <div className="text-2xl font-bold text-rose-600 dark:text-rose-400">
+                {op.qtyPondNg || 0}
+              </div>
+              <div className="text-[10px] text-rose-600 dark:text-rose-500">
+                patterns ({Math.floor((op.qtyPondNg || 0) / (op.line?.patternMultiplier || 4))} sets)
+              </div>
+            </div>
           </div>
-          <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-center">
-            <div className="text-[10px] text-slate-500 dark:text-slate-400">Sets Ready</div>
-            <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{op.qtyCP}</div>
+          
+          <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg mb-3">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs">
+              <AlertCircle size={14} />
+              <span className="font-semibold">Scan with Dhristi to transfer to Check Panel</span>
+            </div>
+            <div className="text-[10px] text-amber-600 dark:text-amber-500 mt-1">
+              All {op.setsReadyForSewing} sets must be transferred (no partial)
+            </div>
           </div>
-        </div>
-        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700 pt-2">
-          <span>Awaiting Dhristi scan</span><span>Last: {lastUpdated}</span>
+          
+          <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700 pt-2">
+            <div className="flex items-center gap-1">
+              <Wifi size={10} />
+              <span>SPARSHA</span>
+            </div>
+            <span>Last: {lastUpdated}</span>
+          </div>
         </div>
       </div>
     );
@@ -174,11 +217,17 @@ export const CuttingPondView = () => {
 
   useEffect(() => { fetchOps(); const i = setInterval(fetchOps, 3000); return () => clearInterval(i); }, [fetchOps]);
 
-  const totalSupply = ops.reduce((sum, o) => sum + (o.qtyEntan * (o.line?.patternMultiplier || 1)), 0);
-  const totalCut = ops.reduce((sum, o) => sum + (o.qtyPond || 0), 0);
-  const totalNg = ops.reduce((sum, o) => sum + (o.qtyPondNg || 0), 0);
-  const totalRemaining = totalSupply - totalCut;
-  const overallProgress = totalSupply > 0 ? (totalCut / totalSupply) * 100 : 0;
+  // ✅ FIX 3A: Header Metrics - Hitung pieces dan sets
+  const totalSupplyPieces = ops.reduce((sum, o) => sum + (o.qtyEntan * (o.line?.patternMultiplier || 1)), 0);
+  const totalCutPieces = ops.reduce((sum, o) => sum + (o.qtyPond || 0), 0);
+  const totalNgPieces = ops.reduce((sum, o) => sum + (o.qtyPondNg || 0), 0);
+
+  const totalSupplySets = ops.reduce((sum, o) => sum + (o.qtyEntan || 0), 0);
+  const totalCutSets = ops.reduce((sum, o) => sum + (o.setsReadyForSewing || 0), 0);
+  const totalNgSets = ops.reduce((sum, o) => sum + (Math.floor((o.qtyPondNg || 0) / (o.line?.patternMultiplier || 1))), 0);
+
+  const totalRemaining = totalSupplyPieces - totalCutPieces;
+  const overallProgress = totalSupplyPieces > 0 ? (totalCutPieces / totalSupplyPieces) * 100 : 0;
 
   return (
     <div className="animate-in fade-in duration-300">
@@ -204,9 +253,31 @@ export const CuttingPondView = () => {
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 pb-6">
-          <MetricCard title="Total Target" value={totalSupply.toLocaleString()} icon={Package} color="orange" suffix="pcs" subtitle="Total patterns from Entan" />
-          <MetricCard title="Processed" value={totalCut.toLocaleString()} icon={Scissors} color="blue" suffix="pcs" subtitle="Fine cut completed" />
-          <MetricCard title="Total NG" value={totalNg.toLocaleString()} icon={AlertCircle} color="rose" suffix="pcs" subtitle="Not good pieces" />
+          {/* ✅ FIX 3A: Metric Cards dengan label sets dan subtitle pieces */}
+          <MetricCard 
+            title="Total Target" 
+            value={totalSupplySets.toLocaleString()} 
+            icon={Package} 
+            color="orange" 
+            suffix="sets" 
+            subtitle={`${totalSupplyPieces.toLocaleString()} patterns (${totalSupplySets} sets × ${ops[0]?.line?.patternMultiplier || 4} patterns)`} 
+          />
+          <MetricCard 
+            title="Processed" 
+            value={totalCutSets.toLocaleString()} 
+            icon={Scissors} 
+            color="blue" 
+            suffix="sets" 
+            subtitle={`${totalCutPieces.toLocaleString()} patterns checked`} 
+          />
+          <MetricCard 
+            title="Total NG" 
+            value={totalNgSets.toLocaleString()} 
+            icon={AlertCircle} 
+            color="rose" 
+            suffix="sets" 
+            subtitle={`${totalNgPieces.toLocaleString()} patterns rejected`} 
+          />
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg">
             <div className="flex items-center justify-between mb-2">
               <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Overall Progress</div>

@@ -69,46 +69,52 @@ export class ProductionOrdersService {
     }
 
     // ===== CHECK PANEL =====
-    if (station === 'CP') {
-      const ops = await this.prisma.productionOrder.findMany({
-        where: {
-          status: ProductionStatus.WIP,
-          currentStation: StationCode.CP, // ✅ HANYA yang sudah discan
-        },
-        include: { line: true },
-        orderBy: { createdAt: 'asc' },
-      });
-      return ops;
-    }
+      if (station === 'CP') {
+        const ops = await this.prisma.productionOrder.findMany({
+          where: {
+            status: ProductionStatus.WIP,
+            currentStation: StationCode.CP,  // ✅ HANYA yang sudah ditransfer dari Pond
+          },
+          include: { 
+            line: true,
+            checkPanelInspections: true,  // ✅ Include inspection progress
+          },
+          orderBy: { createdAt: 'asc' },
+        });
+        return ops;
+      }
 
     // ===== CUTTING POND =====
-    if (station === 'CUTTING_POND') {
-      const ops = await this.prisma.productionOrder.findMany({
-        where: {
-          status: ProductionStatus.WIP,
-          currentStation: station as StationCode,
-        },
-        include: {
-          line: true,
-          patternProgress: true,
-        },
-        orderBy: { createdAt: 'asc' },
-      });
-      // Format patternProgress menjadi array patterns
-      return ops.map(op => ({
-        ...op,
-        patterns: op.patternProgress?.map(p => ({
-          index: p.patternIndex,
-          name: p.patternName,
-          target: p.target,
-          good: p.good,
-          ng: p.ng,
-          current: p.good + p.ng,
-          completed: p.completed,
-        })) || [],
-        patternProgress: undefined,
-      }));
-    }
+      if (station === 'CUTTING_POND') {
+        const ops = await this.prisma.productionOrder.findMany({
+          where: {
+            status: ProductionStatus.WIP,
+            currentStation: StationCode.CUTTING_POND,
+            // ✅ Tampilkan OP yang masih proses ATAU sudah selesai tapi belum transfer
+            // (readyForCP = false artinya masih proses, readyForCP = true artinya selesai tapi belum transfer)
+          },
+          include: {
+            line: true,
+            patternProgress: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        });
+        
+        // Format patternProgress menjadi array patterns
+        return ops.map(op => ({
+          ...op,
+          patterns: op.patternProgress?.map(p => ({
+            index: p.patternIndex,
+            name: p.patternName,
+            target: p.target,
+            good: p.good,
+            ng: p.ng,
+            current: p.good + p.ng,
+            completed: p.completed,
+          })) || [],
+          patternProgress: undefined,
+        }));
+      }
 
     // ===== CUTTING ENTAN =====
     if (station === 'CUTTING_ENTAN') {

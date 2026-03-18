@@ -31,42 +31,46 @@ export class ProductionEngineService {
     return { success: true };
   }
 
-  // ================= CP SCAN (DRISTI) =================
-  async cpScan(qrCode: string, qty: number) {
-    const opNumber = qrCode.split('-')[1];
-    const op = await this.prisma.productionOrder.findUnique({
-      where: { opNumber },
-    });
-    if (!op) throw new NotFoundException('OP not found');
-
-    if (!op.readyForCP) {
-      throw new BadRequestException('OP is not ready for Check Panel');
-    }
-
-    if (qty !== op.qtyCP) {
-      throw new BadRequestException(`Quantity mismatch: expected ${op.qtyCP}, got ${qty}`);
-    }
-
-    await this.prisma.productionOrder.update({
-      where: { id: op.id },
-      data: {
-        currentStation: StationCode.CP,
-        readyForCP: false,
-      },
-    });
-
-    await this.prisma.productionLog.create({
-      data: {
-        opId: op.id,
-        station: StationCode.CP,
-        type: 'RECEIVED',
-        qty: op.qtyCP,
-        note: `Received from Pond via scan with qty ${qty}`,
-      },
-    });
-
-    return { success: true };
+// ================= CP SCAN (DHRISTI) =================
+async cpScan(qrCode: string, qty: number) {
+  const opNumber = qrCode.split('-')[1];
+  const op = await this.prisma.productionOrder.findUnique({
+    where: { opNumber },
+    include: { line: true },
+  });
+  if (!op) throw new NotFoundException('OP not found');
+  if (!op.readyForCP) {
+    throw new BadRequestException('OP is not ready for Check Panel');
   }
+
+  // ✅ qty yang dikirim harus sama dengan setsReadyForSewing dari Pond
+  if (qty !== op.setsReadyForSewing) {
+    throw new BadRequestException(`Quantity mismatch: expected ${op.setsReadyForSewing}, got ${qty}`);
+  }
+
+  await this.prisma.productionOrder.update({
+    where: { id: op.id },
+    data: {
+      currentStation: StationCode.CP,
+      readyForCP: false,
+      qtyCP: op.setsReadyForSewing,  // ✅ SET qtyCP (dalam sets)
+      cpGoodQty: 0,                   // ✅ Reset inspection counters
+      cpNgQty: 0,
+    },
+  });
+
+  await this.prisma.productionLog.create({
+    data: {
+      opId: op.id,
+      station: StationCode.CP,
+      type: 'RECEIVED',
+      qty: op.setsReadyForSewing,
+      note: `Received from Pond via scan with qty ${qty} sets`,
+    },
+  });
+
+  return { success: true };
+}
 
   // ================= SEND TO SEWING VIA SCANNER (PARSIAL) =================
 async sendToSewingFromScan(qrCode: string, qty: number) {
@@ -281,6 +285,76 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
     });
 
     return { success: true };
+  }
+
+  // =====================================================
+  // NEW METHOD - Transfer dari Cutting Pond ke Check Panel
+  // =====================================================
+  async pondToCPTransfer(qrCode: string, qty: number) {
+    // Extract OP number dari QR Code
+    const parts = qrCode.split('-');
+    const opNumber = parts.length > 1 ? parts[1] : qrCode;
+    
+    const op = await this.prisma.productionOrder.findUnique({
+      where: { opNumber },
+    });
+    
+    if (!op) {
+      throw new NotFoundException('OP not found');
+    }
+    
+    // ✅ Validasi 1: OP harus masih di Cutting Pond
+    if (op.currentStation !== StationCode.CUTTING_POND) {
+      throw new BadRequestException(
+        `OP is not at Cutting Pond (current: ${op.currentStation})`
+      );
+    }
+    
+    // ✅ Validasi 2: OP harus sudah readyForCP
+    if (!op.readyForCP) {
+      throw new BadRequestException('OP is not ready for Check Panel yet');
+    }
+    
+    // ✅ Validasi 3: allPatternsCompleted harus true
+    if (!op.allPatternsCompleted) {
+      throw new BadRequestException('Not all patterns have been completed at Pond');
+    }
+    
+    // ✅ Validasi 4: Qty harus sama dengan setsReadyForSewing (NO PARTIAL)
+    if (qty !== op.setsReadyForSewing) {
+      throw new BadRequestException(
+        `Quantity must match setsReadyForSewing (${op.setsReadyForSewing}). Got: ${qty}. Partial transfer not allowed from Pond to CP.`
+      );
+    }
+    
+    return this.prisma.$transaction(async (tx) => {
+      // Update ProductionOrder
+      await tx.productionOrder.update({
+        where: { id: op.id },
+        data: {
+          currentStation: StationCode.CP,  // ✅ Sekarang pindah ke CP
+          readyForCP: false,               // ✅ Reset flag
+          qtyCP: qty,                      // ✅ Qty yang diterima di CP
+          cpGoodQty: 0,                    // ✅ Reset CP inspection counters
+          cpNgQty: 0,
+        },
+      });
+      
+      // Create ProductionLog
+      await tx.productionLog.create({
+        data: {
+          opId: op.id,
+          station: StationCode.CUTTING_POND,
+          type: 'TRANSFER_TO_CP',
+          qty: qty,
+          note: `Transferred ${qty} sets from Cutting Pond to Check Panel`,
+        },
+      });
+      
+      console.log(`✅ OP ${op.opNumber} transferred from Pond to CP: ${qty} sets`);
+      
+      return { success: true, qty };
+    });
   }
 
   // ================= POND QUEUE (frontend) =================
@@ -514,14 +588,24 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
       // Cek apakah semua pola selesai
       const allDone = currentOp.patterns.every(p => p.completed);
       if (allDone) {
+        // 🔥 FIX: Hitung setsReadyForSewing dari minimum good patterns
         const setComplete = Math.min(...currentOp.patterns.map(p => p.good));
+        
         await this.prisma.productionOrder.update({
           where: { id: currentOp.id },
           data: {
-            qtyCP: setComplete,
-            readyForCP: true,
+            qtyPond: currentOp.qtyPond,        // Total pieces counted
+            qtyPondNg: currentOp.qtyPondNg,    // Total NG pieces
+            setsReadyForSewing: setComplete,   // ✅ Sets yang bisa dibentuk (MIN good)
+            allPatternsCompleted: true,        // ✅ Semua pattern selesai dicek
+            readyForCP: true,                  // ✅ Siap dipindah ke CP
+            // ❌ JANGAN UBAH currentStation - Tetap di CUTTING_POND
+            // currentStation: StationCode.CP,  // ❌ HAPUS INI
           },
         });
+        
+        console.log(`✅ Pond completed for OP ${currentOp.opNumber}: ${setComplete} sets ready for CP`);
+        
         // Hapus OP dari session
         session.pondOps = session.pondOps.filter(o => o.id !== currentOp.id);
         if (session.pondOps.length === 0) {
@@ -711,6 +795,7 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
         itemNumberFG: op.itemNumberFG,
         qtyEntan: op.qtyEntan,
         qtyPond: op.qtyPond,
+        qtyPondNg: op.qtyPondNg,  // 🔥 TAMBAH INI
         multiplier,
         patterns,
       };

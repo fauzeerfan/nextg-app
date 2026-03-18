@@ -141,6 +141,16 @@ backend/uploads/patterns/1772153343512-135267913.png
 backend/uploads/patterns/1772153343514-455700814.png
 backend/uploads/patterns/1772153343515-118334685.png
 backend/uploads/patterns/1772153343516-526216975.png
+backend/uploads/patterns/1773725464665-732112469.png
+backend/uploads/patterns/1773725464666-191073313.png
+backend/uploads/patterns/1773725464668-572859299.png
+backend/uploads/patterns/1773725464669-969221038.png
+backend/uploads/patterns/1773725464671-340176730.png
+backend/uploads/patterns/1773725464672-778761793.png
+backend/uploads/patterns/1773725464673-974565674.png
+backend/uploads/patterns/1773725464673-980348559.png
+backend/uploads/patterns/1773725464674-199558996.png
+backend/uploads/patterns/1773725464794-870026003.png
 frontend/.gitignore
 frontend/eslint.config.js
 frontend/index.html
@@ -183,6 +193,7 @@ package.json
 This section contains the contents of the repository's files.
 
 <file path="frontend/src/features/stations/CheckPanelView.tsx">
+// frontend/src/features/stations/CheckPanelView.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle, XCircle, RefreshCw, ImageIcon, ImageOff, AlertTriangle,
@@ -247,7 +258,7 @@ const MetricCard = ({
   }[color];
 
   return (
-    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg hover:shadow-xl transition-all duration-300">
+    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg">
       <div className="flex items-center justify-between mb-2">
         <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{title}</div>
         <div
@@ -258,7 +269,7 @@ const MetricCard = ({
       </div>
       <div className="text-2xl font-bold text-slate-900 dark:text-white">
         {value}
-        {suffix && <span className="text-sm text-slate-500 dark:text-slate-400 ml-1">{suffix}</span>}
+        {suffix && <span className="text-sm text-slate-500 ml-1">{suffix}</span>}
       </div>
       {subtitle && <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{subtitle}</div>}
     </div>
@@ -300,22 +311,26 @@ export const CheckPanelView = ({
 
   const allPatternsCompleted =
     patterns.length > 0 && patterns.every((_, i) => prog[i]?.completed === true);
+
   const totalGoodPola = Object.values(prog).reduce((s, p) => s + p.good, 0);
   const totalNgPola = Object.values(prog).reduce((s, p) => s + p.ng, 0);
   const polaSisa = totalGoodPola - sets * patterns.length;
   const totalNgEfektif = totalNgPola + polaSisa;
   const setNgEfektif = Math.floor(totalNgEfektif / patterns.length);
 
+  // ✅ FIX 1: Header Metrics - Gunakan qtyCP (sets dari Pond), BUKAN qtyPond (pieces)
   const tq = ops.length;
-  const tin = ops.reduce((s, o) => s + (o.qtyPond || 0), 0);
+  const tin = ops.reduce((s, o) => s + (o.qtyCP || 0), 0); // ✅ qtyCP = sets yang ditransfer dari Pond
   const tg = ops.reduce((s, o) => s + (o.cpGoodQty || 0), 0);
   const tng = ops.reduce((s, o) => s + (o.cpNgQty || 0), 0);
-  const comp = tin > 0 ? Math.round((tg / tin) * 100) : 0;
+  const comp = tin > 0 ? Math.round(((tg + tng) / tin) * 100) : 0; // ✅ FIX: (Good+NG)/Total × 100
 
   const fetchOps = useCallback(async () => {
     setRefreshing(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/production-orders?station=CP`);
+      const res = await fetch(`${API_BASE_URL}/production-orders?station=CP`, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data: ProductionOrder[] = await res.json();
         setOps(data);
@@ -392,7 +407,6 @@ export const CheckPanelView = ({
     }
   };
 
-  // 🔄 Fungsi baru untuk me-refresh data OP aktif dan progres pola dari server
   const refreshActiveOp = useCallback(async () => {
     if (!actOp) return;
     try {
@@ -444,10 +458,21 @@ export const CheckPanelView = ({
     setTimeout(() => setToast(null), 2000);
   };
 
+  // ✅ FIX 2: selectOp - Validasi CP completion, BUKAN Pond completion
   const selectOp = (op: ProductionOrder) => {
-    // 🔥 Prevent if OP is already completed (allPatternsCompleted = true)
-    if (op.allPatternsCompleted) {
-      showToast('OP is already completed and ready for sewing', 'error');
+    // ✅ Cek apakah CP inspection sudah selesai
+    const cpInspected = (op.cpGoodQty || 0) + (op.cpNgQty || 0);
+    const cpTotal = op.qtyCP || 0;
+
+    // ✅ Blokir jika CP sudah selesai semua
+    if (cpTotal > 0 && cpInspected >= cpTotal) {
+      showToast('CP inspection already completed for this OP', 'error');
+      return;
+    }
+
+    // ✅ Validasi: OP harus punya qtyCP > 0 (sudah ditransfer dari Pond)
+    if (cpTotal <= 0) {
+      showToast('OP not yet transferred from Cutting Pond', 'error');
       return;
     }
 
@@ -468,15 +493,25 @@ export const CheckPanelView = ({
     fetchOps();
   };
 
+  // ✅ FIX 3: Submit Inspection - Pre-validation dan target menggunakan qtyCP
   const submitInspection = async (isGood: boolean, reason: string = '') => {
     if (isSubmittingRef.current) return;
     if (!actOp || !actPtrn) return showToast('Select OP and pattern first', 'error');
     const idx = patterns.findIndex((p) => p.name === actPtrn.name);
     if (idx === -1) return showToast('Pattern not found', 'error');
-
     const cur = prog[idx] || { good: 0, ng: 0, completed: false };
+
+    // ✅ VALIDASI: Cek apakah pattern sudah completed
     if (cur.completed) {
       showToast('This pattern is already completed', 'error');
+      return;
+    }
+
+    // ✅ VALIDASI: Cek apakah sudah mencapai target qtyCP
+    const target = actOp.qtyCP || 0;
+    const done = cur.good + cur.ng;
+    if (done >= target) {
+      showToast(`Pattern already reached target (${target} sets)`, 'error');
       return;
     }
 
@@ -501,7 +536,7 @@ export const CheckPanelView = ({
       });
 
       if (res.ok) {
-        const target = actOp.qtyEntan || 0;
+        const target = actOp.qtyCP || 0; // ✅ BENAR: qtyCP
         const newGood = cur.good + (isGood ? 1 : 0);
         const newNg = cur.ng + (isGood ? 0 : 1);
         const completed = newGood + newNg >= target;
@@ -522,7 +557,6 @@ export const CheckPanelView = ({
 
         showToast(isGood ? 'Good +1' : 'NG Recorded', isGood ? 'success' : 'error');
         
-        // 🔄 Refresh data dari server (daftar OP dan detail OP aktif + progres)
         await Promise.all([
           fetchOps(),
           refreshActiveOp()
@@ -563,14 +597,16 @@ export const CheckPanelView = ({
     }
   };
 
-  const handleImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    e.currentTarget.style.display = 'none';
-    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-    e.currentTarget.nextElementSibling?.classList.add('flex');
-  };
+const handleImgError = (e: React.SyntheticEvent) => {
+  // ✅ FIX: Cast ke HTMLImageElement
+  const imgElement = e.currentTarget as HTMLImageElement;
+  imgElement.style.display = 'none';
+  imgElement.nextElementSibling?.classList.remove('hidden');
+  imgElement.nextElementSibling?.classList.add('flex');
+};
 
   return (
-    <div className="animate-in fade-in duration-300">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4 md:p-6">
       {toast && (
         <div
           className={`fixed top-6 right-6 z-[200] animate-in slide-in-from-right-5 fade-in duration-300 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border ${
@@ -579,10 +615,8 @@ export const CheckPanelView = ({
               : 'bg-gradient-to-r from-rose-500 to-rose-400 text-white border-rose-400'
           }`}
         >
-          <div className="flex items-center gap-3">
-            {toast.type === 'success' ? <CheckCircle size={18} /> : <XCircle size={18} />}
-            <span className="font-bold text-sm">{toast.msg}</span>
-          </div>
+          {toast.type === 'success' ? <CheckCircle size={18} /> : <XCircle size={18} />}
+          {toast.msg}
           <button onClick={() => setToast(null)} className="ml-4 opacity-80 hover:opacity-100">
             <XCircle size={14} />
           </button>
@@ -637,9 +671,24 @@ export const CheckPanelView = ({
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 pb-6">
-          <MetricCard title="Total Input" value={tin} icon={Package} color="blue" suffix="pcs" subtitle="From Cutting Pond" />
-          <MetricCard title="Verified Good" value={tg} icon={CheckCircle} color="emerald" suffix="pcs" subtitle="Cumulative" />
-          <MetricCard title="NG Total" value={tng} icon={AlertTriangle} color="rose" suffix="pcs" subtitle="Cumulative" />
+          {/* ✅ FIX 1: Metric Cards dengan qtyCP (sets) */}
+          <MetricCard title="Total Input" value={tin} icon={Package} color="blue" suffix="sets" subtitle="From Cutting Pond" />
+          <MetricCard
+            title="Verified Good"
+            value={tg}
+            icon={CheckCircle}
+            color="emerald"
+            suffix="sets"
+            subtitle={`${tin > 0 ? Math.round((tg / tin) * 100) : 0}% of input`}
+          />
+          <MetricCard
+            title="NG Total"
+            value={tng}
+            icon={AlertTriangle}
+            color="rose"
+            suffix="sets"
+            subtitle={`${tin > 0 ? Math.round((tng / tin) * 100) : 0}% of input`}
+          />
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg">
             <div className="flex items-center justify-between mb-2">
               <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Completion Rate</div>
@@ -647,20 +696,25 @@ export const CheckPanelView = ({
                 <Award size={16} className="text-amber-600 dark:text-amber-400" />
               </div>
             </div>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">{comp}%</div>
+            <div className="text-2xl font-bold text-slate-900 dark:text-white">
+              {Math.min(comp, 100)}% {/* ✅ CAP DI 100% */}
+            </div>
             <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mt-2 overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-1000"
-                style={{ width: `${comp}%` }}
+                style={{ width: `${Math.min(comp, 100)}%` }} 
               ></div>
             </div>
+<div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+  {tg + tng} / {tin} sets inspected  {/* ✅ Pastikan semua brace tertutup */}
+</div>
           </div>
         </div>
       </div>
 
-      {/* Main Grid - Menggunakan 5 kolom pada layar large, kolom kiri 1/5, kanan 4/5 */}
+      {/* Main Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        {/* Left Column - OP List (1 dari 5 bagian) */}
+        {/* Left Column - OP List */}
         <div className="lg:col-span-1">
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden h-full">
             <div className="p-4 border-b border-slate-100 dark:border-slate-700/50">
@@ -706,49 +760,75 @@ export const CheckPanelView = ({
                     <p className="text-xs text-slate-500 dark:text-slate-400">Waiting for incoming orders...</p>
                   </div>
                 ) : (
-                  ops.map((op: ProductionOrder) => (
-                    <div
-                      key={op.id}
-                      className={`group p-3 rounded-xl border-2 transition-all duration-300 cursor-pointer mb-2 ${
-                        op.allPatternsCompleted
-                          ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 opacity-70 cursor-not-allowed'
-                          : actOp?.id === op.id
+                  ops.map((op: ProductionOrder) => {
+                    // ✅ FIX 2: Cek CP completion, BUKAN Pond completion
+                    const cpInspected = (op.cpGoodQty || 0) + (op.cpNgQty || 0);
+                    const cpTotal = op.qtyCP || 0;
+                    const isCpCompleted = cpTotal > 0 && cpInspected >= cpTotal;
+
+                    return (
+                      <div
+                        key={op.id}
+                        className={`group p-3 rounded-xl border-2 transition-all duration-300 cursor-pointer mb-2 ${
+                          isCpCompleted
+                            ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 opacity-70 cursor-not-allowed'
+                            : actOp?.id === op.id
                             ? 'border-blue-500 bg-gradient-to-r from-blue-50 to-white dark:from-blue-900/20 dark:to-slate-800 shadow-lg'
                             : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-lg'
-                      }`}
-                      onClick={() => !op.allPatternsCompleted && selectOp(op)}
-                    >
-                      <div className="flex items-start justify-between mb-1">
-                        <div>
-                          <div className="font-mono font-bold text-base text-slate-900 dark:text-white">
-                            {op.opNumber}
+                        }`}
+                        onClick={() => !isCpCompleted && selectOp(op)}
+                      >
+                        <div className="flex items-start justify-between mb-1">
+                          <div>
+                            <div className="font-mono font-bold text-base text-slate-900 dark:text-white">
+                              {op.opNumber}
+                            </div>
+                            <div className="text-xs text-slate-600 dark:text-slate-400">Style: {op.styleCode}</div>
                           </div>
-                          <div className="text-xs text-slate-600 dark:text-slate-400">Style: {op.styleCode}</div>
                         </div>
-                      </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-1">
-                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                          <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Ready</span>
-                        </div>
+                        <div className="flex items-center justify-between mt-2">
+                          <div className="flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                            <span className="text-xs font-medium text-blue-600 dark:text-blue-400">From Pond</span>
+                          </div>
+                          {/* ✅ FIX 3: Tampilkan qtyCP (sets dari Pond), BUKAN qtyPond (pieces) */}
                           <div className="text-right">
-                            <div className="text-base font-bold text-slate-900 dark:text-white">{op.qtyPond || 0}</div>
-                            <div className="text-[10px] text-slate-500">pieces</div>
-                            {op.allPatternsCompleted && (
-                              <div className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                                {op.setsReadyForSewing || 0} sets ready
+                            <div className="text-base font-bold text-blue-600 dark:text-blue-400">
+                              {op.qtyCP || 0}
+                            </div>
+                            <div className="text-[10px] text-slate-500">sets from Pond</div>
+                            {(op.cpGoodQty || 0) > 0 && (
+                              <div className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">
+                                Inspected: {op.cpGoodQty + op.cpNgQty}/{op.qtyCP} sets
+                              </div>
+                            )}
+                            {/* ✅ Badge progress */}
+                            {op.qtyCP > 0 && (
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                                {Math.round(((op.cpGoodQty + op.cpNgQty) / op.qtyCP) * 100)}% complete
+                              </div>
+                            )}
+                            {/* ✅ Badge jika CP sudah selesai */}
+                            {isCpCompleted && (
+                              <div className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-1">
+                                <CheckCircle size={12} />
+                                CP Complete
                               </div>
                             )}
                           </div>
-                      </div>
-                      {op.allPatternsCompleted && (
-                        <div className="mt-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                          <CheckCircle size={12} />
-                          Ready for Sewing
                         </div>
-                      )}
-                    </div>
-                  ))
+                        {/* ✅ Progress bar CP inspection */}
+                        {op.qtyCP > 0 && (
+                          <div className="mt-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-500"
+                              style={{ width: `${((op.cpGoodQty + op.cpNgQty) / op.qtyCP) * 100}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )
               ) : patterns.length === 0 ? (
                 <div className="text-center py-8">
@@ -761,9 +841,12 @@ export const CheckPanelView = ({
               ) : (
                 patterns.map((pat, idx) => {
                   const p = prog[idx] || { good: 0, ng: 0, completed: false };
-                  const target = actOp.qtyEntan || 0;
+                  // ✅ FIX 4: Target menggunakan qtyCP, bukan qtyEntan
+                  const target = actOp.qtyCP || 0;
                   const done = p.good + p.ng;
-                  const rem = target - done;
+                  const rem = Math.max(0, target - done); // ✅ Tidak boleh negatif
+                  const isCompleted = done >= target; // ✅ Flag completed
+
                   return (
                     <div
                       key={idx}
@@ -788,18 +871,26 @@ export const CheckPanelView = ({
                         {p.completed && <CheckCircle size={14} className="text-emerald-500" />}
                       </div>
                       <div className="mt-1 flex items-center justify-between text-xs">
-                        <span className="text-emerald-600">G:{p.good}</span>
-                        <span className="text-rose-600">NG:{p.ng}</span>
-                        <span className="text-slate-500">Rem:{rem}</span>
+                        <span className="text-emerald-600">G:{p.good} sets</span>
+                        <span className="text-rose-600">NG:{p.ng} sets</span>
+                        <span className={`text-slate-500 ${isCompleted ? 'text-emerald-600 font-bold' : ''}`}>
+                          Rem:{rem} sets 
+                        </span>
                       </div>
                       <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1 mt-1.5 overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${
-                            p.completed ? 'bg-emerald-500' : 'bg-purple-500'
+                            isCompleted ? 'bg-emerald-500' : 'bg-purple-500'
                           }`}
-                          style={{ width: `${(done / target) * 100}%` }}
+                          style={{ width: `${Math.min((done / target) * 100, 100)}%` }}
                         ></div>
                       </div>
+                      {isCompleted && (
+                        <div className="mt-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          <CheckCircle size={10} />
+                          Pattern Complete ({done}/{target} sets)
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -808,7 +899,7 @@ export const CheckPanelView = ({
           </div>
         </div>
 
-        {/* Right Column - Inspection Interface (3 dari 5 bagian) */}
+        {/* Right Column - Inspection Interface */}
         <div className="lg:col-span-4">
           {!actOp ? (
             <div className="h-full flex flex-col items-center justify-center bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 p-8">
@@ -918,7 +1009,8 @@ export const CheckPanelView = ({
                       </div>
                       <p className="text-xs text-slate-600 dark:text-slate-400 max-w-xl mx-auto">
                         Out of {totalGoodPola} good patterns, only {sets * patterns.length} patterns can form{' '}
-                        {sets} complete sets. The remaining {polaSisa} good patterns cannot form a set and will be considered NG.
+                        {sets} complete sets. The remaining {polaSisa} good patterns cannot form a set and will be
+                        considered NG.
                       </p>
                       <p className="text-xs font-semibold text-rose-600 dark:text-rose-400 mt-2">
                         Effective NG: {totalNgEfektif} patterns ({setNgEfektif} sets)
@@ -943,7 +1035,10 @@ export const CheckPanelView = ({
                       >
                         <button
                           onClick={handleGood}
-                          disabled={submitting || (actPtrn && prog[patterns.findIndex((p) => p.name === actPtrn.name)]?.completed)}
+                          disabled={
+                            submitting ||
+                            (actPtrn && prog[patterns.findIndex((p) => p.name === actPtrn.name)]?.completed)
+                          }
                           className="absolute inset-0 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -991,7 +1086,10 @@ export const CheckPanelView = ({
                       >
                         <button
                           onClick={handleNg}
-                          disabled={submitting || (actPtrn && prog[patterns.findIndex((p) => p.name === actPtrn.name)]?.completed)}
+                          disabled={
+                            submitting ||
+                            (actPtrn && prog[patterns.findIndex((p) => p.name === actPtrn.name)]?.completed)
+                          }
                           className="absolute inset-0 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -1047,7 +1145,9 @@ export const CheckPanelView = ({
               </div>
               <div>
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">Select Defect Reason</h3>
-                <p className="text-xs text-slate-600 dark:text-slate-300">Choose the primary reason for rejection</p>
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Choose the primary reason for rejection
+                </p>
               </div>
             </div>
             <div className="grid gap-1.5 max-h-[250px] overflow-y-auto mb-4">
@@ -2375,6 +2475,16 @@ export class ProductionEngineController {
   ) {
     await this.engine.cuttingPond(body.opId, body.qty || 1);
     return { success: true };
+  }
+
+  // =====================================================
+  // TAMBAHKAN ENDPOINT BARU - Transfer dari Pond ke CP
+  // =====================================================
+
+  @Post('pond-to-cp-transfer')
+  async pondToCPTransfer(@Body() body: { qrCode: string; qty: number }) {
+    await this.engine.pondToCPTransfer(body.qrCode, body.qty);
+    return { success: true, message: 'OP transferred to Check Panel' };
   }
 
   //////////////////////////////////////////////////////
@@ -5905,6 +6015,7 @@ export interface PondOp {
   itemNumberFG: string;
   qtyEntan: number;
   qtyPond: number;
+  qtyPondNg?: number;  // 🔥 TAMBAH INI
   multiplier: number;
   patterns: PondPattern[];
 }
@@ -7020,51 +7131,6 @@ async scanInCP(dto: { qrCode: string; qty?: number }) {
 }
 </file>
 
-<file path="frontend/package.json">
-{
-  "name": "nextg-frontend",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@tailwindcss/vite": "^4.1.17",
-    "@types/node": "^20.11.5",
-    "@types/react-router-dom": "^5.3.3",
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.555.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "react-router-dom": "^6.30.3",
-    "recharts": "^3.8.0",
-    "tailwind-merge": "^3.5.0"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.39.1",
-    "@types/node": "^24.10.1",
-    "@types/react": "^19.2.5",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.1",
-    "autoprefixer": "^10.4.22",
-    "baseline-browser-mapping": "^2.10.0",
-    "eslint": "^9.39.1",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.4.24",
-    "globals": "^16.5.0",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.17",
-    "typescript": "~5.9.3",
-    "typescript-eslint": "^8.46.4",
-    "vite": "^7.2.4"
-  }
-}
-</file>
-
 <file path="frontend/src/components/layout/Sidebar.tsx">
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -7444,7 +7510,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
 <file path="frontend/src/features/stations/CuttingPondView.tsx">
 import { useState, useEffect, useCallback } from 'react';
-import { Activity, Wifi, RefreshCw, Scissors, Layers, Target, TrendingUp, Package, AlertCircle, CheckSquare, XSquare } from 'lucide-react';
+import { Activity, Wifi, RefreshCw, Scissors, Layers, Target, TrendingUp, Package, AlertCircle, CheckSquare, XSquare, CheckCircle } from 'lucide-react';
 import type { ProductionOrder } from '../../types/production';
 
 const API_BASE_URL = 'http://localhost:3000';
@@ -7510,29 +7576,72 @@ const PatternMiniCard = ({ pattern }: { pattern: PatternProgress }) => {
 };
 
 const JobCard = ({ op, lastUpdated }: { op: ProductionOrderWithLine; lastUpdated: string }) => {
-  if (op.readyForCP) {
+  // ✅ Cek apakah OP sudah selesai di Pond tapi belum transfer
+  const isReadyForTransfer = op.allPatternsCompleted && op.readyForCP;
+  
+  if (isReadyForTransfer) {
     return (
-      <div className="bg-gradient-to-br from-white to-emerald-50 dark:from-slate-800 dark:to-emerald-900/20 rounded-xl border-2 border-emerald-300 dark:border-emerald-700 shadow-lg p-4">
-        <div className="flex justify-between items-start mb-2">
-          <div>
-            <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">READY FOR CHECK PANEL</div>
-            <div className="font-mono font-bold text-base text-slate-900 dark:text-white">{op.opNumber}</div>
-            <div className="text-xs text-slate-600 dark:text-slate-300">{op.styleCode}</div>
+      <div className="group relative bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/10 dark:to-slate-900 rounded-xl border-2 border-emerald-500 shadow-lg overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-emerald-400" />
+        
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">
+                READY FOR CHECK PANEL
+              </div>
+              <div className="font-mono font-bold text-lg text-slate-900 dark:text-white">
+                {op.opNumber}
+              </div>
+              <div className="text-xs text-slate-600 dark:text-slate-400">
+                {op.styleCode}
+              </div>
+            </div>
+            <div className="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full text-xs font-bold flex items-center gap-1">
+              <CheckCircle size={12} />
+              READY
+            </div>
           </div>
-          <div className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full text-[10px] font-bold">READY</div>
-        </div>
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-center">
-            <div className="text-[10px] text-slate-500 dark:text-slate-400">Total Good</div>
-            <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{op.qtyPond}</div>
+          
+          {/* ✅ FIX 3B: Job Card - Label Sets vs Pieces */}
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg">
+              <div className="text-xs text-emerald-700 dark:text-emerald-400">Sets Ready</div>
+              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                {op.setsReadyForSewing || 0}
+              </div>
+              <div className="text-[10px] text-emerald-600 dark:text-emerald-500">
+                {op.qtyPond || 0} patterns ({op.line?.patternMultiplier || 4} patterns/set)
+              </div>
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg">
+              <div className="text-xs text-slate-700 dark:text-slate-400">Total NG</div>
+              <div className="text-2xl font-bold text-rose-600 dark:text-rose-400">
+                {op.qtyPondNg || 0}
+              </div>
+              <div className="text-[10px] text-rose-600 dark:text-rose-500">
+                patterns ({Math.floor((op.qtyPondNg || 0) / (op.line?.patternMultiplier || 4))} sets)
+              </div>
+            </div>
           </div>
-          <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-center">
-            <div className="text-[10px] text-slate-500 dark:text-slate-400">Sets Ready</div>
-            <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{op.qtyCP}</div>
+          
+          <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg mb-3">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs">
+              <AlertCircle size={14} />
+              <span className="font-semibold">Scan with Dhristi to transfer to Check Panel</span>
+            </div>
+            <div className="text-[10px] text-amber-600 dark:text-amber-500 mt-1">
+              All {op.setsReadyForSewing} sets must be transferred (no partial)
+            </div>
           </div>
-        </div>
-        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700 pt-2">
-          <span>Awaiting Dhristi scan</span><span>Last: {lastUpdated}</span>
+          
+          <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700 pt-2">
+            <div className="flex items-center gap-1">
+              <Wifi size={10} />
+              <span>SPARSHA</span>
+            </div>
+            <span>Last: {lastUpdated}</span>
+          </div>
         </div>
       </div>
     );
@@ -7619,11 +7728,17 @@ export const CuttingPondView = () => {
 
   useEffect(() => { fetchOps(); const i = setInterval(fetchOps, 3000); return () => clearInterval(i); }, [fetchOps]);
 
-  const totalSupply = ops.reduce((sum, o) => sum + (o.qtyEntan * (o.line?.patternMultiplier || 1)), 0);
-  const totalCut = ops.reduce((sum, o) => sum + (o.qtyPond || 0), 0);
-  const totalNg = ops.reduce((sum, o) => sum + (o.qtyPondNg || 0), 0);
-  const totalRemaining = totalSupply - totalCut;
-  const overallProgress = totalSupply > 0 ? (totalCut / totalSupply) * 100 : 0;
+  // ✅ FIX 3A: Header Metrics - Hitung pieces dan sets
+  const totalSupplyPieces = ops.reduce((sum, o) => sum + (o.qtyEntan * (o.line?.patternMultiplier || 1)), 0);
+  const totalCutPieces = ops.reduce((sum, o) => sum + (o.qtyPond || 0), 0);
+  const totalNgPieces = ops.reduce((sum, o) => sum + (o.qtyPondNg || 0), 0);
+
+  const totalSupplySets = ops.reduce((sum, o) => sum + (o.qtyEntan || 0), 0);
+  const totalCutSets = ops.reduce((sum, o) => sum + (o.setsReadyForSewing || 0), 0);
+  const totalNgSets = ops.reduce((sum, o) => sum + (Math.floor((o.qtyPondNg || 0) / (o.line?.patternMultiplier || 1))), 0);
+
+  const totalRemaining = totalSupplyPieces - totalCutPieces;
+  const overallProgress = totalSupplyPieces > 0 ? (totalCutPieces / totalSupplyPieces) * 100 : 0;
 
   return (
     <div className="animate-in fade-in duration-300">
@@ -7649,9 +7764,31 @@ export const CuttingPondView = () => {
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 pb-6">
-          <MetricCard title="Total Target" value={totalSupply.toLocaleString()} icon={Package} color="orange" suffix="pcs" subtitle="Total patterns from Entan" />
-          <MetricCard title="Processed" value={totalCut.toLocaleString()} icon={Scissors} color="blue" suffix="pcs" subtitle="Fine cut completed" />
-          <MetricCard title="Total NG" value={totalNg.toLocaleString()} icon={AlertCircle} color="rose" suffix="pcs" subtitle="Not good pieces" />
+          {/* ✅ FIX 3A: Metric Cards dengan label sets dan subtitle pieces */}
+          <MetricCard 
+            title="Total Target" 
+            value={totalSupplySets.toLocaleString()} 
+            icon={Package} 
+            color="orange" 
+            suffix="sets" 
+            subtitle={`${totalSupplyPieces.toLocaleString()} patterns (${totalSupplySets} sets × ${ops[0]?.line?.patternMultiplier || 4} patterns)`} 
+          />
+          <MetricCard 
+            title="Processed" 
+            value={totalCutSets.toLocaleString()} 
+            icon={Scissors} 
+            color="blue" 
+            suffix="sets" 
+            subtitle={`${totalCutPieces.toLocaleString()} patterns checked`} 
+          />
+          <MetricCard 
+            title="Total NG" 
+            value={totalNgSets.toLocaleString()} 
+            icon={AlertCircle} 
+            color="rose" 
+            suffix="sets" 
+            subtitle={`${totalNgPieces.toLocaleString()} patterns rejected`} 
+          />
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg">
             <div className="flex items-center justify-between mb-2">
               <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Overall Progress</div>
@@ -9216,348 +9353,6 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
 };
 </file>
 
-<file path="frontend/src/types/production.ts">
-// ==========================================
-// 1. GLOBAL SYSTEM TYPES
-// ==========================================
-
-export type Theme = 'light' | 'dark' | 'system';
-
-export type StationCode =
-  | 'CUTTING_ENTAN'
-  | 'CUTTING_POND'
-  | 'CP'
-  | 'SEWING'
-  | 'QC'
-  | 'PACKING'
-  | 'FG'
-  | 'USER_MGMT'
-  | 'ROLE_MGMT'
-  | 'MASTER_OP'
-  | 'LINE_MASTER';
-
-// ==========================================
-// 2. CORE PRODUCTION (ALIGNED WITH PRISMA)
-// ==========================================
-
-export interface PatternProgress {
-  index: number;
-  name: string;
-  target: number;
-  good: number;
-  ng: number;
-  current: number;
-  completed: boolean;
-}
-
-export interface ProductionOrder {
-  id: string;
-  opNumber: string;
-  styleCode: string;
-  itemNumberFG: string;      // dari schema
-  itemNameFG?: string;       // dari schema
-  qtyOp: number;             // target quantity OP
-
-  // Cutting quantities
-  qtyEntan: number;          // total cut from external API
-  qtySentToPond: number;     // total sent to Pond (sum of batches)
-  qtyPond: number;           // actual pieces counted by Sparsha Pond
-  qtyPondNg?: number;        // not good pieces in Pond
-
-  // Check Panel quantities
-  qtyCP: number;             // total masuk CP (good + ng)
-  cpGoodQty: number;         // good after Check Panel
-  cpNgQty: number;           // ng after Check Panel
-  allPatternsCompleted?: boolean;
-
-  // Sewing quantities
-  qtySewingIn: number;       // input to Sewing (start)
-  qtySewingOut: number;      // output from Sewing (finish)
-
-  // Quality Control quantities
-  qtyQC: number;             // good after QC
-  qcNgQty: number;           // ng after QC
-
-  // Packing & Finished Goods
-  qtyPacking: number;        // packed quantity
-  qtyFG: number;             // finished goods stock in
-
-  status: string;            // WIP, DONE, HOLD
-  currentStation: StationCode | string; // current station code
-
-  // Optional QR Code (generated at Cutting Entan)
-  qrCode?: string;
-  qrCodePacking?: string;    // untuk packing
-
-  // Per‑pattern progress (for Cutting Pond only)
-  patterns?: PatternProgress[];
-
-  // Metadata
-  createdAt?: string;
-  updatedAt?: string;
-
-  // Computed fields (optional, for UI)
-  progress_pct?: number;
-  last_sync_timestamp?: string;
-
-  lineCode?: string;                // tambah
-  setsReadyForSewing?: number;      // tambah
-}
-
-export type OpStatus = 'SCHEDULED' | 'WIP' | 'COMPLETED' | 'HOLD' | 'CLOSED_FG';
-
-// ==========================================
-// 3. MASTER DATA (PATTERN CONFIG)
-// ==========================================
-
-export interface PatternPart {
-  name: string;    // Nama Pola (e.g. Sandaran)
-  imgGood: string; // Filename (e.g. k1yh_1_good.png)
-  imgNg: string;   // Filename (e.g. k1yh_1_ng.png)
-}
-
-export interface PatternMaster {
-  id: string;
-  styleCode: string;       // Key: K1YH (First 4 chars of OP)
-  patterns: PatternPart[]; // Array of Objects with Images
-
-  // Set Images (Global/Full View for QC)
-  imgSetGood?: string;
-  imgSetNg?: string;
-
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-// ==========================================
-// 4. USER & SYSTEM MANAGEMENT
-// ==========================================
-
-export interface UserData {
-  id: string;
-  username: string;
-  fullName: string;
-  email: string;
-  role: string;
-  roleId?: string;
-  department: string;
-  departmentId?: string;
-  jobTitle: string;
-  jobTitleId?: string;
-  status: 'ACTIVE' | 'INACTIVE';
-  lastLogin: string;
-  avatarSeed: string;
-  lineCode?: string;
-  allowedStations?: string[];
-}
-
-export interface RoleData {
-  id: string;
-  name: string;
-  description: string;
-  userCount: number;
-  permissions: string[];
-}
-
-export interface DepartmentData {
-  id: string;
-  code: string;
-  name: string;
-}
-
-export interface JobTitleData {
-  id: string;
-  name: string;
-}
-
-// ==========================================
-// 5. SUPPORTING FLOW (NG HANDLERS)
-// ==========================================
-
-export interface MaterialRequest {
-  id: string; // reqNo
-  req_date: string;
-  op_number: string;
-  part_name: string;
-  qty_needed: number;
-  reason: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUPPLIED';
-  requester: string;
-}
-
-export interface OpReplacement {
-  id: string; // reqNo
-  req_date: string;
-  original_op: string;
-  new_op_identity: string;
-  qty: number;
-  reason_ng: string;
-  status: 'DRAFT' | 'SUBMITTED' | 'PPIC_APPROVED' | 'RELEASED' | 'REJECTED';
-  qc_inspector: string;
-}
-
-export interface NgReason {
-  id: string;
-  category: 'MATERIAL' | 'PROCESS' | 'MACHINE';
-  label: string;
-}
-
-// ==========================================
-// 6. INVENTORY & ALERTS
-// ==========================================
-
-export interface FgStock {
-  id: string;
-  fgNumber: string;
-  styleCode: string;
-  description?: string;
-  totalStock: number;
-  totalBoxes: number;
-  availableStock: number;
-  warehouse: string;
-  shelfLocation?: string;
-  lastUpdated: string;
-}
-
-export interface FgStockItem {
-  id: string;
-  fgId: string;
-  opId: string;
-  opNumber?: string;
-  qty: number;
-  createdAt: string;
-}
-
-export interface Shipment {
-  id: string;
-  shippingNo: string;
-  shippingDate: string;
-  customerName?: string;
-  fgNumber: string;
-  styleCode: string;
-  qty: number;
-  status: 'DRAFT' | 'SHIPPED' | 'DELIVERED';
-  createdBy?: string;
-  items?: ShipmentItem[];
-}
-
-export interface ShipmentItem {
-  id: string;
-  shipmentId: string;
-  opId: string;
-  opNumber?: string;
-  qty: number;
-}
-
-export interface FgScanEvent {
-  time: string;
-  status: 'OK' | 'ERROR';
-  message: string;
-  box_id?: string;
-}
-
-export interface AlertItem {
-  id: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  message: string;
-  station_code: StationCode;
-  timestamp: string;
-}
-
-// ==========================================
-// 7. CUTTING BATCH
-// ==========================================
-
-export interface CuttingBatch {
-  id: string;
-  batchNumber: number;
-  qty: number;
-  qrCode: string;
-  createdAt: string;
-  printed: boolean;
-  opNumber?: string;
-  itemNumberFG?: string;
-}
-
-// ==========================================
-// 8. LINE MASTER
-// ==========================================
-
-export interface LineStation {
-  code: string;
-  name: string;
-  required: boolean;
-  deviceType: string;
-}
-
-export interface LineMaster {
-  id: string;
-  code: string;
-  name: string;
-  description?: string;
-  patternMultiplier: number;
-  stations: LineStation[];
-  createdAt: string;
-  updatedAt: string;
-  userCount?: number;
-  productionOrders?: ProductionOrder[];
-}
-
-// ==========================================
-// 9. DASHBOARD COMPREHENSIVE (REAL DATA)
-// ==========================================
-export interface DashboardComprehensive {
-  kpi: {
-    totalOps: number;
-    todayOutput: number;
-    totalWip: number;
-    overallEfficiency: number;
-    defectRate: number;
-    onTimeDelivery: number;
-    targetOutput: number;
-    achievement: number;
-  };
-  hourlyProduction: Array<{ 
-    hour: string; 
-    output: number;
-    target: number;
-  }>;
-  statusDistribution: Array<{ 
-    status: string; 
-    count: number; 
-  }>;
-  slowMovingOps: Array<{ 
-    opNumber: string; 
-    currentStation: string; 
-    hoursInStation: number; 
-  }>;
-  recentActivities: Array<{ 
-    time: string; 
-    opNumber: string; 
-    station: string; 
-    action: string; 
-    qty: number; 
-  }>;
-  lineSummaries: Array<{ 
-    lineCode: string; 
-    output: number; 
-    efficiency: number; 
-    defectRate: number;
-    target: number;
-  }>;
-  stationFlow: Array<{           // 🔥 NEW: Station flow progress
-    station: string;
-    count: number;
-    wipQty: number;
-    progress: number;
-  }>;
-  qualityTrend: Array<{          // 🔥 NEW: 7-day quality trend
-    date: string;
-    defectRate: number;
-  }>;
-}
-</file>
-
 <file path="backend/src/check-panel/check-panel.service.ts">
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9607,9 +9402,14 @@ export class CheckPanelService {
       const currentNg = existing?.ng ?? 0;
       const newTotal = currentGood + currentNg + good + ng;
 
-      if (newTotal > op.qtyEntan) {
+      // ✅ Validasi menggunakan qtyCP (jumlah sets dari Cutting Pond)
+      if (op.qtyCP <= 0) {
+        throw new BadRequestException('OP has not been transferred from Cutting Pond yet');
+      }
+
+      if (newTotal > op.qtyCP) {
         throw new BadRequestException(
-          `Cannot exceed target ${op.qtyEntan}. Current: ${currentGood + currentNg}, adding: ${good + ng}`
+          `Cannot exceed target ${op.qtyCP} sets. Current: ${currentGood + currentNg}, adding: ${good + ng}`
         );
       }
 
@@ -9624,14 +9424,13 @@ export class CheckPanelService {
       await tx.productionOrder.update({
         where: { id: opId },
         data: {
-          qtyCP: { increment: good + ng },
-          cpGoodQty: { increment: good },
-          cpNgQty: { increment: ng },
+          // ❌ HAPUS increment qtyCP - qtyCP sudah fixed saat transfer dari Pond
+          cpGoodQty: { increment: good },  // ✅ Hanya ini yang increment
+          cpNgQty: { increment: ng },      // ✅ Hanya ini yang increment
         },
       });
 
       // 3. Upsert ke CheckPanelInspection
-      const completed = newTotal >= op.qtyEntan;
 
       await tx.checkPanelInspection.upsert({
         where: { opId_patternIndex: { opId, patternIndex } },
@@ -9667,7 +9466,7 @@ export class CheckPanelService {
         where: { opId },
       });
       if (allInspections.length > 0) {
-        const allCompleted = allInspections.every(i => (i.good + i.ng) >= op.qtyEntan);
+        const allCompleted = allInspections.every(i => (i.good + i.ng) >= op.qtyCP); // ✅ Gunakan qtyCP
         if (allCompleted) {
           const setsReady = Math.min(...allInspections.map(i => i.good));
           await tx.productionOrder.update({
@@ -9807,16 +9606,65 @@ export class IotController {
     const device = await this.prisma.iotDevice.findUnique({
       where: { deviceId: body.deviceId },
     });
+    
     if (!device) throw new NotFoundException('Device not registered');
-
+    
     if (device.station === 'CP') {
-      return this.productionEngine.cpScan(body.qrCode, body.qty || 1);
+      // ✅ Dhristi di station CP bisa untuk 2 fungsi:
+      // 1. Transfer dari Pond ke CP (jika OP masih di Pond tapi readyForCP = true)
+      // 2. Inspect di CP (jika OP sudah di CP)
+      return this.productionEngine.pondToCPTransfer(body.qrCode, body.qty || 1);
     } else if (device.station === 'SEWING') {
-      // 🔥 Panggil method baru untuk pengiriman parsial dari Check Panel ke Sewing
+      // 🔥 Panggil method untuk pengiriman parsial dari Check Panel ke Sewing
       return this.productionEngine.sendToSewingFromScan(body.qrCode, body.qty || 1);
     } else {
       throw new NotFoundException('Unsupported station for scanner');
     }
+  }
+}
+</file>
+
+<file path="frontend/package.json">
+{
+  "name": "nextg-frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.17",
+    "@types/node": "^20.11.5",
+    "@types/react-router-dom": "^5.3.3",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.555.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^6.30.3",
+    "recharts": "^3.8.0",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "autoprefixer": "^10.4.22",
+    "baseline-browser-mapping": "^2.10.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.17",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.4",
+    "vite": "^7.2.4"
   }
 }
 </file>
@@ -10650,1003 +10498,346 @@ export const UserManagementView = () => {
 };
 </file>
 
-<file path="backend/src/production-orders/production-orders.controller.ts">
-import { Controller, Get, Post, Body, Param, Delete, Query } from '@nestjs/common';
-import { ProductionOrdersService } from './production-orders.service';
+<file path="frontend/src/types/production.ts">
+// ==========================================
+// 1. GLOBAL SYSTEM TYPES
+// ==========================================
 
-@Controller('production-orders')
-export class ProductionOrdersController {
-  constructor(private readonly productionOrdersService: ProductionOrdersService) {}
+export type Theme = 'light' | 'dark' | 'system';
 
-  // =========================================================
-  // 1. ACTION ENDPOINTS
-  // =========================================================
+export type StationCode =
+  | 'CUTTING_ENTAN'
+  | 'CUTTING_POND'
+  | 'CP'
+  | 'SEWING'
+  | 'QC'
+  | 'PACKING'
+  | 'FG'
+  | 'USER_MGMT'
+  | 'ROLE_MGMT'
+  | 'MASTER_OP'
+  | 'LINE_MASTER';
 
-  @Post('sync')
-  syncData() {
-    return this.productionOrdersService.syncExternalData();
-  }
+// ==========================================
+// 2. CORE PRODUCTION (ALIGNED WITH PRISMA)
+// ==========================================
 
-  @Post('simulate')
-  createSimulation(@Body() dto: any) {
-    return this.productionOrdersService.createSimulation(dto);
-  }
-
-  @Delete('reset-all-data')
-  resetData() {
-    return this.productionOrdersService.resetSystemData();
-  }
-
-  // =========================================================
-  // 2. CUTTING QUEUE ENDPOINTS (NEW)
-  // =========================================================
-
-  @Get('cutting-entan/queue')
-  async getCuttingEntanQueue() {
-    return this.productionOrdersService.findActiveForStation('CUTTING_ENTAN');
-  }
-
-  @Get('cutting-pond/queue')
-  async getCuttingPondQueue() {
-    return this.productionOrdersService.findActiveForStation('CUTTING_POND');
-  }
-
-  // =========================================================
-  // 3. STATS & QUERY
-  // =========================================================
-
-  @Get('dashboard-stats')
-  getDashboardStats() {
-    return this.productionOrdersService.getDashboardStats();
-  }
-
-  @Get('dashboard-comprehensive')
-  async getDashboardComprehensive() {
-    return this.productionOrdersService.getDashboardComprehensive();
-  }
-
-  @Get()
-  findAll(
-    @Query('station') station?: string,
-    @Query('view') view?: string,
-    @Query('includeProgress') includeProgress?: string, // tambah
-  ) {
-    if (station) {
-      if (view === 'history') {
-        return this.productionOrdersService.findHistoryForStation(station);
-      }
-      // Ubah pemanggilan method dengan parameter includeProgress
-      return this.productionOrdersService.findActiveForStation(station, includeProgress === 'true');
-    }
-
-    return this.productionOrdersService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.productionOrdersService.findOne(id);
-  }
-
-  // =========================================================
-  // 4. PATTERN PROGRESS ENDPOINT (NEW)
-  // =========================================================
-  @Get(':id/pattern-progress')
-  async getPatternProgress(@Param('id') id: string) {
-    return this.productionOrdersService.getPatternProgress(id);
-  }
-
-  // =========================================================
-  // 5. CHECK PANEL INSPECTIONS ENDPOINT (ADDED)
-  // =========================================================
-  @Get(':id/check-panel-inspections')
-  async getCheckPanelInspections(@Param('id') id: string) {
-    return this.productionOrdersService.getCheckPanelInspections(id);
-  }
-
-  // =========================================================
-  // 6. SEWING PROGRESS ENDPOINT (ADDED)
-  // =========================================================
-  @Get(':id/sewing-progress')
-  async getSewingProgress(@Param('id') id: string) {
-    return this.productionOrdersService.getSewingProgress(id);
-  }
-
-  // =========================================================
-  // 7. QC INSPECTION ENDPOINTS (ADDED)
-  // =========================================================
-  @Post(':id/qc-inspect')
-  async qcInspect(
-    @Param('id') id: string,
-    @Body() body: { good: number; ng: number; ngReasons?: string[] }
-  ) {
-    return this.productionOrdersService.qcInspect(id, body);
-  }
-
-  @Get(':id/qc-inspections')
-  async getQcInspections(@Param('id') id: string) {
-    return this.productionOrdersService.getQcInspections(id);
-  }
+export interface PatternProgress {
+  index: number;
+  name: string;
+  target: number;
+  good: number;
+  ng: number;
+  current: number;
+  completed: boolean;
 }
-</file>
 
-<file path="frontend/src/features/dashboard/DashboardView.tsx">
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  Activity, Layers, Shirt, RefreshCw,
-  TrendingUp, Clock, Gauge,
-  Cpu, BarChart, PieChart as PieChartIcon,
-  List, AlertTriangle, CheckCircle,
-  Filter, Download, Maximize2, Minimize2,
-  MoreHorizontal, Target, Package, AlertOctagon,
-  TrendingDown, Users, AlertCircle, X, Factory
-} from 'lucide-react';
-import {
-  XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, PieChart, Pie, Cell,
-  ResponsiveContainer,
-  AreaChart, Area, ComposedChart, Bar, Line
-} from 'recharts';
-import type { DashboardComprehensive } from '../../types/production';
+export interface ProductionOrder {
+  id: string;
+  opNumber: string;
+  styleCode: string;
+  itemNumberFG: string;      // dari schema
+  itemNameFG?: string;       // dari schema
+  qtyOp: number;             // target quantity OP
 
-const API_BASE_URL = 'http://localhost:3000';
+  // Cutting quantities
+  qtyEntan: number;          // total cut from external API
+  qtySentToPond: number;     // total sent to Pond (sum of batches)
+  qtyPond: number;           // actual pieces counted by Sparsha Pond
+  qtyPondNg?: number;        // not good pieces in Pond
 
-// ==========================================
-// COLOR PALETTE
-// ==========================================
-const CHART_COLORS = {
-  primary: '#3b82f6',
-  success: '#10b981',
-  warning: '#f59e0b',
-  danger: '#ef4444',
-  purple: '#8b5cf6',
-  gray: '#64748b',
-  info: '#06b6d4',
-};
+  // Check Panel quantities
+  qtyCP: number;             // total masuk CP (good + ng)
+  cpGoodQty: number;         // good after Check Panel
+  cpNgQty: number;           // ng after Check Panel
+  allPatternsCompleted?: boolean;
 
-const STATUS_COLORS: Record<string, string> = {
-  'WIP': '#3b82f6',
-  'DONE': '#10b981',
-  'HOLD': '#f59e0b',
-};
+  // Sewing quantities
+  qtySewingIn: number;       // input to Sewing (start)
+  qtySewingOut: number;      // output from Sewing (finish)
 
-const STATION_COLORS: Record<string, string> = {
-  'CUTTING_ENTAN': '#f97316',
-  'CUTTING_POND': '#f59e0b',
-  'CP': '#10b981',
-  'SEWING': '#8b5cf6',
-  'QC': '#ef4444',
-  'PACKING': '#3b82f6',
-  'FG': '#06b6d4',
-};
+  // Quality Control quantities
+  qtyQC: number;             // good after QC
+  qcNgQty: number;           // ng after QC
 
-const GRADIENTS = {
-  blue: 'from-blue-500 via-blue-400 to-cyan-400',
-  emerald: 'from-emerald-500 via-emerald-400 to-teal-400',
-  amber: 'from-amber-500 via-amber-400 to-orange-400',
-  rose: 'from-rose-500 via-rose-400 to-pink-400',
-  purple: 'from-purple-500 via-purple-400 to-violet-400',
-  indigo: 'from-indigo-500 via-indigo-400 to-blue-400',
-};
+  // Packing & Finished Goods
+  qtyPacking: number;        // packed quantity
+  qtyFG: number;             // finished goods stock in
+
+  status: string;            // WIP, DONE, HOLD
+  currentStation: StationCode | string; // current station code
+
+  // Optional QR Code (generated at Cutting Entan)
+  qrCode?: string;
+  qrCodePacking?: string;    // untuk packing
+
+  // Per‑pattern progress (for Cutting Pond only)
+  patterns?: PatternProgress[];
+
+  // Metadata
+  createdAt?: string;
+  updatedAt?: string;
+
+  // Computed fields (optional, for UI)
+  progress_pct?: number;
+  last_sync_timestamp?: string;
+
+  lineCode?: string;                // tambah
+  setsReadyForSewing?: number;      // tambah
+}
+
+export type OpStatus = 'SCHEDULED' | 'WIP' | 'COMPLETED' | 'HOLD' | 'CLOSED_FG';
 
 // ==========================================
-// KPI CARD COMPONENT
+// 3. MASTER DATA (PATTERN CONFIG)
 // ==========================================
-const KpiCard = ({
-  title,
-  value,
-  icon: Icon,
-  color = 'blue',
-  subtitle,
-  suffix,
-  trend,
-  trendDirection = 'up',
-  sparklineData,
-  loading = false,
-  delay = 0
-}: any) => {
-  const colorMap: Record<string, {
-    gradient: string;
-    iconBg: string;
-    text: string;
-    lightBg: string;
-    border: string;
-    glow: string;
-  }> = {
-    blue: {
-      gradient: GRADIENTS.blue,
-      iconBg: 'bg-blue-50 dark:bg-blue-900/20',
-      text: 'text-blue-600 dark:text-blue-400',
-      lightBg: 'bg-gradient-to-br from-blue-50/80 to-transparent dark:from-blue-950/30',
-      border: 'border-blue-200/50 dark:border-blue-800/30',
-      glow: 'shadow-blue-500/10',
-    },
-    emerald: {
-      gradient: GRADIENTS.emerald,
-      iconBg: 'bg-emerald-50 dark:bg-emerald-900/20',
-      text: 'text-emerald-600 dark:text-emerald-400',
-      lightBg: 'bg-gradient-to-br from-emerald-50/80 to-transparent dark:from-emerald-950/30',
-      border: 'border-emerald-200/50 dark:border-emerald-800/30',
-      glow: 'shadow-emerald-500/10',
-    },
-    amber: {
-      gradient: GRADIENTS.amber,
-      iconBg: 'bg-amber-50 dark:bg-amber-900/20',
-      text: 'text-amber-600 dark:text-amber-400',
-      lightBg: 'bg-gradient-to-br from-amber-50/80 to-transparent dark:from-amber-950/30',
-      border: 'border-amber-200/50 dark:border-amber-800/30',
-      glow: 'shadow-amber-500/10',
-    },
-    rose: {
-      gradient: GRADIENTS.rose,
-      iconBg: 'bg-rose-50 dark:bg-rose-900/20',
-      text: 'text-rose-600 dark:text-rose-400',
-      lightBg: 'bg-gradient-to-br from-rose-50/80 to-transparent dark:from-rose-950/30',
-      border: 'border-rose-200/50 dark:border-rose-800/30',
-      glow: 'shadow-rose-500/10',
-    },
-    purple: {
-      gradient: GRADIENTS.purple,
-      iconBg: 'bg-purple-50 dark:bg-purple-900/20',
-      text: 'text-purple-600 dark:text-purple-400',
-      lightBg: 'bg-gradient-to-br from-purple-50/80 to-transparent dark:from-purple-950/30',
-      border: 'border-purple-200/50 dark:border-purple-800/30',
-      glow: 'shadow-purple-500/10',
-    },
-    indigo: {
-      gradient: GRADIENTS.indigo,
-      iconBg: 'bg-indigo-50 dark:bg-indigo-900/20',
-      text: 'text-indigo-600 dark:text-indigo-400',
-      lightBg: 'bg-gradient-to-br from-indigo-50/80 to-transparent dark:from-indigo-950/30',
-      border: 'border-indigo-200/50 dark:border-indigo-800/30',
-      glow: 'shadow-indigo-500/10',
-    },
+
+export interface PatternPart {
+  name: string;    // Nama Pola (e.g. Sandaran)
+  imgGood: string; // Filename (e.g. k1yh_1_good.png)
+  imgNg: string;   // Filename (e.g. k1yh_1_ng.png)
+}
+
+export interface PatternMaster {
+  id: string;
+  styleCode: string;       // Key: K1YH (First 4 chars of OP)
+  patterns: PatternPart[]; // Array of Objects with Images
+
+  // Set Images (Global/Full View for QC)
+  imgSetGood?: string;
+  imgSetNg?: string;
+
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ==========================================
+// 4. USER & SYSTEM MANAGEMENT
+// ==========================================
+
+export interface UserData {
+  id: string;
+  username: string;
+  fullName: string;
+  email: string;
+  role: string;
+  roleId?: string;
+  department: string;
+  departmentId?: string;
+  jobTitle: string;
+  jobTitleId?: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  lastLogin: string;
+  avatarSeed: string;
+  lineCode?: string;
+  allowedStations?: string[];
+}
+
+export interface RoleData {
+  id: string;
+  name: string;
+  description: string;
+  userCount: number;
+  permissions: string[];
+}
+
+export interface DepartmentData {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface JobTitleData {
+  id: string;
+  name: string;
+}
+
+// ==========================================
+// 5. SUPPORTING FLOW (NG HANDLERS)
+// ==========================================
+
+export interface MaterialRequest {
+  id: string; // reqNo
+  req_date: string;
+  op_number: string;
+  part_name: string;
+  qty_needed: number;
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUPPLIED';
+  requester: string;
+}
+
+export interface OpReplacement {
+  id: string; // reqNo
+  req_date: string;
+  original_op: string;
+  new_op_identity: string;
+  qty: number;
+  reason_ng: string;
+  status: 'DRAFT' | 'SUBMITTED' | 'PPIC_APPROVED' | 'RELEASED' | 'REJECTED';
+  qc_inspector: string;
+}
+
+export interface NgReason {
+  id: string;
+  category: 'MATERIAL' | 'PROCESS' | 'MACHINE';
+  label: string;
+}
+
+// ==========================================
+// 6. INVENTORY & ALERTS
+// ==========================================
+
+export interface FgStock {
+  id: string;
+  fgNumber: string;
+  styleCode: string;
+  description?: string;
+  totalStock: number;
+  totalBoxes: number;
+  availableStock: number;
+  warehouse: string;
+  shelfLocation?: string;
+  lastUpdated: string;
+}
+
+export interface FgStockItem {
+  id: string;
+  fgId: string;
+  opId: string;
+  opNumber?: string;
+  qty: number;
+  createdAt: string;
+}
+
+export interface Shipment {
+  id: string;
+  shippingNo: string;
+  shippingDate: string;
+  customerName?: string;
+  fgNumber: string;
+  styleCode: string;
+  qty: number;
+  status: 'DRAFT' | 'SHIPPED' | 'DELIVERED';
+  createdBy?: string;
+  items?: ShipmentItem[];
+}
+
+export interface ShipmentItem {
+  id: string;
+  shipmentId: string;
+  opId: string;
+  opNumber?: string;
+  qty: number;
+}
+
+export interface FgScanEvent {
+  time: string;
+  status: 'OK' | 'ERROR';
+  message: string;
+  box_id?: string;
+}
+
+export interface AlertItem {
+  id: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  message: string;
+  station_code: StationCode;
+  timestamp: string;
+}
+
+// ==========================================
+// 7. CUTTING BATCH
+// ==========================================
+
+export interface CuttingBatch {
+  id: string;
+  batchNumber: number;
+  qty: number;
+  qrCode: string;
+  createdAt: string;
+  printed: boolean;
+  opNumber?: string;
+  itemNumberFG?: string;
+}
+
+// ==========================================
+// 8. LINE MASTER
+// ==========================================
+
+export interface LineStation {
+  code: string;
+  name: string;
+  required: boolean;
+  deviceType: string;
+}
+
+export interface LineMaster {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  patternMultiplier: number;
+  stations: LineStation[];
+  createdAt: string;
+  updatedAt: string;
+  userCount?: number;
+  productionOrders?: ProductionOrder[];
+}
+
+// ==========================================
+// 9. DASHBOARD COMPREHENSIVE (REAL DATA)
+// ==========================================
+export interface DashboardComprehensive {
+  kpi: {
+    totalOps: number;
+    todayOutput: number;
+    totalWip: number;
+    overallEfficiency: number;
+    defectRate: number;
+    onTimeDelivery: number;
+    targetOutput: number;
+    achievement: number;
   };
-  const colors = colorMap[color] || colorMap.blue;
-
-  if (loading) {
-    return (
-      <div
-        className="bg-white dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6 shadow-lg animate-pulse"
-        style={{ animationDelay: `${delay}ms` }}
-      >
-        <div className="h-4 w-24 bg-slate-200 dark:bg-slate-700 rounded mb-4" />
-        <div className="h-8 w-32 bg-slate-200 dark:bg-slate-700 rounded mb-2" />
-        <div className="h-3 w-16 bg-slate-200 dark:bg-slate-700 rounded" />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={`group relative bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border ${colors.border} p-6 shadow-lg ${colors.glow} hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 hover:scale-[1.02] overflow-hidden`}
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div className={`absolute inset-0 ${colors.lightBg} opacity-0 group-hover:opacity-100 transition-opacity duration-700`} />
-      <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br ${colors.gradient} opacity-0 group-hover:opacity-10 rounded-bl-full transition-opacity duration-500`} />
-
-      <div className="relative">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{title}</span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-black bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
-                {typeof value === 'number' ? value.toLocaleString() : value}
-              </span>
-              {suffix && <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{suffix}</span>}
-            </div>
-          </div>
-          <div className={`p-3.5 rounded-2xl ${colors.iconBg} ${colors.text} shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
-            <Icon size={22} strokeWidth={2} />
-          </div>
-        </div>
-
-        {(subtitle || trend) && (
-          <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
-            {subtitle && (
-              <span className="text-sm font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
-                {subtitle}
-              </span>
-            )}
-            {trend && (
-              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
-                trendDirection === 'up' 
-                  ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' 
-                  : 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400'
-              }`}>
-                {trendDirection === 'up' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                <span>{trend}</span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// ==========================================
-// STATION FLOW COMPONENT
-// ==========================================
-const StationFlow = ({ data }: { data: Array<{ station: string; count: number; wipQty: number; progress: number }> }) => {
-  const stationOrder = ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'];
-  const stationLabels: Record<string, string> = {
-    'CUTTING_ENTAN': 'Cutting Entan',
-    'CUTTING_POND': 'Cutting Pond',
-    'CP': 'Check Panel',
-    'SEWING': 'Sewing',
-    'QC': 'Quality Control',
-    'PACKING': 'Packing',
-    'FG': 'Finished Goods',
-  };
-
-  const sortedData = [...data].sort((a, b) => {
-    const aIndex = stationOrder.indexOf(a.station);
-    const bIndex = stationOrder.indexOf(b.station);
-    return (aIndex === -1 ? 99 : aIndex) - (bIndex === -1 ? 99 : bIndex);
-  });
-
-  return (
-    <div className="space-y-3">
-      {sortedData.map((station, idx) => (
-        <div key={station.station} className="relative">
-          <div className="flex justify-between text-sm mb-1">
-            <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-              <span 
-                className="w-3 h-3 rounded-full" 
-                style={{ backgroundColor: STATION_COLORS[station.station] || CHART_COLORS.gray }}
-              />
-              {stationLabels[station.station] || station.station}
-            </span>
-            <span className="text-slate-500 dark:text-slate-400">
-              {station.count} OPs • {station.wipQty.toLocaleString()} pcs
-            </span>
-          </div>
-          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-1000"
-              style={{ 
-                width: `${Math.min((station.count / Math.max(...data.map(d => d.count))) * 100, 100)}%`,
-                backgroundColor: STATION_COLORS[station.station] || CHART_COLORS.gray
-              }}
-            />
-          </div>
-        </div>
-      ))}
-      {data.length === 0 && (
-        <div className="text-center py-8 text-slate-400">
-          <Factory size={32} className="mx-auto mb-2 opacity-50" />
-          <p>No station data available</p>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ==========================================
-// SKELETON LOADING
-// ==========================================
-const DashboardSkeleton = () => (
-  <div className="space-y-6">
-    <div className="h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6 animate-pulse" />
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-      {[...Array(6)].map((_, i) => (
-        <div key={i} className="h-44 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6" />
-      ))}
-    </div>
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {[...Array(2)].map((_, i) => (
-        <div key={i} className="h-96 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6">
-          <div className="h-7 w-52 bg-slate-200/80 dark:bg-slate-800/80 rounded-xl mb-6" />
-          <div className="h-72 bg-slate-100/80 dark:bg-slate-800/50 rounded-2xl" />
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
-// ==========================================
-// TABLE COMPONENTS
-// ==========================================
-const TableRow = ({ children, hover = true }: { children: React.ReactNode; hover?: boolean }) => (
-  <tr className={`border-b border-slate-100/60 dark:border-slate-800/60 ${hover ? 'hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors' : ''}`}>
-    {children}
-  </tr>
-);
-
-const Badge = ({ children, variant = 'default', size = 'md' }: { children: React.ReactNode; variant?: 'default' | 'success' | 'warning' | 'danger' | 'info'; size?: 'sm' | 'md' }) => {
-  const variants = {
-    default: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-    success: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-    warning: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-    danger: 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
-    info: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  };
-  const sizes = {
-    sm: 'px-2 py-0.5 text-xs',
-    md: 'px-2.5 py-1 text-xs',
-  };
-  return (
-    <span className={`inline-flex items-center font-semibold rounded-full ${variants[variant]} ${sizes[size]} shadow-sm`}>
-      {children}
-    </span>
-  );
-};
-
-const SectionHeader = ({ icon: Icon, title, subtitle, action, color = 'blue' }: any) => {
-  const colorClasses = {
-    blue: 'text-blue-500',
-    emerald: 'text-emerald-500',
-    amber: 'text-amber-500',
-    rose: 'text-rose-500',
-    purple: 'text-purple-500',
-  };
-  return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <div className={`p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 ${colorClasses[color as keyof typeof colorClasses]}`}>
-          <Icon size={20} strokeWidth={2} />
-        </div>
-        <div>
-          <h3 className="text-base font-bold text-slate-900 dark:text-white">{title}</h3>
-          {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>}
-        </div>
-      </div>
-      {action}
-    </div>
-  );
-};
-
-// ==========================================
-// CUSTOM TOOLTIP FOR CHARTS
-// ==========================================
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-slate-900/95 backdrop-blur-xl text-white p-4 rounded-xl border border-slate-700 shadow-2xl">
-        <p className="text-sm font-semibold mb-2">{label}</p>
-        {payload.map((entry: any, index: number) => (
-          <p key={index} className="text-sm font-bold" style={{ color: entry.color }}>
-            {entry.name}: {entry.value.toLocaleString()}
-          </p>
-        ))}
-      </div>
-    );
-  }
-  return null;
-};
-
-// ==========================================
-// MAIN DASHBOARD COMPONENT
-// ==========================================
-export const DashboardView = () => {
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<DashboardComprehensive | null>(null);
-  const [lastUpdate, setLastUpdate] = useState('');
-  const [selectedLine, setSelectedLine] = useState('all');
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
-
-  // ==========================================
-  // FETCH DATA
-  // ==========================================
-  const fetchData = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/production-orders/dashboard-comprehensive`);
-      if (res.ok) {
-        const json: DashboardComprehensive = await res.json();
-        setData(json);
-        setLastUpdate(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-      }
-    } catch (e) {
-      console.error('Failed to load dashboard stats:', e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
-
-  useEffect(() => {
-    const isDark = document.documentElement.classList.contains('dark');
-    setIsDarkMode(isDark);
-  }, []);
-
-  // ==========================================
-  // MEMOIZED DATA
-  // ==========================================
-  const filteredLineSummaries = useMemo(() => {
-    if (!data?.lineSummaries) return [];
-    if (selectedLine === 'all') return data.lineSummaries;
-    return data.lineSummaries.filter(line => line.lineCode === selectedLine);
-  }, [data, selectedLine]);
-
-  const sparklineData = useMemo(() => {
-    if (!data?.hourlyProduction) return [];
-    return data.hourlyProduction.map(h => ({ value: h.output }));
-  }, [data]);
-
-  // ==========================================
-  // FULLSCREEN TOGGLE
-  // ==========================================
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-        setIsFullscreen(false);
-      }
-    }
-  };
-
-  // ==========================================
-  // LOADING STATE
-  // ==========================================
-  if (loading && !data) {
-    return <DashboardSkeleton />;
-  }
-
-  const kpi = data?.kpi || {
-    totalOps: 0,
-    todayOutput: 0,
-    totalWip: 0,
-    overallEfficiency: 0,
-    defectRate: 0,
-    onTimeDelivery: 0,
-    targetOutput: 0,
-    achievement: 0,
-  };
-
-  const statusDistribution = data?.statusDistribution || [];
-  const stationFlow = data?.stationFlow || [];
-
-  // ==========================================
-  // RENDER
-  // ==========================================
-  return (
-    <div className={`w-full min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 transition-all duration-500 ${isFullscreen ? 'pt-0' : 'px-4 py-8'}`}>
-      
-      {/* ==========================================
-          HEADER
-      ========================================== */}
-      <div className={`bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6 shadow-xl mb-6 ${isFullscreen ? 'rounded-none border-x-0 border-t-0' : ''}`}>
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg shadow-blue-500/30">
-              <Cpu size={28} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">Production Dashboard</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Real-time Manufacturing Intelligence</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2.5 px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-full border border-emerald-200/50 dark:border-emerald-800/30">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/50" />
-              </span>
-              <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">Live Monitoring</span>
-            </div>
-
-            <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800/50 rounded-full border border-slate-200/50 dark:border-slate-700/50">
-              <Clock size={16} className="text-slate-400" />
-              <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                Last sync: <span className="font-bold text-slate-900 dark:text-white">{lastUpdate || '—'}</span>
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative group">
-              <select
-                value={selectedLine}
-                onChange={(e) => setSelectedLine(e.target.value)}
-                className="appearance-none bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl pl-4 pr-12 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer shadow-sm"
-              >
-                <option value="all">📊 All Production Lines</option>
-                {data?.lineSummaries?.map(line => (
-                  <option key={line.lineCode} value={line.lineCode}>🏭 {line.lineCode}</option>
-                ))}
-              </select>
-              <Filter size={18} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-hover:text-blue-500 transition-colors" />
-            </div>
-
-            <button
-              onClick={fetchData}
-              disabled={refreshing}
-              className="group p-3 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-blue-400 dark:hover:border-blue-500 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
-              title="Refresh data"
-            >
-              <RefreshCw size={20} className={`${refreshing ? 'animate-spin text-blue-500' : 'text-slate-600 dark:text-slate-400 group-hover:text-blue-500'} transition-colors`} />
-            </button>
-
-            <button
-              onClick={toggleFullscreen}
-              className="group p-3 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-blue-400 dark:hover:border-blue-500 transition-all hover:scale-105 active:scale-95 shadow-sm hover:shadow-md"
-              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-            >
-              {isFullscreen ? (
-                <Minimize2 size={20} className="text-slate-600 dark:text-slate-400 group-hover:text-blue-500 transition-colors" />
-              ) : (
-                <Maximize2 size={20} className="text-slate-600 dark:text-slate-400 group-hover:text-blue-500 transition-colors" />
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ==========================================
-          ROW 1: KPI CARDS (6 cards)
-      ========================================== */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-        <KpiCard
-          title="Total POs"
-          value={kpi.totalOps || 0}
-          icon={Layers}
-          color="blue"
-          subtitle="All statuses"
-          loading={loading}
-          delay={0}
-        />
-        <KpiCard
-          title="Today Output"
-          value={kpi.todayOutput || 0}
-          icon={Shirt}
-          color="emerald"
-          suffix="pcs"
-          trend={`${kpi.achievement || 0}%`}
-          trendDirection={kpi.achievement >= 100 ? 'up' : 'down'}
-          sparklineData={sparklineData}
-          loading={loading}
-          delay={100}
-        />
-        <KpiCard
-          title="Target"
-          value={kpi.targetOutput || 0}
-          icon={Target}
-          color="indigo"
-          suffix="pcs"
-          subtitle="Daily goal"
-          loading={loading}
-          delay={150}
-        />
-        <KpiCard
-          title="WIP"
-          value={kpi.totalWip || 0}
-          icon={Activity}
-          color="amber"
-          subtitle="In progress"
-          sparklineData={sparklineData.slice(2, 8)}
-          loading={loading}
-          delay={200}
-        />
-        <KpiCard
-          title="Defect Rate"
-          value={`${kpi.defectRate || 0}%`}
-          icon={AlertOctagon}
-          color="rose"
-          trend={`${(kpi.defectRate || 0) > 5 ? '+2%' : '-1%'}`}
-          trendDirection={(kpi.defectRate || 0) > 5 ? 'up' : 'down'}
-          loading={loading}
-          delay={300}
-        />
-        <KpiCard
-          title="Efficiency"
-          value={`${kpi.overallEfficiency || 0}%`}
-          icon={Gauge}
-          color="purple"
-          subtitle="Achievement"
-          loading={loading}
-          delay={400}
-        />
-      </div>
-
-      {/* ==========================================
-          ROW 2: STATION FLOW & STATUS DISTRIBUTION
-      ========================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Station Flow */}
-        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6 shadow-xl">
-          <SectionHeader 
-            icon={Factory} 
-            title="Station Flow Status" 
-            subtitle="WIP distribution across stations"
-            color="blue" 
-          />
-          <div className="mt-4">
-            <StationFlow data={stationFlow} />
-          </div>
-        </div>
-        
-        {/* Status Distribution */}
-        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6 shadow-xl">
-          <SectionHeader 
-            icon={PieChartIcon} 
-            title="PO Status Distribution" 
-            subtitle="Production order status"
-            color="purple" 
-          />
-          <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
-              <Pie
-                data={statusDistribution}
-                cx="50%"
-                cy="50%"
-                innerRadius={80}
-                outerRadius={110}
-                paddingAngle={3}
-                dataKey="count"
-                nameKey="status"
-                strokeWidth={0}
-              >
-                {statusDistribution.map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={STATUS_COLORS[entry.status] || CHART_COLORS.gray}
-                    className="hover:opacity-80 transition-opacity"
-                  />
-                ))}
-              </Pie>
-              <Tooltip content={<CustomTooltip />} />
-              <Legend
-                verticalAlign="bottom"
-                height={40}
-                iconType="circle"
-                iconSize={10}
-                formatter={(value) => (
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">{value}</span>
-                )}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* ==========================================
-          ROW 3: CHARTS
-      ========================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Hourly Production vs Target */}
-        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6 shadow-xl hover:shadow-2xl transition-all duration-300">
-          <SectionHeader 
-            icon={BarChart} 
-            title="Hourly Production vs Target" 
-            subtitle="Real-time gap analysis"
-            color="blue"
-            action={
-              <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all hover:scale-110">
-                <MoreHorizontal size={20} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" />
-              </button>
-            }
-          />
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={data?.hourlyProduction || []}>
-              <CartesianGrid strokeDasharray="3 3" stroke={isDarkMode ? '#334155' : '#e2e8f0'} opacity={0.5} />
-              <XAxis 
-                dataKey="hour" 
-                tick={{ fill: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 12 }} 
-                axisLine={{ stroke: isDarkMode ? '#475569' : '#cbd5e1' }}
-                tickLine={{ stroke: isDarkMode ? '#475569' : '#cbd5e1' }}
-              />
-              <YAxis 
-                tick={{ fill: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 12 }} 
-                axisLine={{ stroke: isDarkMode ? '#475569' : '#cbd5e1' }}
-                tickLine={{ stroke: isDarkMode ? '#475569' : '#cbd5e1' }}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend />
-              <Bar dataKey="output" name="Actual" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
-              <Line type="step" dataKey="target" name="Target" stroke={CHART_COLORS.danger} strokeWidth={3} strokeDasharray="5 5" />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Line Performance */}
-        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6 shadow-xl hover:shadow-2xl transition-all duration-300">
-          <SectionHeader 
-            icon={Users} 
-            title="Line Performance" 
-            subtitle={`Performance of ${filteredLineSummaries.length} production lines`}
-            color="indigo"
-            action={
-              <Badge variant="info" size="sm">
-                {filteredLineSummaries.length} lines
-              </Badge>
-            }
-          />
-          <div className="space-y-4 mt-4">
-            {filteredLineSummaries.length > 0 ? (
-              filteredLineSummaries.map((line, idx) => (
-                <div key={line.lineCode} className="relative">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="font-bold text-slate-700 dark:text-slate-300">Line {line.lineCode}</span>
-                    <span className="text-slate-500 dark:text-slate-400">{line.output} / {line.target} pcs</span>
-                  </div>
-                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-1000 ${line.efficiency >= 90 ? 'bg-emerald-500' : line.efficiency >= 70 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                      style={{ width: `${Math.min((line.output / (line.target || 1)) * 100, 100)}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs mt-1">
-                    <span className="text-slate-500">Efficiency: {line.efficiency}%</span>
-                    <span className={line.defectRate < 2 ? 'text-emerald-600' : line.defectRate < 5 ? 'text-amber-600' : 'text-rose-600'}>
-                      Defect: {line.defectRate}%
-                    </span>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-8 text-slate-400">
-                <Users size={32} className="mx-auto mb-2 opacity-50" />
-                <p>No line data available</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ==========================================
-          ROW 4: TABLES
-      ========================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Slow Moving OPs */}
-        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 shadow-xl overflow-hidden">
-          <div className="p-6 border-b border-slate-200/60 dark:border-slate-800/60">
-            <SectionHeader 
-              icon={AlertTriangle} 
-              title="Slow Moving POs" 
-              subtitle="Orders stalled > 24 hours"
-              color="amber"
-            />
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50/80 dark:bg-slate-800/40">
-                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">PO Number</th>
-                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Station</th>
-                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Duration</th>
-                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800/60">
-                {(data?.slowMovingOps || []).length > 0 ? (
-                  data?.slowMovingOps.map((op, idx) => (
-                    <TableRow key={idx}>
-                      <td className="py-4 px-6">
-                        <code className="text-sm font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">
-                          {op.opNumber}
-                        </code>
-                      </td>
-                      <td className="py-4 px-6 text-sm font-medium text-slate-600 dark:text-slate-400">{op.currentStation}</td>
-                      <td className="py-4 px-6">
-                        <Badge variant="warning" size="sm">
-                          ⏱️ {op.hoursInStation}h
-                        </Badge>
-                      </td>
-                      <td className="py-4 px-6">
-                        <Badge variant="warning" size="sm">Attention</Badge>
-                      </td>
-                    </TableRow>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4} className="py-12 text-center">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="p-4 rounded-full bg-emerald-50 dark:bg-emerald-900/20">
-                          <CheckCircle size={32} className="text-emerald-500" />
-                        </div>
-                        <p className="text-slate-500 dark:text-slate-400 font-medium">No slow moving orders</p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Recent Activities */}
-        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 shadow-xl overflow-hidden">
-          <div className="p-6 border-b border-slate-200/60 dark:border-slate-800/60">
-            <SectionHeader 
-              icon={List} 
-              title="Recent Activities" 
-              subtitle="Latest production activity logs"
-              color="emerald"
-            />
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50/80 dark:bg-slate-800/40">
-                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Time</th>
-                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">PO</th>
-                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Station</th>
-                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
-                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Qty</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800/60">
-                {(data?.recentActivities || []).length > 0 ? (
-                  data?.recentActivities.slice(0, 5).map((act, idx) => (
-                    <TableRow key={idx}>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2">
-                          <Clock size={14} className="text-slate-400" />
-                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                            {new Date(act.time).toLocaleTimeString()}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <code className="text-sm font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">
-                          {act.opNumber}
-                        </code>
-                      </td>
-                      <td className="py-4 px-6 text-sm font-medium text-slate-600 dark:text-slate-400">{act.station}</td>
-                      <td className="py-4 px-6">
-                        <Badge 
-                          variant={
-                            act.action.toLowerCase().includes('start') ? 'info' :
-                            act.action.toLowerCase().includes('complete') ? 'success' : 'default'
-                          }
-                          size="sm"
-                        >
-                          {act.action.toLowerCase().includes('start') ? '▶' :
-                           act.action.toLowerCase().includes('complete') ? '✓' : '•'} {act.action}
-                        </Badge>
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className="text-sm font-bold text-slate-900 dark:text-white">
-                          {act.qty?.toLocaleString() || 0}
-                        </span>
-                      </td>
-                    </TableRow>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="p-4 rounded-full bg-slate-100 dark:bg-slate-800">
-                          <Activity size={32} className="text-slate-400" />
-                        </div>
-                        <p className="text-slate-500 dark:text-slate-400 font-medium">No recent activities</p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* ==========================================
-          FOOTER
-      ========================================== */}
-      <div className="text-center pb-8">
-        <p className="text-sm text-slate-400 dark:text-slate-500 font-medium">
-          Auto-refresh every 30 seconds • Real-time data from production server
-        </p>
-      </div>
-    </div>
-  );
-};
+  hourlyProduction: Array<{ 
+    hour: string; 
+    output: number;
+    target: number;
+  }>;
+  statusDistribution: Array<{ 
+    status: string; 
+    count: number; 
+  }>;
+  slowMovingOps: Array<{ 
+    opNumber: string; 
+    currentStation: string; 
+    hoursInStation: number; 
+  }>;
+  recentActivities: Array<{ 
+    time: string; 
+    opNumber: string; 
+    station: string; 
+    action: string; 
+    qty: number; 
+  }>;
+  lineSummaries: Array<{ 
+    lineCode: string; 
+    output: number; 
+    efficiency: number; 
+    defectRate: number;
+    target: number;
+  }>;
+  stationFlow: Array<{           // 🔥 NEW: Station flow progress
+    station: string;
+    count: number;
+    wipQty: number;
+    progress: number;
+  }>;
+  qualityTrend: Array<{          // 🔥 NEW: 7-day quality trend
+    date: string;
+    defectRate: number;
+  }>;
+}
 </file>
 
 <file path="frontend/src/features/stations/CuttingEntanView.tsx">
@@ -13319,6 +12510,1005 @@ model QcInspection {
 }
 </file>
 
+<file path="backend/src/production-orders/production-orders.controller.ts">
+import { Controller, Get, Post, Body, Param, Delete, Query } from '@nestjs/common';
+import { ProductionOrdersService } from './production-orders.service';
+
+@Controller('production-orders')
+export class ProductionOrdersController {
+  constructor(private readonly productionOrdersService: ProductionOrdersService) {}
+
+  // =========================================================
+  // 1. ACTION ENDPOINTS
+  // =========================================================
+
+  @Post('sync')
+  syncData() {
+    return this.productionOrdersService.syncExternalData();
+  }
+
+  @Post('simulate')
+  createSimulation(@Body() dto: any) {
+    return this.productionOrdersService.createSimulation(dto);
+  }
+
+  @Delete('reset-all-data')
+  resetData() {
+    return this.productionOrdersService.resetSystemData();
+  }
+
+  // =========================================================
+  // 2. CUTTING QUEUE ENDPOINTS (NEW)
+  // =========================================================
+
+  @Get('cutting-entan/queue')
+  async getCuttingEntanQueue() {
+    return this.productionOrdersService.findActiveForStation('CUTTING_ENTAN');
+  }
+
+  @Get('cutting-pond/queue')
+  async getCuttingPondQueue() {
+    return this.productionOrdersService.findActiveForStation('CUTTING_POND');
+  }
+
+  // =========================================================
+  // 3. STATS & QUERY
+  // =========================================================
+
+  @Get('dashboard-stats')
+  getDashboardStats() {
+    return this.productionOrdersService.getDashboardStats();
+  }
+
+  @Get('dashboard-comprehensive')
+  async getDashboardComprehensive() {
+    return this.productionOrdersService.getDashboardComprehensive();
+  }
+
+  @Get()
+  findAll(
+    @Query('station') station?: string,
+    @Query('view') view?: string,
+    @Query('includeProgress') includeProgress?: string, // tambah
+  ) {
+    if (station) {
+      if (view === 'history') {
+        return this.productionOrdersService.findHistoryForStation(station);
+      }
+      // Ubah pemanggilan method dengan parameter includeProgress
+      return this.productionOrdersService.findActiveForStation(station, includeProgress === 'true');
+    }
+
+    return this.productionOrdersService.findAll();
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.productionOrdersService.findOne(id);
+  }
+
+  // =========================================================
+  // 4. PATTERN PROGRESS ENDPOINT (NEW)
+  // =========================================================
+  @Get(':id/pattern-progress')
+  async getPatternProgress(@Param('id') id: string) {
+    return this.productionOrdersService.getPatternProgress(id);
+  }
+
+  // =========================================================
+  // 5. CHECK PANEL INSPECTIONS ENDPOINT (ADDED)
+  // =========================================================
+  @Get(':id/check-panel-inspections')
+  async getCheckPanelInspections(@Param('id') id: string) {
+    return this.productionOrdersService.getCheckPanelInspections(id);
+  }
+
+  // =========================================================
+  // 6. SEWING PROGRESS ENDPOINT (ADDED)
+  // =========================================================
+  @Get(':id/sewing-progress')
+  async getSewingProgress(@Param('id') id: string) {
+    return this.productionOrdersService.getSewingProgress(id);
+  }
+
+  // =========================================================
+  // 7. QC INSPECTION ENDPOINTS (ADDED)
+  // =========================================================
+  @Post(':id/qc-inspect')
+  async qcInspect(
+    @Param('id') id: string,
+    @Body() body: { good: number; ng: number; ngReasons?: string[] }
+  ) {
+    return this.productionOrdersService.qcInspect(id, body);
+  }
+
+  @Get(':id/qc-inspections')
+  async getQcInspections(@Param('id') id: string) {
+    return this.productionOrdersService.getQcInspections(id);
+  }
+}
+</file>
+
+<file path="frontend/src/features/dashboard/DashboardView.tsx">
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  Activity, Layers, Shirt, RefreshCw,
+  TrendingUp, Clock, Gauge,
+  Cpu, BarChart, PieChart as PieChartIcon,
+  List, AlertTriangle, CheckCircle,
+  Filter, Download, Maximize2, Minimize2,
+  MoreHorizontal, Target, Package, AlertOctagon,
+  TrendingDown, Users, AlertCircle, X, Factory
+} from 'lucide-react';
+import {
+  XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, PieChart, Pie, Cell,
+  ResponsiveContainer,
+  AreaChart, Area, ComposedChart, Bar, Line
+} from 'recharts';
+import type { DashboardComprehensive } from '../../types/production';
+
+const API_BASE_URL = 'http://localhost:3000';
+
+// ==========================================
+// COLOR PALETTE
+// ==========================================
+const CHART_COLORS = {
+  primary: '#3b82f6',
+  success: '#10b981',
+  warning: '#f59e0b',
+  danger: '#ef4444',
+  purple: '#8b5cf6',
+  gray: '#64748b',
+  info: '#06b6d4',
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  'WIP': '#3b82f6',
+  'DONE': '#10b981',
+  'HOLD': '#f59e0b',
+};
+
+const STATION_COLORS: Record<string, string> = {
+  'CUTTING_ENTAN': '#f97316',
+  'CUTTING_POND': '#f59e0b',
+  'CP': '#10b981',
+  'SEWING': '#8b5cf6',
+  'QC': '#ef4444',
+  'PACKING': '#3b82f6',
+  'FG': '#06b6d4',
+};
+
+const GRADIENTS = {
+  blue: 'from-blue-500 via-blue-400 to-cyan-400',
+  emerald: 'from-emerald-500 via-emerald-400 to-teal-400',
+  amber: 'from-amber-500 via-amber-400 to-orange-400',
+  rose: 'from-rose-500 via-rose-400 to-pink-400',
+  purple: 'from-purple-500 via-purple-400 to-violet-400',
+  indigo: 'from-indigo-500 via-indigo-400 to-blue-400',
+};
+
+// ==========================================
+// KPI CARD COMPONENT
+// ==========================================
+const KpiCard = ({
+  title,
+  value,
+  icon: Icon,
+  color = 'blue',
+  subtitle,
+  suffix,
+  trend,
+  trendDirection = 'up',
+  sparklineData,
+  loading = false,
+  delay = 0
+}: any) => {
+  const colorMap: Record<string, {
+    gradient: string;
+    iconBg: string;
+    text: string;
+    lightBg: string;
+    border: string;
+    glow: string;
+  }> = {
+    blue: {
+      gradient: GRADIENTS.blue,
+      iconBg: 'bg-blue-50 dark:bg-blue-900/20',
+      text: 'text-blue-600 dark:text-blue-400',
+      lightBg: 'bg-gradient-to-br from-blue-50/80 to-transparent dark:from-blue-950/30',
+      border: 'border-blue-200/50 dark:border-blue-800/30',
+      glow: 'shadow-blue-500/10',
+    },
+    emerald: {
+      gradient: GRADIENTS.emerald,
+      iconBg: 'bg-emerald-50 dark:bg-emerald-900/20',
+      text: 'text-emerald-600 dark:text-emerald-400',
+      lightBg: 'bg-gradient-to-br from-emerald-50/80 to-transparent dark:from-emerald-950/30',
+      border: 'border-emerald-200/50 dark:border-emerald-800/30',
+      glow: 'shadow-emerald-500/10',
+    },
+    amber: {
+      gradient: GRADIENTS.amber,
+      iconBg: 'bg-amber-50 dark:bg-amber-900/20',
+      text: 'text-amber-600 dark:text-amber-400',
+      lightBg: 'bg-gradient-to-br from-amber-50/80 to-transparent dark:from-amber-950/30',
+      border: 'border-amber-200/50 dark:border-amber-800/30',
+      glow: 'shadow-amber-500/10',
+    },
+    rose: {
+      gradient: GRADIENTS.rose,
+      iconBg: 'bg-rose-50 dark:bg-rose-900/20',
+      text: 'text-rose-600 dark:text-rose-400',
+      lightBg: 'bg-gradient-to-br from-rose-50/80 to-transparent dark:from-rose-950/30',
+      border: 'border-rose-200/50 dark:border-rose-800/30',
+      glow: 'shadow-rose-500/10',
+    },
+    purple: {
+      gradient: GRADIENTS.purple,
+      iconBg: 'bg-purple-50 dark:bg-purple-900/20',
+      text: 'text-purple-600 dark:text-purple-400',
+      lightBg: 'bg-gradient-to-br from-purple-50/80 to-transparent dark:from-purple-950/30',
+      border: 'border-purple-200/50 dark:border-purple-800/30',
+      glow: 'shadow-purple-500/10',
+    },
+    indigo: {
+      gradient: GRADIENTS.indigo,
+      iconBg: 'bg-indigo-50 dark:bg-indigo-900/20',
+      text: 'text-indigo-600 dark:text-indigo-400',
+      lightBg: 'bg-gradient-to-br from-indigo-50/80 to-transparent dark:from-indigo-950/30',
+      border: 'border-indigo-200/50 dark:border-indigo-800/30',
+      glow: 'shadow-indigo-500/10',
+    },
+  };
+  const colors = colorMap[color] || colorMap.blue;
+
+  if (loading) {
+    return (
+      <div
+        className="bg-white dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6 shadow-lg animate-pulse"
+        style={{ animationDelay: `${delay}ms` }}
+      >
+        <div className="h-4 w-24 bg-slate-200 dark:bg-slate-700 rounded mb-4" />
+        <div className="h-8 w-32 bg-slate-200 dark:bg-slate-700 rounded mb-2" />
+        <div className="h-3 w-16 bg-slate-200 dark:bg-slate-700 rounded" />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`group relative bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border ${colors.border} p-6 shadow-lg ${colors.glow} hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 hover:scale-[1.02] overflow-hidden`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <div className={`absolute inset-0 ${colors.lightBg} opacity-0 group-hover:opacity-100 transition-opacity duration-700`} />
+      <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br ${colors.gradient} opacity-0 group-hover:opacity-10 rounded-bl-full transition-opacity duration-500`} />
+
+      <div className="relative">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{title}</span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-black bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
+                {typeof value === 'number' ? value.toLocaleString() : value}
+              </span>
+              {suffix && <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{suffix}</span>}
+            </div>
+          </div>
+          <div className={`p-3.5 rounded-2xl ${colors.iconBg} ${colors.text} shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
+            <Icon size={22} strokeWidth={2} />
+          </div>
+        </div>
+
+        {(subtitle || trend) && (
+          <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
+            {subtitle && (
+              <span className="text-sm font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
+                {subtitle}
+              </span>
+            )}
+            {trend && (
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                trendDirection === 'up' 
+                  ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' 
+                  : 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400'
+              }`}>
+                {trendDirection === 'up' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                <span>{trend}</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// STATION FLOW COMPONENT
+// ==========================================
+const StationFlow = ({ data }: { data: Array<{ station: string; count: number; wipQty: number; progress: number }> }) => {
+  const stationOrder = ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'];
+  const stationLabels: Record<string, string> = {
+    'CUTTING_ENTAN': 'Cutting Entan',
+    'CUTTING_POND': 'Cutting Pond',
+    'CP': 'Check Panel',
+    'SEWING': 'Sewing',
+    'QC': 'Quality Control',
+    'PACKING': 'Packing',
+    'FG': 'Finished Goods',
+  };
+
+  const sortedData = [...data].sort((a, b) => {
+    const aIndex = stationOrder.indexOf(a.station);
+    const bIndex = stationOrder.indexOf(b.station);
+    return (aIndex === -1 ? 99 : aIndex) - (bIndex === -1 ? 99 : bIndex);
+  });
+
+  return (
+    <div className="space-y-3">
+      {sortedData.map((station, idx) => (
+        <div key={station.station} className="relative">
+          <div className="flex justify-between text-sm mb-1">
+            <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <span 
+                className="w-3 h-3 rounded-full" 
+                style={{ backgroundColor: STATION_COLORS[station.station] || CHART_COLORS.gray }}
+              />
+              {stationLabels[station.station] || station.station}
+            </span>
+            <span className="text-slate-500 dark:text-slate-400">
+              {station.count} OPs • {station.wipQty.toLocaleString()} pcs
+            </span>
+          </div>
+          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-1000"
+              style={{ 
+                width: `${Math.min((station.count / Math.max(...data.map(d => d.count))) * 100, 100)}%`,
+                backgroundColor: STATION_COLORS[station.station] || CHART_COLORS.gray
+              }}
+            />
+          </div>
+        </div>
+      ))}
+      {data.length === 0 && (
+        <div className="text-center py-8 text-slate-400">
+          <Factory size={32} className="mx-auto mb-2 opacity-50" />
+          <p>No station data available</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ==========================================
+// SKELETON LOADING
+// ==========================================
+const DashboardSkeleton = () => (
+  <div className="space-y-6">
+    <div className="h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6 animate-pulse" />
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      {[...Array(6)].map((_, i) => (
+        <div key={i} className="h-44 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6" />
+      ))}
+    </div>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {[...Array(2)].map((_, i) => (
+        <div key={i} className="h-96 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6">
+          <div className="h-7 w-52 bg-slate-200/80 dark:bg-slate-800/80 rounded-xl mb-6" />
+          <div className="h-72 bg-slate-100/80 dark:bg-slate-800/50 rounded-2xl" />
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// ==========================================
+// TABLE COMPONENTS
+// ==========================================
+const TableRow = ({ children, hover = true }: { children: React.ReactNode; hover?: boolean }) => (
+  <tr className={`border-b border-slate-100/60 dark:border-slate-800/60 ${hover ? 'hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors' : ''}`}>
+    {children}
+  </tr>
+);
+
+const Badge = ({ children, variant = 'default', size = 'md' }: { children: React.ReactNode; variant?: 'default' | 'success' | 'warning' | 'danger' | 'info'; size?: 'sm' | 'md' }) => {
+  const variants = {
+    default: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+    success: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    warning: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    danger: 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+    info: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  };
+  const sizes = {
+    sm: 'px-2 py-0.5 text-xs',
+    md: 'px-2.5 py-1 text-xs',
+  };
+  return (
+    <span className={`inline-flex items-center font-semibold rounded-full ${variants[variant]} ${sizes[size]} shadow-sm`}>
+      {children}
+    </span>
+  );
+};
+
+const SectionHeader = ({ icon: Icon, title, subtitle, action, color = 'blue' }: any) => {
+  const colorClasses = {
+    blue: 'text-blue-500',
+    emerald: 'text-emerald-500',
+    amber: 'text-amber-500',
+    rose: 'text-rose-500',
+    purple: 'text-purple-500',
+  };
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <div className={`p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 ${colorClasses[color as keyof typeof colorClasses]}`}>
+          <Icon size={20} strokeWidth={2} />
+        </div>
+        <div>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">{title}</h3>
+          {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>}
+        </div>
+      </div>
+      {action}
+    </div>
+  );
+};
+
+// ==========================================
+// CUSTOM TOOLTIP FOR CHARTS
+// ==========================================
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900/95 backdrop-blur-xl text-white p-4 rounded-xl border border-slate-700 shadow-2xl">
+        <p className="text-sm font-semibold mb-2">{label}</p>
+        {payload.map((entry: any, index: number) => (
+          <p key={index} className="text-sm font-bold" style={{ color: entry.color }}>
+            {entry.name}: {entry.value.toLocaleString()}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+// ==========================================
+// MAIN DASHBOARD COMPONENT
+// ==========================================
+export const DashboardView = () => {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<DashboardComprehensive | null>(null);
+  const [lastUpdate, setLastUpdate] = useState('');
+  const [selectedLine, setSelectedLine] = useState('all');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // ==========================================
+  // FETCH DATA
+  // ==========================================
+  const fetchData = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/production-orders/dashboard-comprehensive`);
+      if (res.ok) {
+        const json: DashboardComprehensive = await res.json();
+        setData(json);
+        setLastUpdate(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      }
+    } catch (e) {
+      console.error('Failed to load dashboard stats:', e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  useEffect(() => {
+    const isDark = document.documentElement.classList.contains('dark');
+    setIsDarkMode(isDark);
+  }, []);
+
+  // ==========================================
+  // MEMOIZED DATA
+  // ==========================================
+  const filteredLineSummaries = useMemo(() => {
+    if (!data?.lineSummaries) return [];
+    if (selectedLine === 'all') return data.lineSummaries;
+    return data.lineSummaries.filter(line => line.lineCode === selectedLine);
+  }, [data, selectedLine]);
+
+  const sparklineData = useMemo(() => {
+    if (!data?.hourlyProduction) return [];
+    return data.hourlyProduction.map(h => ({ value: h.output }));
+  }, [data]);
+
+  // ==========================================
+  // FULLSCREEN TOGGLE
+  // ==========================================
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+        setIsFullscreen(false);
+      }
+    }
+  };
+
+  // ==========================================
+  // LOADING STATE
+  // ==========================================
+  if (loading && !data) {
+    return <DashboardSkeleton />;
+  }
+
+  const kpi = data?.kpi || {
+    totalOps: 0,
+    todayOutput: 0,
+    totalWip: 0,
+    overallEfficiency: 0,
+    defectRate: 0,
+    onTimeDelivery: 0,
+    targetOutput: 0,
+    achievement: 0,
+  };
+
+  const statusDistribution = data?.statusDistribution || [];
+  const stationFlow = data?.stationFlow || [];
+
+  // ==========================================
+  // RENDER
+  // ==========================================
+  return (
+    <div className={`w-full min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 transition-all duration-500 ${isFullscreen ? 'pt-0' : 'px-4 py-8'}`}>
+      
+      {/* ==========================================
+          HEADER
+      ========================================== */}
+      <div className={`bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6 shadow-xl mb-6 ${isFullscreen ? 'rounded-none border-x-0 border-t-0' : ''}`}>
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg shadow-blue-500/30">
+              <Cpu size={28} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">Production Dashboard</h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Real-time Manufacturing Intelligence</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2.5 px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-full border border-emerald-200/50 dark:border-emerald-800/30">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/50" />
+              </span>
+              <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">Live Monitoring</span>
+            </div>
+
+            <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800/50 rounded-full border border-slate-200/50 dark:border-slate-700/50">
+              <Clock size={16} className="text-slate-400" />
+              <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                Last sync: <span className="font-bold text-slate-900 dark:text-white">{lastUpdate || '—'}</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative group">
+              <select
+                value={selectedLine}
+                onChange={(e) => setSelectedLine(e.target.value)}
+                className="appearance-none bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl pl-4 pr-12 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer shadow-sm"
+              >
+                <option value="all">📊 All Production Lines</option>
+                {data?.lineSummaries?.map(line => (
+                  <option key={line.lineCode} value={line.lineCode}>🏭 {line.lineCode}</option>
+                ))}
+              </select>
+              <Filter size={18} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-hover:text-blue-500 transition-colors" />
+            </div>
+
+            <button
+              onClick={fetchData}
+              disabled={refreshing}
+              className="group p-3 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-blue-400 dark:hover:border-blue-500 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
+              title="Refresh data"
+            >
+              <RefreshCw size={20} className={`${refreshing ? 'animate-spin text-blue-500' : 'text-slate-600 dark:text-slate-400 group-hover:text-blue-500'} transition-colors`} />
+            </button>
+
+            <button
+              onClick={toggleFullscreen}
+              className="group p-3 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-blue-400 dark:hover:border-blue-500 transition-all hover:scale-105 active:scale-95 shadow-sm hover:shadow-md"
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? (
+                <Minimize2 size={20} className="text-slate-600 dark:text-slate-400 group-hover:text-blue-500 transition-colors" />
+              ) : (
+                <Maximize2 size={20} className="text-slate-600 dark:text-slate-400 group-hover:text-blue-500 transition-colors" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ==========================================
+          ROW 1: KPI CARDS (6 cards)
+      ========================================== */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <KpiCard
+          title="Total POs"
+          value={kpi.totalOps || 0}
+          icon={Layers}
+          color="blue"
+          subtitle="All statuses"
+          loading={loading}
+          delay={0}
+        />
+        <KpiCard
+          title="Today Output"
+          value={kpi.todayOutput || 0}
+          icon={Shirt}
+          color="emerald"
+          suffix="pcs"
+          trend={`${kpi.achievement || 0}%`}
+          trendDirection={kpi.achievement >= 100 ? 'up' : 'down'}
+          sparklineData={sparklineData}
+          loading={loading}
+          delay={100}
+        />
+        <KpiCard
+          title="Target"
+          value={kpi.targetOutput || 0}
+          icon={Target}
+          color="indigo"
+          suffix="pcs"
+          subtitle="Daily goal"
+          loading={loading}
+          delay={150}
+        />
+        <KpiCard
+          title="WIP"
+          value={kpi.totalWip || 0}
+          icon={Activity}
+          color="amber"
+          subtitle="In progress"
+          sparklineData={sparklineData.slice(2, 8)}
+          loading={loading}
+          delay={200}
+        />
+        <KpiCard
+          title="Defect Rate"
+          value={`${kpi.defectRate || 0}%`}
+          icon={AlertOctagon}
+          color="rose"
+          trend={`${(kpi.defectRate || 0) > 5 ? '+2%' : '-1%'}`}
+          trendDirection={(kpi.defectRate || 0) > 5 ? 'up' : 'down'}
+          loading={loading}
+          delay={300}
+        />
+        <KpiCard
+          title="Efficiency"
+          value={`${kpi.overallEfficiency || 0}%`}
+          icon={Gauge}
+          color="purple"
+          subtitle="Achievement"
+          loading={loading}
+          delay={400}
+        />
+      </div>
+
+      {/* ==========================================
+          ROW 2: STATION FLOW & STATUS DISTRIBUTION
+      ========================================== */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Station Flow */}
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6 shadow-xl">
+          <SectionHeader 
+            icon={Factory} 
+            title="Station Flow Status" 
+            subtitle="WIP distribution across stations"
+            color="blue" 
+          />
+          <div className="mt-4">
+            <StationFlow data={stationFlow} />
+          </div>
+        </div>
+        
+        {/* Status Distribution */}
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6 shadow-xl">
+          <SectionHeader 
+            icon={PieChartIcon} 
+            title="PO Status Distribution" 
+            subtitle="Production order status"
+            color="purple" 
+          />
+          <ResponsiveContainer width="100%" height={280}>
+            <PieChart>
+              <Pie
+                data={statusDistribution}
+                cx="50%"
+                cy="50%"
+                innerRadius={80}
+                outerRadius={110}
+                paddingAngle={3}
+                dataKey="count"
+                nameKey="status"
+                strokeWidth={0}
+              >
+                {statusDistribution.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={STATUS_COLORS[entry.status] || CHART_COLORS.gray}
+                    className="hover:opacity-80 transition-opacity"
+                  />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+              <Legend
+                verticalAlign="bottom"
+                height={40}
+                iconType="circle"
+                iconSize={10}
+                formatter={(value) => (
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">{value}</span>
+                )}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ==========================================
+          ROW 3: CHARTS
+      ========================================== */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Hourly Production vs Target */}
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <SectionHeader 
+            icon={BarChart} 
+            title="Hourly Production vs Target" 
+            subtitle="Real-time gap analysis"
+            color="blue"
+            action={
+              <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all hover:scale-110">
+                <MoreHorizontal size={20} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" />
+              </button>
+            }
+          />
+          <ResponsiveContainer width="100%" height={320}>
+            <ComposedChart data={data?.hourlyProduction || []}>
+              <CartesianGrid strokeDasharray="3 3" stroke={isDarkMode ? '#334155' : '#e2e8f0'} opacity={0.5} />
+              <XAxis 
+                dataKey="hour" 
+                tick={{ fill: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 12 }} 
+                axisLine={{ stroke: isDarkMode ? '#475569' : '#cbd5e1' }}
+                tickLine={{ stroke: isDarkMode ? '#475569' : '#cbd5e1' }}
+              />
+              <YAxis 
+                tick={{ fill: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 12 }} 
+                axisLine={{ stroke: isDarkMode ? '#475569' : '#cbd5e1' }}
+                tickLine={{ stroke: isDarkMode ? '#475569' : '#cbd5e1' }}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend />
+              <Bar dataKey="output" name="Actual" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+              <Line type="step" dataKey="target" name="Target" stroke={CHART_COLORS.danger} strokeWidth={3} strokeDasharray="5 5" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Line Performance */}
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 p-6 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <SectionHeader 
+            icon={Users} 
+            title="Line Performance" 
+            subtitle={`Performance of ${filteredLineSummaries.length} production lines`}
+            color="indigo"
+            action={
+              <Badge variant="info" size="sm">
+                {filteredLineSummaries.length} lines
+              </Badge>
+            }
+          />
+          <div className="space-y-4 mt-4">
+            {filteredLineSummaries.length > 0 ? (
+              filteredLineSummaries.map((line, idx) => (
+                <div key={line.lineCode} className="relative">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="font-bold text-slate-700 dark:text-slate-300">Line {line.lineCode}</span>
+                    <span className="text-slate-500 dark:text-slate-400">{line.output} / {line.target} pcs</span>
+                  </div>
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-1000 ${line.efficiency >= 90 ? 'bg-emerald-500' : line.efficiency >= 70 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                      style={{ width: `${Math.min((line.output / (line.target || 1)) * 100, 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs mt-1">
+                    <span className="text-slate-500">Efficiency: {line.efficiency}%</span>
+                    <span className={line.defectRate < 2 ? 'text-emerald-600' : line.defectRate < 5 ? 'text-amber-600' : 'text-rose-600'}>
+                      Defect: {line.defectRate}%
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-slate-400">
+                <Users size={32} className="mx-auto mb-2 opacity-50" />
+                <p>No line data available</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ==========================================
+          ROW 4: TABLES
+      ========================================== */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Slow Moving OPs */}
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 shadow-xl overflow-hidden">
+          <div className="p-6 border-b border-slate-200/60 dark:border-slate-800/60">
+            <SectionHeader 
+              icon={AlertTriangle} 
+              title="Slow Moving POs" 
+              subtitle="Orders stalled > 24 hours"
+              color="amber"
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50/80 dark:bg-slate-800/40">
+                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">PO Number</th>
+                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Station</th>
+                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Duration</th>
+                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800/60">
+                {(data?.slowMovingOps || []).length > 0 ? (
+                  data?.slowMovingOps.map((op, idx) => (
+                    <TableRow key={idx}>
+                      <td className="py-4 px-6">
+                        <code className="text-sm font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">
+                          {op.opNumber}
+                        </code>
+                      </td>
+                      <td className="py-4 px-6 text-sm font-medium text-slate-600 dark:text-slate-400">{op.currentStation}</td>
+                      <td className="py-4 px-6">
+                        <Badge variant="warning" size="sm">
+                          ⏱️ {op.hoursInStation}h
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-6">
+                        <Badge variant="warning" size="sm">Attention</Badge>
+                      </td>
+                    </TableRow>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="py-12 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="p-4 rounded-full bg-emerald-50 dark:bg-emerald-900/20">
+                          <CheckCircle size={32} className="text-emerald-500" />
+                        </div>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium">No slow moving orders</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Recent Activities */}
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-200/60 dark:border-slate-800/60 shadow-xl overflow-hidden">
+          <div className="p-6 border-b border-slate-200/60 dark:border-slate-800/60">
+            <SectionHeader 
+              icon={List} 
+              title="Recent Activities" 
+              subtitle="Latest production activity logs"
+              color="emerald"
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50/80 dark:bg-slate-800/40">
+                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Time</th>
+                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">PO</th>
+                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Station</th>
+                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
+                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Qty</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800/60">
+                {(data?.recentActivities || []).length > 0 ? (
+                  data?.recentActivities.slice(0, 5).map((act, idx) => (
+                    <TableRow key={idx}>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <Clock size={14} className="text-slate-400" />
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                            {new Date(act.time).toLocaleTimeString()}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <code className="text-sm font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">
+                          {act.opNumber}
+                        </code>
+                      </td>
+                      <td className="py-4 px-6 text-sm font-medium text-slate-600 dark:text-slate-400">{act.station}</td>
+                      <td className="py-4 px-6">
+                        <Badge 
+                          variant={
+                            act.action.toLowerCase().includes('start') ? 'info' :
+                            act.action.toLowerCase().includes('complete') ? 'success' : 'default'
+                          }
+                          size="sm"
+                        >
+                          {act.action.toLowerCase().includes('start') ? '▶' :
+                           act.action.toLowerCase().includes('complete') ? '✓' : '•'} {act.action}
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className="text-sm font-bold text-slate-900 dark:text-white">
+                          {act.qty?.toLocaleString() || 0}
+                        </span>
+                      </td>
+                    </TableRow>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="p-4 rounded-full bg-slate-100 dark:bg-slate-800">
+                          <Activity size={32} className="text-slate-400" />
+                        </div>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium">No recent activities</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* ==========================================
+          FOOTER
+      ========================================== */}
+      <div className="text-center pb-8">
+        <p className="text-sm text-slate-400 dark:text-slate-500 font-medium">
+          Auto-refresh every 30 seconds • Real-time data from production server
+        </p>
+      </div>
+    </div>
+  );
+};
+</file>
+
 <file path="backend/src/mes/production-engine.service.ts">
 // backend/src/mes/production-engine.service.ts
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
@@ -13374,6 +13564,9 @@ export class ProductionEngineService {
       data: {
         currentStation: StationCode.CP,
         readyForCP: false,
+        qtyCP: op.setsReadyForSewing,  // ✅ SET qtyCP saat transfer (fixed value)
+        cpGoodQty: 0,                   // ✅ Reset inspection counters
+        cpNgQty: 0,
       },
     });
 
@@ -13603,6 +13796,76 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
     });
 
     return { success: true };
+  }
+
+  // =====================================================
+  // NEW METHOD - Transfer dari Cutting Pond ke Check Panel
+  // =====================================================
+  async pondToCPTransfer(qrCode: string, qty: number) {
+    // Extract OP number dari QR Code
+    const parts = qrCode.split('-');
+    const opNumber = parts.length > 1 ? parts[1] : qrCode;
+    
+    const op = await this.prisma.productionOrder.findUnique({
+      where: { opNumber },
+    });
+    
+    if (!op) {
+      throw new NotFoundException('OP not found');
+    }
+    
+    // ✅ Validasi 1: OP harus masih di Cutting Pond
+    if (op.currentStation !== StationCode.CUTTING_POND) {
+      throw new BadRequestException(
+        `OP is not at Cutting Pond (current: ${op.currentStation})`
+      );
+    }
+    
+    // ✅ Validasi 2: OP harus sudah readyForCP
+    if (!op.readyForCP) {
+      throw new BadRequestException('OP is not ready for Check Panel yet');
+    }
+    
+    // ✅ Validasi 3: allPatternsCompleted harus true
+    if (!op.allPatternsCompleted) {
+      throw new BadRequestException('Not all patterns have been completed at Pond');
+    }
+    
+    // ✅ Validasi 4: Qty harus sama dengan setsReadyForSewing (NO PARTIAL)
+    if (qty !== op.setsReadyForSewing) {
+      throw new BadRequestException(
+        `Quantity must match setsReadyForSewing (${op.setsReadyForSewing}). Got: ${qty}. Partial transfer not allowed from Pond to CP.`
+      );
+    }
+    
+    return this.prisma.$transaction(async (tx) => {
+      // Update ProductionOrder
+      await tx.productionOrder.update({
+        where: { id: op.id },
+        data: {
+          currentStation: StationCode.CP,  // ✅ Sekarang pindah ke CP
+          readyForCP: false,               // ✅ Reset flag
+          qtyCP: qty,                      // ✅ Qty yang diterima di CP
+          cpGoodQty: 0,                    // ✅ Reset CP inspection counters
+          cpNgQty: 0,
+        },
+      });
+      
+      // Create ProductionLog
+      await tx.productionLog.create({
+        data: {
+          opId: op.id,
+          station: StationCode.CUTTING_POND,
+          type: 'TRANSFER_TO_CP',
+          qty: qty,
+          note: `Transferred ${qty} sets from Cutting Pond to Check Panel`,
+        },
+      });
+      
+      console.log(`✅ OP ${op.opNumber} transferred from Pond to CP: ${qty} sets`);
+      
+      return { success: true, qty };
+    });
   }
 
   // ================= POND QUEUE (frontend) =================
@@ -13836,14 +14099,24 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
       // Cek apakah semua pola selesai
       const allDone = currentOp.patterns.every(p => p.completed);
       if (allDone) {
+        // 🔥 FIX: Hitung setsReadyForSewing dari minimum good patterns
         const setComplete = Math.min(...currentOp.patterns.map(p => p.good));
+        
         await this.prisma.productionOrder.update({
           where: { id: currentOp.id },
           data: {
-            qtyCP: setComplete,
-            readyForCP: true,
+            qtyPond: currentOp.qtyPond,        // Total pieces counted
+            qtyPondNg: currentOp.qtyPondNg,    // Total NG pieces
+            setsReadyForSewing: setComplete,   // ✅ Sets yang bisa dibentuk (MIN good)
+            allPatternsCompleted: true,        // ✅ Semua pattern selesai dicek
+            readyForCP: true,                  // ✅ Siap dipindah ke CP
+            // ❌ JANGAN UBAH currentStation - Tetap di CUTTING_POND
+            // currentStation: StationCode.CP,  // ❌ HAPUS INI
           },
         });
+        
+        console.log(`✅ Pond completed for OP ${currentOp.opNumber}: ${setComplete} sets ready for CP`);
+        
         // Hapus OP dari session
         session.pondOps = session.pondOps.filter(o => o.id !== currentOp.id);
         if (session.pondOps.length === 0) {
@@ -14033,6 +14306,7 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
         itemNumberFG: op.itemNumberFG,
         qtyEntan: op.qtyEntan,
         qtyPond: op.qtyPond,
+        qtyPondNg: op.qtyPondNg,  // 🔥 TAMBAH INI
         multiplier,
         patterns,
       };
@@ -16248,46 +16522,52 @@ export class ProductionOrdersService {
     }
 
     // ===== CHECK PANEL =====
-    if (station === 'CP') {
-      const ops = await this.prisma.productionOrder.findMany({
-        where: {
-          status: ProductionStatus.WIP,
-          currentStation: StationCode.CP, // ✅ HANYA yang sudah discan
-        },
-        include: { line: true },
-        orderBy: { createdAt: 'asc' },
-      });
-      return ops;
-    }
+      if (station === 'CP') {
+        const ops = await this.prisma.productionOrder.findMany({
+          where: {
+            status: ProductionStatus.WIP,
+            currentStation: StationCode.CP,  // ✅ HANYA yang sudah ditransfer dari Pond
+          },
+          include: { 
+            line: true,
+            checkPanelInspections: true,  // ✅ Include inspection progress
+          },
+          orderBy: { createdAt: 'asc' },
+        });
+        return ops;
+      }
 
     // ===== CUTTING POND =====
-    if (station === 'CUTTING_POND') {
-      const ops = await this.prisma.productionOrder.findMany({
-        where: {
-          status: ProductionStatus.WIP,
-          currentStation: station as StationCode,
-        },
-        include: {
-          line: true,
-          patternProgress: true,
-        },
-        orderBy: { createdAt: 'asc' },
-      });
-      // Format patternProgress menjadi array patterns
-      return ops.map(op => ({
-        ...op,
-        patterns: op.patternProgress?.map(p => ({
-          index: p.patternIndex,
-          name: p.patternName,
-          target: p.target,
-          good: p.good,
-          ng: p.ng,
-          current: p.good + p.ng,
-          completed: p.completed,
-        })) || [],
-        patternProgress: undefined,
-      }));
-    }
+      if (station === 'CUTTING_POND') {
+        const ops = await this.prisma.productionOrder.findMany({
+          where: {
+            status: ProductionStatus.WIP,
+            currentStation: StationCode.CUTTING_POND,
+            // ✅ Tampilkan OP yang masih proses ATAU sudah selesai tapi belum transfer
+            // (readyForCP = false artinya masih proses, readyForCP = true artinya selesai tapi belum transfer)
+          },
+          include: {
+            line: true,
+            patternProgress: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        });
+        
+        // Format patternProgress menjadi array patterns
+        return ops.map(op => ({
+          ...op,
+          patterns: op.patternProgress?.map(p => ({
+            index: p.patternIndex,
+            name: p.patternName,
+            target: p.target,
+            good: p.good,
+            ng: p.ng,
+            current: p.good + p.ng,
+            completed: p.completed,
+          })) || [],
+          patternProgress: undefined,
+        }));
+      }
 
     // ===== CUTTING ENTAN =====
     if (station === 'CUTTING_ENTAN') {

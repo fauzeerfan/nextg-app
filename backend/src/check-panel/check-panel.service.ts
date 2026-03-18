@@ -30,7 +30,7 @@ export class CheckPanelService {
 
     return this.prisma.$transaction(async (tx) => {
       // 🔒 Kunci baris CheckPanelInspection untuk pattern ini
-      const locked = await tx.$queryRaw`
+      await tx.$queryRaw`
         SELECT * FROM "CheckPanelInspection"
         WHERE "opId" = ${opId} AND "patternIndex" = ${patternIndex}
         FOR UPDATE
@@ -41,14 +41,21 @@ export class CheckPanelService {
         where: { opId_patternIndex: { opId, patternIndex } },
       });
 
-      // Hitung total setelah inspeksi ini, gunakan nullish coalescing untuk menghindari undefined
+      // Hitung total setelah inspeksi ini
       const currentGood = existing?.good ?? 0;
       const currentNg = existing?.ng ?? 0;
       const newTotal = currentGood + currentNg + good + ng;
 
-      if (newTotal > op.qtyEntan) {
+      // ✅ Target per pattern = qtyCP (jumlah set)
+      const targetPatterns = op.qtyCP;
+
+      if (op.qtyCP <= 0) {
+        throw new BadRequestException('OP has not been transferred from Cutting Pond yet');
+      }
+
+      if (newTotal > targetPatterns) {
         throw new BadRequestException(
-          `Cannot exceed target ${op.qtyEntan}. Current: ${currentGood + currentNg}, adding: ${good + ng}`
+          `Cannot exceed target ${targetPatterns} inspections per pattern. Current: ${currentGood + currentNg}, adding: ${good + ng}`
         );
       }
 
@@ -63,14 +70,13 @@ export class CheckPanelService {
       await tx.productionOrder.update({
         where: { id: opId },
         data: {
-          qtyCP: { increment: good + ng },
           cpGoodQty: { increment: good },
           cpNgQty: { increment: ng },
         },
       });
 
       // 3. Upsert ke CheckPanelInspection
-      const completed = newTotal >= op.qtyEntan;
+      const completed = newTotal >= targetPatterns;
 
       await tx.checkPanelInspection.upsert({
         where: { opId_patternIndex: { opId, patternIndex } },
@@ -101,19 +107,20 @@ export class CheckPanelService {
         },
       });
 
-      // 5. Hitung setsReadyForSewing jika semua pattern selesai
+      // 5. Hitung setsReadyForSewing jika SEMUA pattern selesai
       const allInspections = await tx.checkPanelInspection.findMany({
         where: { opId },
       });
       if (allInspections.length > 0) {
-        const allCompleted = allInspections.every(i => (i.good + i.ng) >= op.qtyEntan);
+        const allCompleted = allInspections.every(i => (i.good + i.ng) >= targetPatterns);
         if (allCompleted) {
+          // ✅ setsReady = nilai minimum good dari semua pattern
           const setsReady = Math.min(...allInspections.map(i => i.good));
           await tx.productionOrder.update({
             where: { id: opId },
             data: { 
               setsReadyForSewing: setsReady,
-              allPatternsCompleted: true, // <-- tambahan field ini
+              allPatternsCompleted: true,
             },
           });
           console.log(`setsReadyForSewing updated to ${setsReady} for OP ${op.opNumber}`);

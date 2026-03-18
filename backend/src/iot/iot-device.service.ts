@@ -18,6 +18,7 @@ export interface PondOp {
   itemNumberFG: string;
   qtyEntan: number;
   qtyPond: number;
+  qtyPondNg?: number;  // 🔥 TAMBAH INI
   multiplier: number;
   patterns: PondPattern[];
 }

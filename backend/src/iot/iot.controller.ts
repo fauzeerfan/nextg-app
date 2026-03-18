@@ -80,12 +80,16 @@ export class IotController {
     const device = await this.prisma.iotDevice.findUnique({
       where: { deviceId: body.deviceId },
     });
+    
     if (!device) throw new NotFoundException('Device not registered');
-
+    
     if (device.station === 'CP') {
-      return this.productionEngine.cpScan(body.qrCode, body.qty || 1);
+      // ✅ Dhristi di station CP bisa untuk 2 fungsi:
+      // 1. Transfer dari Pond ke CP (jika OP masih di Pond tapi readyForCP = true)
+      // 2. Inspect di CP (jika OP sudah di CP)
+      return this.productionEngine.pondToCPTransfer(body.qrCode, body.qty || 1);
     } else if (device.station === 'SEWING') {
-      // 🔥 Panggil method baru untuk pengiriman parsial dari Check Panel ke Sewing
+      // 🔥 Panggil method untuk pengiriman parsial dari Check Panel ke Sewing
       return this.productionEngine.sendToSewingFromScan(body.qrCode, body.qty || 1);
     } else {
       throw new NotFoundException('Unsupported station for scanner');

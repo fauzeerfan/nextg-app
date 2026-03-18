@@ -1,3 +1,4 @@
+// frontend/src/features/stations/CheckPanelView.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle, XCircle, RefreshCw, ImageIcon, ImageOff, AlertTriangle,
@@ -62,7 +63,7 @@ const MetricCard = ({
   }[color];
 
   return (
-    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg hover:shadow-xl transition-all duration-300">
+    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg">
       <div className="flex items-center justify-between mb-2">
         <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{title}</div>
         <div
@@ -73,7 +74,7 @@ const MetricCard = ({
       </div>
       <div className="text-2xl font-bold text-slate-900 dark:text-white">
         {value}
-        {suffix && <span className="text-sm text-slate-500 dark:text-slate-400 ml-1">{suffix}</span>}
+        {suffix && <span className="text-sm text-slate-500 ml-1">{suffix}</span>}
       </div>
       {subtitle && <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{subtitle}</div>}
     </div>
@@ -105,6 +106,9 @@ export const CheckPanelView = ({
   const [submitting, setSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
 
+  // ✅ Helper untuk mengakses patternMultiplier dengan aman (type assertion)
+  const getPatternMultiplier = (op: ProductionOrder) => (op as any).line?.patternMultiplier ?? 4;
+
   const getAuthHeaders = () => {
     const token = localStorage.getItem('nextg_token');
     return {
@@ -113,24 +117,29 @@ export const CheckPanelView = ({
     };
   };
 
+  // ✅ SEMUA pattern sudah selesai dicek
   const allPatternsCompleted =
     patterns.length > 0 && patterns.every((_, i) => prog[i]?.completed === true);
+
   const totalGoodPola = Object.values(prog).reduce((s, p) => s + p.good, 0);
   const totalNgPola = Object.values(prog).reduce((s, p) => s + p.ng, 0);
   const polaSisa = totalGoodPola - sets * patterns.length;
   const totalNgEfektif = totalNgPola + polaSisa;
   const setNgEfektif = Math.floor(totalNgEfektif / patterns.length);
 
+  // ✅ Statistik dalam satuan pattern (bukan sets)
   const tq = ops.length;
-  const tin = ops.reduce((s, o) => s + (o.qtyPond || 0), 0);
+  const tin = ops.reduce((s, o) => s + ((o.qtyCP || 0) * getPatternMultiplier(o)), 0);
   const tg = ops.reduce((s, o) => s + (o.cpGoodQty || 0), 0);
   const tng = ops.reduce((s, o) => s + (o.cpNgQty || 0), 0);
-  const comp = tin > 0 ? Math.round((tg / tin) * 100) : 0;
+  const comp = tin > 0 ? Math.round(((tg + tng) / tin) * 100) : 0;
 
   const fetchOps = useCallback(async () => {
     setRefreshing(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/production-orders?station=CP`);
+      const res = await fetch(`${API_BASE_URL}/production-orders?station=CP`, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data: ProductionOrder[] = await res.json();
         setOps(data);
@@ -207,7 +216,6 @@ export const CheckPanelView = ({
     }
   };
 
-  // 🔄 Fungsi baru untuk me-refresh data OP aktif dan progres pola dari server
   const refreshActiveOp = useCallback(async () => {
     if (!actOp) return;
     try {
@@ -259,10 +267,19 @@ export const CheckPanelView = ({
     setTimeout(() => setToast(null), 2000);
   };
 
+  // ✅ Validasi pemilihan OP
   const selectOp = (op: ProductionOrder) => {
-    // 🔥 Prevent if OP is already completed (allPatternsCompleted = true)
-    if (op.allPatternsCompleted) {
-      showToast('OP is already completed and ready for sewing', 'error');
+    const cpInspected = (op.cpGoodQty || 0) + (op.cpNgQty || 0);
+    const patternMultiplier = getPatternMultiplier(op);
+    const cpTotalPatterns = (op.qtyCP || 0) * patternMultiplier;
+
+    if (cpTotalPatterns > 0 && cpInspected >= cpTotalPatterns) {
+      showToast('All patterns completed for this OP', 'error');
+      return;
+    }
+
+    if (op.qtyCP <= 0) {
+      showToast('OP not yet transferred from Cutting Pond', 'error');
       return;
     }
 
@@ -280,18 +297,27 @@ export const CheckPanelView = ({
     localStorage.removeItem(STORAGE_KEY_OP);
     setActOp(null);
     setActPtrn(null);
+    setProg({});
     fetchOps();
   };
 
+  // ✅ Submit inspeksi – target per pattern = qtyCP (jumlah set)
   const submitInspection = async (isGood: boolean, reason: string = '') => {
     if (isSubmittingRef.current) return;
     if (!actOp || !actPtrn) return showToast('Select OP and pattern first', 'error');
     const idx = patterns.findIndex((p) => p.name === actPtrn.name);
     if (idx === -1) return showToast('Pattern not found', 'error');
-
     const cur = prog[idx] || { good: 0, ng: 0, completed: false };
+
     if (cur.completed) {
       showToast('This pattern is already completed', 'error');
+      return;
+    }
+
+    const target = actOp.qtyCP || 0;
+    const done = cur.good + cur.ng;
+    if (done >= target) {
+      showToast(`Pattern already reached target (${target} inspections)`, 'error');
       return;
     }
 
@@ -316,7 +342,6 @@ export const CheckPanelView = ({
       });
 
       if (res.ok) {
-        const target = actOp.qtyEntan || 0;
         const newGood = cur.good + (isGood ? 1 : 0);
         const newNg = cur.ng + (isGood ? 0 : 1);
         const completed = newGood + newNg >= target;
@@ -336,8 +361,7 @@ export const CheckPanelView = ({
         localStorage.setItem(STORAGE_KEY_GLOBAL_LOGS, JSON.stringify([log, ...recent].slice(0, 50)));
 
         showToast(isGood ? 'Good +1' : 'NG Recorded', isGood ? 'success' : 'error');
-        
-        // 🔄 Refresh data dari server (daftar OP dan detail OP aktif + progres)
+
         await Promise.all([
           fetchOps(),
           refreshActiveOp()
@@ -378,14 +402,15 @@ export const CheckPanelView = ({
     }
   };
 
-  const handleImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    e.currentTarget.style.display = 'none';
-    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-    e.currentTarget.nextElementSibling?.classList.add('flex');
+  const handleImgError = (e: React.SyntheticEvent) => {
+    const imgElement = e.currentTarget as HTMLImageElement;
+    imgElement.style.display = 'none';
+    imgElement.nextElementSibling?.classList.remove('hidden');
+    imgElement.nextElementSibling?.classList.add('flex');
   };
 
   return (
-    <div className="animate-in fade-in duration-300">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4 md:p-6">
       {toast && (
         <div
           className={`fixed top-6 right-6 z-[200] animate-in slide-in-from-right-5 fade-in duration-300 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border ${
@@ -394,17 +419,15 @@ export const CheckPanelView = ({
               : 'bg-gradient-to-r from-rose-500 to-rose-400 text-white border-rose-400'
           }`}
         >
-          <div className="flex items-center gap-3">
-            {toast.type === 'success' ? <CheckCircle size={18} /> : <XCircle size={18} />}
-            <span className="font-bold text-sm">{toast.msg}</span>
-          </div>
+          {toast.type === 'success' ? <CheckCircle size={18} /> : <XCircle size={18} />}
+          {toast.msg}
           <button onClick={() => setToast(null)} className="ml-4 opacity-80 hover:opacity-100">
             <XCircle size={14} />
           </button>
         </div>
       )}
 
-      {/* Header */}
+      {/* Header dengan metrik */}
       <div className="bg-gradient-to-br from-white to-blue-50/30 dark:from-slate-900 dark:to-blue-900/10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden mb-6">
         <div className="p-6">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -452,9 +475,23 @@ export const CheckPanelView = ({
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 pb-6">
-          <MetricCard title="Total Input" value={tin} icon={Package} color="blue" suffix="pcs" subtitle="From Cutting Pond" />
-          <MetricCard title="Verified Good" value={tg} icon={CheckCircle} color="emerald" suffix="pcs" subtitle="Cumulative" />
-          <MetricCard title="NG Total" value={tng} icon={AlertTriangle} color="rose" suffix="pcs" subtitle="Cumulative" />
+          <MetricCard title="Total Input" value={tin} icon={Package} color="blue" suffix="patterns" subtitle="From Cutting Pond" />
+          <MetricCard
+            title="Verified Good"
+            value={tg}
+            icon={CheckCircle}
+            color="emerald"
+            suffix="patterns"
+            subtitle={`${tin > 0 ? Math.round((tg / tin) * 100) : 0}% of input`}
+          />
+          <MetricCard
+            title="NG Total"
+            value={tng}
+            icon={AlertTriangle}
+            color="rose"
+            suffix="patterns"
+            subtitle={`${tin > 0 ? Math.round((tng / tin) * 100) : 0}% of input`}
+          />
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg">
             <div className="flex items-center justify-between mb-2">
               <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Completion Rate</div>
@@ -462,20 +499,25 @@ export const CheckPanelView = ({
                 <Award size={16} className="text-amber-600 dark:text-amber-400" />
               </div>
             </div>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">{comp}%</div>
+            <div className="text-2xl font-bold text-slate-900 dark:text-white">
+              {Math.min(comp, 100)}%
+            </div>
             <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mt-2 overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-1000"
-                style={{ width: `${comp}%` }}
+                style={{ width: `${Math.min(comp, 100)}%` }}
               ></div>
+            </div>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+              {tg + tng} / {tin} patterns inspected
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Grid - Menggunakan 5 kolom pada layar large, kolom kiri 1/5, kanan 4/5 */}
+      {/* Grid utama: kiri daftar OP/pattern, kanan area inspeksi */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        {/* Left Column - OP List (1 dari 5 bagian) */}
+        {/* Kolom kiri */}
         <div className="lg:col-span-1">
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden h-full">
             <div className="p-4 border-b border-slate-100 dark:border-slate-700/50">
@@ -521,49 +563,73 @@ export const CheckPanelView = ({
                     <p className="text-xs text-slate-500 dark:text-slate-400">Waiting for incoming orders...</p>
                   </div>
                 ) : (
-                  ops.map((op: ProductionOrder) => (
-                    <div
-                      key={op.id}
-                      className={`group p-3 rounded-xl border-2 transition-all duration-300 cursor-pointer mb-2 ${
-                        op.allPatternsCompleted
-                          ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 opacity-70 cursor-not-allowed'
-                          : actOp?.id === op.id
+                  ops.map((op: ProductionOrder) => {
+                    const patternMultiplier = getPatternMultiplier(op);
+                    const cpInspected = (op.cpGoodQty || 0) + (op.cpNgQty || 0);
+                    const cpTotalPatterns = (op.qtyCP || 0) * patternMultiplier;
+                    const isCpCompleted = cpTotalPatterns > 0 && cpInspected >= cpTotalPatterns;
+
+                    return (
+                      <div
+                        key={op.id}
+                        className={`group p-3 rounded-xl border-2 transition-all duration-300 cursor-pointer mb-2 ${
+                          isCpCompleted
+                            ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 opacity-70 cursor-not-allowed'
+                            : actOp?.id === op.id
                             ? 'border-blue-500 bg-gradient-to-r from-blue-50 to-white dark:from-blue-900/20 dark:to-slate-800 shadow-lg'
                             : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-lg'
-                      }`}
-                      onClick={() => !op.allPatternsCompleted && selectOp(op)}
-                    >
-                      <div className="flex items-start justify-between mb-1">
-                        <div>
-                          <div className="font-mono font-bold text-base text-slate-900 dark:text-white">
-                            {op.opNumber}
+                        }`}
+                        onClick={() => !isCpCompleted && selectOp(op)}
+                      >
+                        <div className="flex items-start justify-between mb-1">
+                          <div>
+                            <div className="font-mono font-bold text-base text-slate-900 dark:text-white">
+                              {op.opNumber}
+                            </div>
+                            <div className="text-xs text-slate-600 dark:text-slate-400">Style: {op.styleCode}</div>
                           </div>
-                          <div className="text-xs text-slate-600 dark:text-slate-400">Style: {op.styleCode}</div>
                         </div>
-                      </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-1">
-                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                          <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Ready</span>
-                        </div>
+                        <div className="flex items-center justify-between mt-2">
+                          <div className="flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                            <span className="text-xs font-medium text-blue-600 dark:text-blue-400">From Pond</span>
+                          </div>
                           <div className="text-right">
-                            <div className="text-base font-bold text-slate-900 dark:text-white">{op.qtyPond || 0}</div>
-                            <div className="text-[10px] text-slate-500">pieces</div>
-                            {op.allPatternsCompleted && (
-                              <div className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                                {op.setsReadyForSewing || 0} sets ready
+                            {/* Jumlah set dan total pola */}
+                            <div className="text-base font-bold text-blue-600 dark:text-blue-400">
+                              {op.qtyCP || 0} sets
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              ({(op.qtyCP || 0) * patternMultiplier} patterns)
+                            </div>
+
+                            {/* Progress inspeksi (selalu tampil jika qtyCP > 0) */}
+                            {op.qtyCP > 0 && (
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                                Inspected: {op.cpGoodQty + op.cpNgQty}/{cpTotalPatterns} ({Math.round(((op.cpGoodQty + op.cpNgQty) / cpTotalPatterns) * 100)}%)
+                              </div>
+                            )}
+
+                            {/* Status completed dengan jumlah sets siap kirim */}
+                            {isCpCompleted && (
+                              <div className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-1">
+                                <CheckCircle size={12} />
+                                Ready: {op.setsReadyForSewing || 0} sets
                               </div>
                             )}
                           </div>
-                      </div>
-                      {op.allPatternsCompleted && (
-                        <div className="mt-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                          <CheckCircle size={12} />
-                          Ready for Sewing
                         </div>
-                      )}
-                    </div>
-                  ))
+                        {op.qtyCP > 0 && (
+                          <div className="mt-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-500"
+                              style={{ width: `${((op.cpGoodQty + op.cpNgQty) / cpTotalPatterns) * 100}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )
               ) : patterns.length === 0 ? (
                 <div className="text-center py-8">
@@ -576,9 +642,12 @@ export const CheckPanelView = ({
               ) : (
                 patterns.map((pat, idx) => {
                   const p = prog[idx] || { good: 0, ng: 0, completed: false };
-                  const target = actOp.qtyEntan || 0;
+                  // ✅ Target per pattern = qtyCP (jumlah set)
+                  const target = actOp.qtyCP || 0;
                   const done = p.good + p.ng;
-                  const rem = target - done;
+                  const rem = Math.max(0, target - done);
+                  const isCompleted = done >= target;
+
                   return (
                     <div
                       key={idx}
@@ -605,16 +674,24 @@ export const CheckPanelView = ({
                       <div className="mt-1 flex items-center justify-between text-xs">
                         <span className="text-emerald-600">G:{p.good}</span>
                         <span className="text-rose-600">NG:{p.ng}</span>
-                        <span className="text-slate-500">Rem:{rem}</span>
+                        <span className={`text-slate-500 ${isCompleted ? 'text-emerald-600 font-bold' : ''}`}>
+                          Rem:{rem}
+                        </span>
                       </div>
                       <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1 mt-1.5 overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${
-                            p.completed ? 'bg-emerald-500' : 'bg-purple-500'
+                            isCompleted ? 'bg-emerald-500' : 'bg-purple-500'
                           }`}
-                          style={{ width: `${(done / target) * 100}%` }}
+                          style={{ width: `${Math.min((done / target) * 100, 100)}%` }}
                         ></div>
                       </div>
+                      {isCompleted && (
+                        <div className="mt-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          <CheckCircle size={10} />
+                          Pattern Complete ({done}/{target})
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -623,7 +700,7 @@ export const CheckPanelView = ({
           </div>
         </div>
 
-        {/* Right Column - Inspection Interface (3 dari 5 bagian) */}
+        {/* Kolom kanan – area inspeksi */}
         <div className="lg:col-span-4">
           {!actOp ? (
             <div className="h-full flex flex-col items-center justify-center bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900/50 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 p-8">
@@ -733,7 +810,8 @@ export const CheckPanelView = ({
                       </div>
                       <p className="text-xs text-slate-600 dark:text-slate-400 max-w-xl mx-auto">
                         Out of {totalGoodPola} good patterns, only {sets * patterns.length} patterns can form{' '}
-                        {sets} complete sets. The remaining {polaSisa} good patterns cannot form a set and will be considered NG.
+                        {sets} complete sets. The remaining {polaSisa} good patterns cannot form a set and will be
+                        considered NG.
                       </p>
                       <p className="text-xs font-semibold text-rose-600 dark:text-rose-400 mt-2">
                         Effective NG: {totalNgEfektif} patterns ({setNgEfektif} sets)
@@ -758,7 +836,10 @@ export const CheckPanelView = ({
                       >
                         <button
                           onClick={handleGood}
-                          disabled={submitting || (actPtrn && prog[patterns.findIndex((p) => p.name === actPtrn.name)]?.completed)}
+                          disabled={
+                            submitting ||
+                            (actPtrn && prog[patterns.findIndex((p) => p.name === actPtrn.name)]?.completed)
+                          }
                           className="absolute inset-0 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -806,7 +887,10 @@ export const CheckPanelView = ({
                       >
                         <button
                           onClick={handleNg}
-                          disabled={submitting || (actPtrn && prog[patterns.findIndex((p) => p.name === actPtrn.name)]?.completed)}
+                          disabled={
+                            submitting ||
+                            (actPtrn && prog[patterns.findIndex((p) => p.name === actPtrn.name)]?.completed)
+                          }
                           className="absolute inset-0 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -852,7 +936,7 @@ export const CheckPanelView = ({
         </div>
       </div>
 
-      {/* NG Modal */}
+      {/* Modal alasan NG */}
       {ngOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 p-6 rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
@@ -862,7 +946,9 @@ export const CheckPanelView = ({
               </div>
               <div>
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">Select Defect Reason</h3>
-                <p className="text-xs text-slate-600 dark:text-slate-300">Choose the primary reason for rejection</p>
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Choose the primary reason for rejection
+                </p>
               </div>
             </div>
             <div className="grid gap-1.5 max-h-[250px] overflow-y-auto mb-4">
