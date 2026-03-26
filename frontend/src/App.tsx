@@ -96,6 +96,8 @@ const AppContent = () => {
       'qc': '/quality-control',
       'packing': '/packing',
       'fg': '/finished-goods',
+      'reports': '/reports',
+      'traceability': '/traceability',
       'line_master': '/line-master',
       'pattern_master': '/pattern-master',
       'user_management': '/user-management'
@@ -118,6 +120,8 @@ const AppContent = () => {
       '/quality-control': 'qc',
       '/packing': 'packing',
       '/finished-goods': 'fg',
+      '/reports': 'reports',
+      '/traceability': 'traceability',
       '/line-master': 'line_master',
       '/pattern-master': 'pattern_master',
       '/user-management': 'user_management'
@@ -176,23 +180,24 @@ const AppContent = () => {
   }
 
   // Get page title
-  const getPageTitle = () => {
-    const titleMap: Record<string, string> = {
-      'dashboard': 'Production Dashboard',
-      'cutting_entan': 'Cutting Entan',
-      'cutting_pond': 'Cutting Pond',
-      'cp': 'Check Panel',
-      'sewing': 'Sewing',
-      'qc': 'Quality Control',
-      'packing': 'Packing',
-      'fg': 'Finished Goods',
-      'line_master': 'Line Master',
-      'pattern_master': 'Pattern Master',
-      'user_management': 'User Management',
+    const getPageTitle = () => {
+      const titleMap: Record<string, string> = {
+        'dashboard': 'Production Dashboard',
+        'cutting_entan': 'Cutting Entan',
+        'cutting_pond': 'Cutting Pond',
+        'cp': 'Check Panel',
+        'sewing': 'Sewing',
+        'qc': 'Quality Control',
+        'packing': 'Packing',
+        'fg': 'Finished Goods',
+        'reports': 'Reports & Analytics',
+        'traceability': 'Traceability',
+        'line_master': 'Line Master',
+        'pattern_master': 'Pattern Master',
+        'user_management': 'User Management',
+      };
+      return titleMap[activeTab] || activeTab.replace(/_/g, ' ').toUpperCase();
     };
-    
-    return titleMap[activeTab] || activeTab.replace(/_/g, ' ').toUpperCase();
-  };
 
   return (
     <div className="flex min-h-screen font-sans transition-colors duration-300 bg-slate-100 dark:bg-slate-950 text-black dark:text-white">

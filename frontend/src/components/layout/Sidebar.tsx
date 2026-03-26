@@ -3,7 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Scissors, Grid, ClipboardCheck, Shirt,
   CheckCircle, Package, Truck, Factory, Users,
-  PanelLeftClose, PanelLeftOpen, LogOut, Sun, Moon
+  PanelLeftClose, PanelLeftOpen, LogOut, Sun, Moon,
+  BarChart3, History
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { NextGLogo } from '../ui/Logo';
@@ -47,83 +48,100 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   // Menu Structure - Organized by categories
-  const menuGroups = [
-    {
-      title: "DASHBOARD",
-      items: [
-        {
-          id: 'dashboard',
-          label: 'Dashboard',
-          icon: LayoutDashboard,
-          color: 'text-blue-500'
-        },
-      ]
-    },
-    {
-      title: "PRODUCTION FLOW",
-      items: [
-        {
-          id: 'cutting_entan',
-          label: 'Cutting Entan',
-          icon: Scissors,
-          color: 'text-orange-500'
-        },
-        {
-          id: 'cutting_pond',
-          label: 'Cutting Pond',
-          icon: Grid,
-          color: 'text-blue-500'
-        },
-        {
-          id: 'cp',
-          label: 'Check Panel',
-          icon: ClipboardCheck,
-          color: 'text-emerald-500'
-        },
-        {
-          id: 'sewing',
-          label: 'Sewing',
-          icon: Shirt,
-          color: 'text-purple-500'
-        },
-        {
-          id: 'qc',
-          label: 'Quality Control',
-          icon: CheckCircle,
-          color: 'text-amber-500'
-        },
-        {
-          id: 'packing',
-          label: 'Packing',
-          icon: Package,
-          color: 'text-indigo-500'
-        },
-        {
-          id: 'fg',
-          label: 'Finished Goods',
-          icon: Truck,
-          color: 'text-green-500'
-        },
-      ]
-    },
-    {
-      title: "MASTER DATA",
-      items: [
-        {
-          id: 'line_master',
-          label: 'Line Master',
-          icon: Factory,
-          color: 'text-cyan-500'
-        },
-        {
-          id: 'user_management',
-          label: 'User Management',
-          icon: Users,
-          color: 'text-red-500'
-        },
-      ]
-    }
-  ];
+const menuGroups = [
+  {
+    title: "DASHBOARD",
+    items: [
+      {
+        id: 'dashboard',
+        label: 'Dashboard',
+        icon: LayoutDashboard,
+        color: 'text-blue-500'
+      },
+    ]
+  },
+  {
+    title: "PRODUCTION FLOW",
+    items: [
+      {
+        id: 'cutting_entan',
+        label: 'Cutting Entan',
+        icon: Scissors,
+        color: 'text-orange-500'
+      },
+      {
+        id: 'cutting_pond',
+        label: 'Cutting Pond',
+        icon: Grid,
+        color: 'text-blue-500'
+      },
+      {
+        id: 'cp',
+        label: 'Check Panel',
+        icon: ClipboardCheck,
+        color: 'text-emerald-500'
+      },
+      {
+        id: 'sewing',
+        label: 'Sewing',
+        icon: Shirt,
+        color: 'text-purple-500'
+      },
+      {
+        id: 'qc',
+        label: 'Quality Control',
+        icon: CheckCircle,
+        color: 'text-amber-500'
+      },
+      {
+        id: 'packing',
+        label: 'Packing',
+        icon: Package,
+        color: 'text-indigo-500'
+      },
+      {
+        id: 'fg',
+        label: 'Finished Goods',
+        icon: Truck,
+        color: 'text-green-500'
+      },
+    ]
+  },
+  {
+    title: "REPORTS AND ANALYTICS",
+    items: [
+      {
+        id: 'reports',
+        label: 'Reports',
+        icon: BarChart3,
+        color: 'text-cyan-500'
+      },
+      {
+        id: 'traceability',
+        label: 'Traceability',
+        icon: History,
+        color: 'text-violet-500'
+      },
+    ]
+  },
+  {
+    title: "MASTER DATA",
+    items: [
+      {
+        id: 'line_master',
+        label: 'Line Master',
+        icon: Factory,
+        color: 'text-cyan-500'
+      },
+      {
+        id: 'user_management',
+        label: 'User Management',
+        icon: Users,
+        color: 'text-red-500'
+      },
+    ]
+  }
+];
 
   const isCollapsed = !isMobile && !isOpen;
 
@@ -185,6 +203,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       'qc': '/quality-control',
       'packing': '/packing',
       'fg': '/finished-goods',
+      'reports': '/reports',
+      'traceability': '/traceability',
       'line_master': '/line-master',
       'pattern_master': '/pattern-master',
       'user_management': '/user-management'
@@ -210,6 +230,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       '/quality-control': 'qc',
       '/packing': 'packing',
       '/finished-goods': 'fg',
+      '/reports': 'reports',
+      '/traceability': 'traceability',
       '/line-master': 'line_master',
       '/pattern-master': 'pattern_master',
       '/user-management': 'user_management'

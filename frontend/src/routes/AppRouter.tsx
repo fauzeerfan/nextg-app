@@ -3,6 +3,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { DashboardView } from '../features/dashboard/DashboardView';
 import { LineMasterView } from '../features/system/LineMasterView';
 import { UserManagementView } from '../features/system/UserManagementView';
+import { ReportsView } from '../features/reports/ReportsView';
+import { TraceabilityView } from '../features/traceability/TraceabilityView';
 import { CuttingEntanView } from '../features/stations/CuttingEntanView';
 import { CuttingPondView } from '../features/stations/CuttingPondView';
 import { CheckPanelView } from '../features/stations/CheckPanelView';
@@ -40,6 +42,8 @@ export const AppRouter: React.FC<AppRouterProps> = ({
     'qc': <QualityControlView addLog={addLog} onNavigate={onNavigate} />,
     'packing': <PackingView />,
     'fg': <FinishedGoodsView />,
+    'reports': <ReportsView />,
+    'traceability': <TraceabilityView />,
     'line_master': <LineMasterView onNavigate={onNavigate} />,
     'user_management': <UserManagementView />
   };
@@ -86,6 +90,15 @@ export const AppRouter: React.FC<AppRouterProps> = ({
       <Route 
         path="/finished-goods" 
         element={tabComponents['fg']} 
+      />
+
+      <Route 
+        path="/reports" 
+        element={tabComponents['reports']} 
+      />
+      <Route 
+        path="/traceability" 
+        element={tabComponents['traceability']} 
       />
       
       {/* Master Data */}

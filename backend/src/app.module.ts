@@ -13,6 +13,8 @@ import { IotModule } from './iot/iot.module';
 import { CheckPanelModule } from './check-panel/check-panel.module';
 import { PackingModule } from './packing/packing.module';
 import { FinishedGoodsModule } from './finished-goods/finished-goods.module';
+import { ReportsModule } from './reports/reports.module';
+import { TraceabilityModule } from './traceability/traceability.module';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { FinishedGoodsModule } from './finished-goods/finished-goods.module';
     CheckPanelModule,
     PackingModule,
     FinishedGoodsModule,
+    ReportsModule,
+    TraceabilityModule,
   ],
   controllers: [AppController],
 })
