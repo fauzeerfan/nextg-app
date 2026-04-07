@@ -93,6 +93,7 @@ CREATE TABLE "ProductionOrder" (
     "cpNgQty" INTEGER NOT NULL DEFAULT 0,
     "readyForCP" BOOLEAN NOT NULL DEFAULT false,
     "setsReadyForSewing" INTEGER NOT NULL DEFAULT 0,
+    "allPatternsCompleted" BOOLEAN NOT NULL DEFAULT false,
     "qtySewingIn" INTEGER NOT NULL DEFAULT 0,
     "qtySewingOut" INTEGER NOT NULL DEFAULT 0,
     "qtyQC" INTEGER NOT NULL DEFAULT 0,
@@ -169,6 +170,7 @@ CREATE TABLE "PackingSession" (
     "status" TEXT NOT NULL DEFAULT 'OPEN',
     "qrCode" TEXT,
     "printed" BOOLEAN NOT NULL DEFAULT false,
+    "receivedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -304,6 +306,35 @@ CREATE TABLE "QcInspection" (
     CONSTRAINT "QcInspection_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "Employee" (
+    "id" TEXT NOT NULL,
+    "nik" TEXT NOT NULL,
+    "fullName" TEXT NOT NULL,
+    "gender" TEXT NOT NULL,
+    "jobTitle" TEXT NOT NULL,
+    "lineCode" TEXT NOT NULL,
+    "station" TEXT NOT NULL,
+    "section" TEXT NOT NULL,
+    "department" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Employee_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ManpowerAttendance" (
+    "id" TEXT NOT NULL,
+    "nik" TEXT NOT NULL,
+    "date" TIMESTAMP(3) NOT NULL,
+    "lineCode" TEXT NOT NULL,
+    "station" TEXT NOT NULL,
+    "scanTime" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ManpowerAttendance_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
 
@@ -345,6 +376,12 @@ CREATE UNIQUE INDEX "SewingFinishProgress_opId_finishIndex_key" ON "SewingFinish
 
 -- CreateIndex
 CREATE UNIQUE INDEX "CheckPanelInspection_opId_patternIndex_key" ON "CheckPanelInspection"("opId", "patternIndex");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Employee_nik_key" ON "Employee"("nik");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ManpowerAttendance_nik_date_key" ON "ManpowerAttendance"("nik", "date");
 
 -- AddForeignKey
 ALTER TABLE "LineStation" ADD CONSTRAINT "LineStation_lineId_fkey" FOREIGN KEY ("lineId") REFERENCES "LineMaster"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -399,3 +436,6 @@ ALTER TABLE "CheckPanelInspection" ADD CONSTRAINT "CheckPanelInspection_opId_fke
 
 -- AddForeignKey
 ALTER TABLE "QcInspection" ADD CONSTRAINT "QcInspection_opId_fkey" FOREIGN KEY ("opId") REFERENCES "ProductionOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ManpowerAttendance" ADD CONSTRAINT "ManpowerAttendance_nik_fkey" FOREIGN KEY ("nik") REFERENCES "Employee"("nik") ON DELETE CASCADE ON UPDATE CASCADE;

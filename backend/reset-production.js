@@ -14,6 +14,10 @@ async function resetProduction() {
     await prisma.$transaction(async (tx) => {
       // Hapus data transaksional dengan urutan dependensi (anak dulu, baru induk)
 
+      // 0. Manpower Attendance (data absensi harian)
+      console.log('  - Menghapus ManpowerAttendance...');
+      await tx.manpowerAttendance.deleteMany({});
+
       // 1. Log dan tracking detail
       console.log('  - Menghapus ProductionLog...');
       await tx.productionLog.deleteMany({});
@@ -68,7 +72,7 @@ async function resetProduction() {
     });
 
     console.log('✅ Semua data produksi berhasil direset!');
-    console.log('ℹ️  Master data (user, line, pattern, device) tetap utuh.');
+    console.log('ℹ️  Master data (user, line, pattern, device, employee) tetap utuh.');
   } catch (error) {
     console.error('❌ Gagal mereset data:');
     console.error(error);

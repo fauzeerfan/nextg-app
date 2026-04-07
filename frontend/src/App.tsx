@@ -13,8 +13,8 @@ type UserData = {
   email: string;
   role: string;
   lineCode?: string;
-  fullName: string;  // Ditambahkan
-  permissions: string[];  // Ditambahkan
+  fullName: string;
+  permissions: string[];
 };
 
 // Tipe untuk data yang diterima dari API login
@@ -85,7 +85,7 @@ const AppContent = () => {
     };
   }, []);
 
-  // Sync URL dengan activeTab
+  // Sync URL dengan activeTab (tab -> path)
   useEffect(() => {
     const tabToPath: Record<string, string> = {
       'dashboard': '/dashboard',
@@ -100,7 +100,10 @@ const AppContent = () => {
       'traceability': '/traceability',
       'line_master': '/line-master',
       'pattern_master': '/pattern-master',
-      'user_management': '/user-management'
+      'user_management': '/user-management',
+      'employee_management': '/employee-management',
+      'manpower_control': '/manpower-control',
+      'manpower_monitoring': '/manpower-monitoring',
     };
 
     const path = tabToPath[activeTab] || '/dashboard';
@@ -109,7 +112,7 @@ const AppContent = () => {
     }
   }, [activeTab, navigate, location.pathname]);
 
-  // Sync activeTab dengan URL saat load
+  // Sync activeTab dengan URL saat load (path -> tab)
   useEffect(() => {
     const pathToTab: Record<string, string> = {
       '/dashboard': 'dashboard',
@@ -124,7 +127,10 @@ const AppContent = () => {
       '/traceability': 'traceability',
       '/line-master': 'line_master',
       '/pattern-master': 'pattern_master',
-      '/user-management': 'user_management'
+      '/user-management': 'user_management',
+      '/employee-management': 'employee_management',
+      '/manpower-control': 'manpower_control',
+      '/manpower-monitoring': 'manpower_monitoring',
     };
 
     const tab = pathToTab[location.pathname];
@@ -180,24 +186,27 @@ const AppContent = () => {
   }
 
   // Get page title
-    const getPageTitle = () => {
-      const titleMap: Record<string, string> = {
-        'dashboard': 'Production Dashboard',
-        'cutting_entan': 'Cutting Entan',
-        'cutting_pond': 'Cutting Pond',
-        'cp': 'Check Panel',
-        'sewing': 'Sewing',
-        'qc': 'Quality Control',
-        'packing': 'Packing',
-        'fg': 'Finished Goods',
-        'reports': 'Reports & Analytics',
-        'traceability': 'Traceability',
-        'line_master': 'Line Master',
-        'pattern_master': 'Pattern Master',
-        'user_management': 'User Management',
-      };
-      return titleMap[activeTab] || activeTab.replace(/_/g, ' ').toUpperCase();
+  const getPageTitle = () => {
+    const titleMap: Record<string, string> = {
+      'dashboard': 'Production Dashboard',
+      'cutting_entan': 'Cutting Entan',
+      'cutting_pond': 'Cutting Pond',
+      'cp': 'Check Panel',
+      'sewing': 'Sewing',
+      'qc': 'Quality Control',
+      'packing': 'Packing',
+      'fg': 'Finished Goods',
+      'reports': 'Reports & Analytics',
+      'traceability': 'Traceability',
+      'line_master': 'Line Master',
+      'pattern_master': 'Pattern Master',
+      'user_management': 'User Management',
+      'employee_management': 'Employee Management',
+      'manpower_control': 'Manpower Control',
+      'manpower_monitoring': 'Manpower Monitoring',
     };
+    return titleMap[activeTab] || activeTab.replace(/_/g, ' ').toUpperCase();
+  };
 
   return (
     <div className="flex min-h-screen font-sans transition-colors duration-300 bg-slate-100 dark:bg-slate-950 text-black dark:text-white">
@@ -239,14 +248,12 @@ const AppContent = () => {
         </div>
       )}
 
-      {/* Main Content Area - Tanpa header */}
-      {/* PERBAIKAN: Tambahkan margin kiri yang menyesuaikan dengan lebar sidebar */}
+      {/* Main Content Area */}
       <div className={`flex-1 flex flex-col min-h-screen overflow-hidden transition-all duration-300 ${
-        !isMobile && isSidebarOpen ? 'md:ml-64' : 'md:ml-20'
+        !isMobile && isSidebarOpen ? 'md:ml-64 lg:ml-72' : 'md:ml-20'
       }`}>
         <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-100 dark:bg-slate-950">
           <div className="max-w-[1600px] mx-auto">
-            {/* Content */}
             <AppRouter 
               activeTab={activeTab}
               setActiveTab={setActiveTab}

@@ -15,6 +15,8 @@ import { PackingModule } from './packing/packing.module';
 import { FinishedGoodsModule } from './finished-goods/finished-goods.module';
 import { ReportsModule } from './reports/reports.module';
 import { TraceabilityModule } from './traceability/traceability.module';
+import { EmployeeModule } from './employee/employee.module';
+import { ManpowerModule } from './manpower/manpower.module';
 
 @Module({
   imports: [
@@ -33,6 +35,8 @@ import { TraceabilityModule } from './traceability/traceability.module';
     FinishedGoodsModule,
     ReportsModule,
     TraceabilityModule,
+    EmployeeModule,
+    ManpowerModule,
   ],
   controllers: [AppController],
 })

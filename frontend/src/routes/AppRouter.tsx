@@ -3,6 +3,9 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { DashboardView } from '../features/dashboard/DashboardView';
 import { LineMasterView } from '../features/system/LineMasterView';
 import { UserManagementView } from '../features/system/UserManagementView';
+import { EmployeeManagementView } from '../features/employee/EmployeeManagementView';
+import { ManpowerControlView } from '../features/manpower/ManpowerControlView';
+import { ManpowerMonitoringView } from '../features/manpower/ManpowerMonitoringView';
 import { ReportsView } from '../features/reports/ReportsView';
 import { TraceabilityView } from '../features/traceability/TraceabilityView';
 import { CuttingEntanView } from '../features/stations/CuttingEntanView';
@@ -26,13 +29,6 @@ export const AppRouter: React.FC<AppRouterProps> = ({
   addLog,
   onNavigate
 }) => {
-  // Fungsi untuk menangani navigasi dan update tab
-  const handleNavigation = (tabId: string) => {
-    setActiveTab(tabId);
-    window.history.pushState({}, '', `/${tabId.replace('_', '-')}`);
-  };
-
-  // Mapping antara tab ID dan komponen
   const tabComponents: Record<string, React.ReactNode> = {
     'dashboard': <DashboardView />,
     'cutting_entan': <CuttingEntanView addLog={addLog} />,
@@ -45,81 +41,39 @@ export const AppRouter: React.FC<AppRouterProps> = ({
     'reports': <ReportsView />,
     'traceability': <TraceabilityView />,
     'line_master': <LineMasterView onNavigate={onNavigate} />,
-    'user_management': <UserManagementView />
+    'user_management': <UserManagementView />,
+    'employee_management': <EmployeeManagementView />,
+    'manpower_control': <ManpowerControlView />,
+    'manpower_monitoring': <ManpowerMonitoringView />
   };
 
   return (
     <Routes>
-      {/* Dashboard */}
-      <Route 
-        path="/" 
-        element={
-          <Navigate to="/dashboard" replace />
-        } 
-      />
-      <Route 
-        path="/dashboard" 
-        element={tabComponents['dashboard']} 
-      />
-      
-      {/* Stations */}
-      <Route 
-        path="/cutting-entan" 
-        element={tabComponents['cutting_entan']} 
-      />
-      <Route 
-        path="/cutting-pond" 
-        element={tabComponents['cutting_pond']} 
-      />
-      <Route 
-        path="/check-panel" 
-        element={tabComponents['cp']} 
-      />
-      <Route 
-        path="/sewing" 
-        element={tabComponents['sewing']} 
-      />
-      <Route 
-        path="/quality-control" 
-        element={tabComponents['qc']} 
-      />
-      <Route 
-        path="/packing" 
-        element={tabComponents['packing']} 
-      />
-      <Route 
-        path="/finished-goods" 
-        element={tabComponents['fg']} 
-      />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/dashboard" element={tabComponents['dashboard']} />
 
-      <Route 
-        path="/reports" 
-        element={tabComponents['reports']} 
-      />
-      <Route 
-        path="/traceability" 
-        element={tabComponents['traceability']} 
-      />
-      
+      {/* Stations */}
+      <Route path="/cutting-entan" element={tabComponents['cutting_entan']} />
+      <Route path="/cutting-pond" element={tabComponents['cutting_pond']} />
+      <Route path="/check-panel" element={tabComponents['cp']} />
+      <Route path="/sewing" element={tabComponents['sewing']} />
+      <Route path="/quality-control" element={tabComponents['qc']} />
+      <Route path="/packing" element={tabComponents['packing']} />
+      <Route path="/finished-goods" element={tabComponents['fg']} />
+
+      <Route path="/reports" element={tabComponents['reports']} />
+      <Route path="/traceability" element={tabComponents['traceability']} />
+
       {/* Master Data */}
-      <Route 
-        path="/line-master" 
-        element={tabComponents['line_master']} 
-      />
-      <Route 
-        path="/pattern-master" 
-        element={tabComponents['pattern_master']} 
-      />
-      <Route 
-        path="/user-management" 
-        element={tabComponents['user_management']} 
-      />
-      
+      <Route path="/line-master" element={tabComponents['line_master']} />
+      <Route path="/pattern-master" element={tabComponents['pattern_master']} />
+      <Route path="/user-management" element={tabComponents['user_management']} />
+      <Route path="/employee-management" element={tabComponents['employee_management']} />
+      <Route path="/manpower-control" element={tabComponents['manpower_control']} />
+      <Route path="/manpower-monitoring" element={tabComponents['manpower_monitoring']} />
+
       {/* Fallback */}
-      <Route 
-        path="*" 
-        element={<Navigate to="/dashboard" replace />} 
-      />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 };

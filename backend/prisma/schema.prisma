@@ -403,3 +403,33 @@ model QcInspection {
 
   op ProductionOrder @relation(fields: [opId], references: [id], onDelete: Cascade)
 }
+
+// ========== NEW: Employee Management ==========
+model Employee {
+  id          String   @id @default(uuid())
+  nik         String   @unique
+  fullName    String
+  gender      String   // "Laki-laki", "Perempuan"
+  jobTitle    String
+  lineCode    String   // e.g., "K1YH"
+  station     String   // station code from StationCode enum
+  section     String
+  department  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  attendances ManpowerAttendance[]
+}
+
+// ========== NEW: Manpower Attendance ==========
+model ManpowerAttendance {
+  id         String   @id @default(uuid())
+  nik        String
+  tanggal    DateTime @map("date") // only date part (use date only)
+  lineCode   String
+  station    String
+  scanTime   DateTime @default(now())
+  employee   Employee @relation(fields: [nik], references: [nik], onDelete: Cascade)
+
+  @@unique([nik, tanggal])
+}
