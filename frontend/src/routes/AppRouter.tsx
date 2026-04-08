@@ -7,7 +7,7 @@ import { EmployeeManagementView } from '../features/employee/EmployeeManagementV
 import { ManpowerControlView } from '../features/manpower/ManpowerControlView';
 import { ManpowerMonitoringView } from '../features/manpower/ManpowerMonitoringView';
 import { ReportsView } from '../features/reports/ReportsView';
-import { TraceabilityView } from '../features/traceability/TraceabilityView';
+import { TraceabilityExtendedView } from '../features/traceability/TraceabilityExtendedView';
 import { CuttingEntanView } from '../features/stations/CuttingEntanView';
 import { CuttingPondView } from '../features/stations/CuttingPondView';
 import { CheckPanelView } from '../features/stations/CheckPanelView';
@@ -39,7 +39,7 @@ export const AppRouter: React.FC<AppRouterProps> = ({
     'packing': <PackingView />,
     'fg': <FinishedGoodsView />,
     'reports': <ReportsView />,
-    'traceability': <TraceabilityView />,
+    'traceability': <TraceabilityExtendedView />,
     'line_master': <LineMasterView onNavigate={onNavigate} />,
     'user_management': <UserManagementView />,
     'employee_management': <EmployeeManagementView />,
