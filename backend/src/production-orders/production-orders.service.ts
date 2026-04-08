@@ -22,124 +22,156 @@ export class ProductionOrdersService {
    * digunakan filter berdasarkan kuantitas atau kondisi logis, bukan currentStation.
    */
   async findActiveForStation(station: string, includeProgress = false) {
-    // ===== QUALITY CONTROL =====
-    if (station === 'QC') {
-      const ops = await this.prisma.productionOrder.findMany({
-        where: {
-          status: ProductionStatus.WIP,
-          qtySewingOut: { gt: 0 },
-        },
-        include: {
-          line: true,
-        },
-        orderBy: { createdAt: 'asc' },
-      });
-      // Filter yang masih memiliki sisa inspeksi
-      return ops.filter(op => op.qtySewingOut > (op.qtyQC + op.qcNgQty));
-    }
-
-    // ===== SEWING =====
-    if (station === 'SEWING') {
-      const ops = await this.prisma.productionOrder.findMany({
-        where: {
-          status: ProductionStatus.WIP,
-          qtySewingIn: { gt: 0 }, // tampilkan OP yang sudah menerima set dari CP
-        },
-        include: {
-          line: true,
-          sewingStartProgress: true,
-          sewingFinishProgress: true,
-        },
-        orderBy: { createdAt: 'asc' },
-      });
-      // Filter yang masih memiliki set belum selesai (qtySewingOut < qtySewingIn)
-      return ops.filter(op => (op.qtySewingOut || 0) < (op.qtySewingIn || 0));
-    }
-
-    // ===== PACKING =====
-    if (station === 'PACKING') {
-      const ops = await this.prisma.productionOrder.findMany({
-        where: {
-          status: ProductionStatus.WIP,
-        },
-        include: { line: true },
-        orderBy: { createdAt: 'asc' },
-      });
-      return ops.filter(op => (op.qtyQC || 0) > (op.qtyPacking || 0));
-    }
-
-    // ===== CHECK PANEL =====
-      if (station === 'CP') {
-        const ops = await this.prisma.productionOrder.findMany({
-          where: {
-            status: ProductionStatus.WIP,
-            currentStation: StationCode.CP,  // ✅ HANYA yang sudah ditransfer dari Pond
-          },
-          include: { 
-            line: true,
-            checkPanelInspections: true,  // ✅ Include inspection progress
-          },
-          orderBy: { createdAt: 'asc' },
-        });
-        return ops;
-      }
-
-    // ===== CUTTING POND =====
-      if (station === 'CUTTING_POND') {
-        const ops = await this.prisma.productionOrder.findMany({
-          where: {
-            status: ProductionStatus.WIP,
-            currentStation: StationCode.CUTTING_POND,
-            // ✅ Tampilkan OP yang masih proses ATAU sudah selesai tapi belum transfer
-            // (readyForCP = false artinya masih proses, readyForCP = true artinya selesai tapi belum transfer)
-          },
-          include: {
-            line: true,
-            patternProgress: true,
-          },
-          orderBy: { createdAt: 'asc' },
-        });
-        
-        // Format patternProgress menjadi array patterns
-        return ops.map(op => ({
-          ...op,
-          patterns: op.patternProgress?.map(p => ({
-            index: p.patternIndex,
-            name: p.patternName,
-            target: p.target,
-            good: p.good,
-            ng: p.ng,
-            current: p.good + p.ng,
-            completed: p.completed,
-          })) || [],
-          patternProgress: undefined,
-        }));
-      }
-
-    // ===== CUTTING ENTAN =====
-    if (station === 'CUTTING_ENTAN') {
-      const ops = await this.prisma.productionOrder.findMany({
-        where: {
-          status: ProductionStatus.WIP,
-          qtyEntan: { gt: this.prisma.productionOrder.fields.qtySentToPond },
-        },
-        include: { line: true },
-        orderBy: { createdAt: 'asc' },
-      });
-      return ops;
-    }
-
-    // ===== STASIUN LAIN (FALLBACK) =====
-    const where: any = {
+  // ==========================================
+  // CHECK PANEL (CP)
+  // ==========================================
+if (station === 'CP') {
+  const ops = await this.prisma.productionOrder.findMany({
+    where: {
       status: ProductionStatus.WIP,
-      currentStation: station as StationCode,
-    };
-    return this.prisma.productionOrder.findMany({
-      where,
+      qtyCP: { gt: 0 },
+    },
+    include: { line: true, checkPanelInspections: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  return ops.filter(op => {
+    const totalInspected = (op.cpGoodQty || 0) + (op.cpNgQty || 0);
+    const hasRemainingInspection = totalInspected < (op.qtyCP || 0);
+    const hasRemainingToSend = (op.setsReadyForSewing || 0) > 0;
+    // OP tetap aktif jika:
+    // - masih ada pattern yang belum diinspeksi, ATAU
+    // - masih ada set yang belum dikirim ke Sewing
+    return hasRemainingInspection || hasRemainingToSend;
+  });
+}
+
+  // ==========================================
+  // SEWING
+  // ==========================================
+  if (station === 'SEWING') {
+    // Tampilkan OP yang masih memiliki input (qtySewingIn) lebih besar dari output (qtySewingOut)
+    const ops = await this.prisma.productionOrder.findMany({
+      where: {
+        status: ProductionStatus.WIP,
+        qtySewingIn: { gt: 0 },
+      },
+      include: {
+        line: true,
+        sewingStartProgress: true,
+        sewingFinishProgress: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return ops.filter(op => (op.qtySewingOut || 0) < (op.qtySewingIn || 0));
+  }
+
+  // ==========================================
+  // QUALITY CONTROL (QC)
+  // ==========================================
+  if (station === 'QC') {
+    const ops = await this.prisma.productionOrder.findMany({
+      where: {
+        status: ProductionStatus.WIP,
+        qtySewingOut: { gt: 0 },
+      },
       include: { line: true },
       orderBy: { createdAt: 'asc' },
     });
+    return ops.filter(op => {
+      const totalInspected = (op.qtyQC || 0) + (op.qcNgQty || 0);
+      return totalInspected < (op.qtySewingOut || 0);
+    });
   }
+
+  // ==========================================
+  // PACKING
+  // ==========================================
+  if (station === 'PACKING') {
+    const ops = await this.prisma.productionOrder.findMany({
+      where: {
+        status: ProductionStatus.WIP,
+        qtyQC: { gt: 0 },
+      },
+      include: { line: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return ops.filter(op => (op.qtyPacking || 0) < (op.qtyQC || 0));
+  }
+
+  // ==========================================
+  // FINISHED GOODS (FG)
+  // ==========================================
+  if (station === 'FG') {
+    const ops = await this.prisma.productionOrder.findMany({
+      where: {
+        status: ProductionStatus.WIP,
+        qtyPacking: { gt: 0 },
+      },
+      include: { line: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return ops.filter(op => (op.qtyFG || 0) < (op.qtyPacking || 0));
+  }
+
+  // ==========================================
+  // CUTTING POND (tetap pakai currentStation)
+  // ==========================================
+  if (station === 'CUTTING_POND') {
+    const ops = await this.prisma.productionOrder.findMany({
+      where: {
+        status: ProductionStatus.WIP,
+        currentStation: StationCode.CUTTING_POND,
+      },
+      include: {
+        line: true,
+        patternProgress: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    // Format patternProgress menjadi array patterns (sama seperti sebelumnya)
+    return ops.map(op => ({
+      ...op,
+      patterns: op.patternProgress?.map(p => ({
+        index: p.patternIndex,
+        name: p.patternName,
+        target: p.target,
+        good: p.good,
+        ng: p.ng,
+        current: p.good + p.ng,
+        completed: p.completed,
+      })) || [],
+      patternProgress: undefined,
+    }));
+  }
+
+  // ==========================================
+  // CUTTING ENTAN (tetap pakai currentStation + qty)
+  // ==========================================
+  if (station === 'CUTTING_ENTAN') {
+    const ops = await this.prisma.productionOrder.findMany({
+      where: {
+        status: ProductionStatus.WIP,
+        qtyEntan: { gt: this.prisma.productionOrder.fields.qtySentToPond },
+      },
+      include: { line: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return ops;
+  }
+
+  // ==========================================
+  // FALLBACK (station lain, misal tidak dikenal)
+  // ==========================================
+  const where: any = {
+    status: ProductionStatus.WIP,
+    currentStation: station as StationCode,
+  };
+  return this.prisma.productionOrder.findMany({
+    where,
+    include: { line: true },
+    orderBy: { createdAt: 'asc' },
+  });
+}
 
   async findHistoryForStation(station: string) {
     if (station === 'CUTTING_ENTAN') {

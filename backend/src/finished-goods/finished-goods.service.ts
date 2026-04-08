@@ -12,17 +12,22 @@ export class FinishedGoodsService {
   /**
    * Menerima box dari packing (scan QR)
    */
-  async receive(qrCode: string) {
-    // Asumsi QR code berisi "PACK-{sessionId}"
-    const sessionId = qrCode.replace('PACK-', '');
-    const session = await this.prisma.packingSession.findUnique({
-      where: { id: sessionId },
-      include: { items: { include: { op: true } } },
-    });
-    if (!session) throw new NotFoundException('Session not found');
-    if (session.status !== 'CLOSED') throw new BadRequestException('Session not closed yet');
+async receive(qrCode: string) {
+  // Asumsi QR code berisi "PACK-{sessionId}"
+  const sessionId = qrCode.replace('PACK-', '');
+  const session = await this.prisma.packingSession.findUnique({
+    where: { id: sessionId },
+    include: { items: { include: { op: true } } },
+  });
+  if (!session) throw new NotFoundException('Session not found');
+  if (session.status !== 'CLOSED') throw new BadRequestException('Session not closed yet');
+  
+  // 🔥 TAMBAHAN: cegah double scan
+  if (session.receivedAt) {
+    throw new BadRequestException('QR code already received');
+  }
 
-    return this.prisma.$transaction(async (tx) => {
+  return this.prisma.$transaction(async (tx) => {
       // 1. Untuk setiap item di session, buat FGStockItem
       for (const item of session.items) {
         await tx.fGStockItem.create({

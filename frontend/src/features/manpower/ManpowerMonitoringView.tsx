@@ -5,11 +5,6 @@ import SankeyChart from '../../components/ui/SankeyChart';
 
 const API_BASE_URL = 'http://localhost:3000';
 
-interface EmployeeFlowDetail {
-  nodes: { id: string; name: string; type: 'employee' | 'line' | 'station' }[];
-  links: { source: number; target: number; value: number }[];
-}
-
 interface AttendanceRecord {
   id: string;
   nik: string;
@@ -29,16 +24,17 @@ const getAuthHeaders = () => {
 };
 
 export const ManpowerMonitoringView = () => {
-  const [flowData, setFlowData] = useState<EmployeeFlowDetail>({ nodes: [], links: [] });
-  const [loading, setLoading] = useState(false);
+  // State untuk flow diagram (Karyawan → Line per Tanggal)
+  const [processedFlow, setProcessedFlow] = useState<{ nodes: any[]; links: any[] }>({ nodes: [], links: [] });
+  const [flowLoading, setFlowLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-const [startDate, setStartDate] = useState(() => {
-  const d = new Date();
-  d.setDate(d.getDate() - 7);
-  return d.toISOString().split('T')[0];
-});
-const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   
   const [filterLine, setFilterLine] = useState('');
   const [filterStation, setFilterStation] = useState('');
@@ -55,6 +51,22 @@ const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')
   const [tablePage, setTablePage] = useState(1);
   const [tableLimit, setTableLimit] = useState(10);
 
+  // ========== HEATMAP STATE ==========
+  const [heatmapStartDate, setHeatmapStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [heatmapEndDate, setHeatmapEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [heatmapData, setHeatmapData] = useState<{
+    nik: string;
+    fullName: string;
+    department: string;
+    jobTitle: string;
+    daily: Record<string, { lineCode: string; station: string }>;
+  }[]>([]);
+  const [loadingHeatmap, setLoadingHeatmap] = useState(false);
+
   // Fetch employee list
   useEffect(() => {
     fetch(`${API_BASE_URL}/employee`, { headers: getAuthHeaders() })
@@ -63,33 +75,127 @@ const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')
       .catch(console.error);
   }, []);
 
+  // Fungsi untuk mengambil data attendance dan memproses menjadi flow Karyawan → Line per Tanggal
   const fetchFlowData = useCallback(async () => {
-    setLoading(true);
+    setFlowLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
       if (startDate) params.append('start', new Date(startDate).toISOString());
       if (endDate) params.append('end', new Date(endDate).toISOString());
       if (filterLine) params.append('lineCode', filterLine);
-      if (filterStation) params.append('station', filterStation);
       if (searchNik) params.append('nik', searchNik);
+      params.append('limit', '10000'); // ambil semua data untuk flow
+      params.append('offset', '0');
 
-      const url = `${API_BASE_URL}/manpower/employee-flow-detail?${params}`;
-      console.log('Fetching:', url);
-      
+      const url = `${API_BASE_URL}/manpower/attendance-list?${params}`;
       const res = await fetch(url, { headers: getAuthHeaders() });
       
       if (!res.ok) {
         const text = await res.text();
-        console.error(`HTTP ${res.status}: ${text}`);
         throw new Error(`Server error: ${res.status} - ${text.substring(0, 100)}`);
       }
       
       const data = await res.json();
-      setFlowData(data);
-      if (data.nodes.length === 0) {
+      const records = data.data;
+
+      if (!records || records.length === 0) {
+        setProcessedFlow({ nodes: [], links: [] });
         setError('Tidak ada data check-in untuk periode ini.');
+        return;
       }
+
+      // Kelompokkan per karyawan
+      const empMap = new Map<string, { nik: string; fullName: string; attendances: any[] }>();
+      records.forEach((rec: any) => {
+        if (!empMap.has(rec.nik)) {
+          empMap.set(rec.nik, { nik: rec.nik, fullName: rec.fullName, attendances: [] });
+        }
+        empMap.get(rec.nik)!.attendances.push(rec);
+      });
+
+      // Persiapan node dan link
+      const nodeMap = new Map<string, any>();
+      const linkMap = new Map<string, number>(); // key: "sourceId->targetId"
+
+      for (const [nik, empData] of empMap.entries()) {
+        // Urutkan berdasarkan tanggal ascending
+        const attendances = empData.attendances.sort((a, b) => 
+          new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime()
+        );
+        
+        // Tambahkan node karyawan
+        const empNodeId = `emp-${nik}`;
+        if (!nodeMap.has(empNodeId)) {
+          nodeMap.set(empNodeId, {
+            id: empNodeId,
+            name: `${empData.fullName} (${nik})`,
+            type: 'employee'
+          });
+        }
+
+        if (attendances.length === 0) continue;
+
+        // Node line pertama
+        const first = attendances[0];
+        const firstDate = new Date(first.tanggal).toISOString().split('T')[0];
+        const firstNodeId = `line-${first.lineCode}-${firstDate}`;
+        if (!nodeMap.has(firstNodeId)) {
+          nodeMap.set(firstNodeId, {
+            id: firstNodeId,
+            name: `${first.lineCode} (${firstDate})`,
+            type: 'line-date'
+          });
+        }
+
+        // Link employee -> line pertama
+        const linkKeyFirst = `${empNodeId}->${firstNodeId}`;
+        linkMap.set(linkKeyFirst, (linkMap.get(linkKeyFirst) || 0) + 1);
+
+        // Link antar line-date berikutnya
+        for (let i = 0; i < attendances.length - 1; i++) {
+          const current = attendances[i];
+          const next = attendances[i+1];
+          const currDate = new Date(current.tanggal).toISOString().split('T')[0];
+          const nextDate = new Date(next.tanggal).toISOString().split('T')[0];
+          const currNodeId = `line-${current.lineCode}-${currDate}`;
+          const nextNodeId = `line-${next.lineCode}-${nextDate}`;
+          
+          if (!nodeMap.has(currNodeId)) {
+            nodeMap.set(currNodeId, {
+              id: currNodeId,
+              name: `${current.lineCode} (${currDate})`,
+              type: 'line-date'
+            });
+          }
+          if (!nodeMap.has(nextNodeId)) {
+            nodeMap.set(nextNodeId, {
+              id: nextNodeId,
+              name: `${next.lineCode} (${nextDate})`,
+              type: 'line-date'
+            });
+          }
+
+          const linkKey = `${currNodeId}->${nextNodeId}`;
+          linkMap.set(linkKey, (linkMap.get(linkKey) || 0) + 1);
+        }
+      }
+
+      // Konversi ke array untuk SankeyChart
+      const nodes = Array.from(nodeMap.values());
+      const nodeIndexMap = new Map<string, number>();
+      nodes.forEach((node, idx) => nodeIndexMap.set(node.id, idx));
+      
+      const links = Array.from(linkMap.entries()).map(([key, value]) => {
+        const [sourceId, targetId] = key.split('->');
+        return {
+          source: nodeIndexMap.get(sourceId)!,
+          target: nodeIndexMap.get(targetId)!,
+          value
+        };
+      });
+
+      setProcessedFlow({ nodes, links });
     } catch (err: any) {
       console.error('Fetch error:', err);
       if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
@@ -97,11 +203,11 @@ const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')
       } else {
         setError(err.message || 'Gagal mengambil data');
       }
-      setFlowData({ nodes: [], links: [] });
+      setProcessedFlow({ nodes: [], links: [] });
     } finally {
-      setLoading(false);
+      setFlowLoading(false);
     }
-  }, [startDate, endDate, filterLine, filterStation, searchNik]);
+  }, [startDate, endDate, filterLine, searchNik]);
 
   // Auto-refresh setiap 30 detik
   useEffect(() => {
@@ -144,17 +250,22 @@ const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')
     setEndDate(today);
   };
 
+  // Untuk dropdown filter (diambil dari data flow yang sudah diproses)
   const uniqueLines = useMemo(() => {
-    return Array.from(new Set(flowData.nodes.filter(n => n.type === 'line').map(n => n.name))).sort();
-  }, [flowData]);
+    const lines = processedFlow.nodes
+      .filter(n => n.type === 'line-date')
+      .map(n => n.name.split(' ')[0]); // ambil kode line saja
+    return Array.from(new Set(lines)).sort();
+  }, [processedFlow]);
 
   const uniqueStations = useMemo(() => {
-    return Array.from(new Set(flowData.nodes.filter(n => n.type === 'station').map(n => n.name))).sort();
-  }, [flowData]);
+    // Tidak relevan untuk flow baru, tapi tetap disediakan agar filter tidak error
+    return [];
+  }, []);
 
   const uniqueEmployees = useMemo(() => {
-    return Array.from(new Set(flowData.nodes.filter(n => n.type === 'employee').map(n => n.name))).sort();
-  }, [flowData]);
+    return Array.from(new Set(processedFlow.nodes.filter(n => n.type === 'employee').map(n => n.name))).sort();
+  }, [processedFlow]);
 
   const fetchAttendanceList = useCallback(async () => {
     setLoadingTable(true);
@@ -185,6 +296,63 @@ const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')
   useEffect(() => {
     fetchAttendanceList();
   }, [fetchAttendanceList]);
+
+  // ========== FETCH HEATMAP DATA ==========
+  const fetchHeatmapData = useCallback(async () => {
+    setLoadingHeatmap(true);
+    try {
+      const params = new URLSearchParams();
+      params.append('start', new Date(heatmapStartDate).toISOString());
+      params.append('end', new Date(heatmapEndDate).toISOString());
+      params.append('limit', '1000');
+      const res = await fetch(`${API_BASE_URL}/manpower/attendance-list?${params}`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const records = data.data;
+        
+        const employeeMap = new Map<string, any>();
+        records.forEach((rec: any) => {
+          const nik = rec.nik;
+          if (!employeeMap.has(nik)) {
+            employeeMap.set(nik, {
+              nik: rec.nik,
+              fullName: rec.fullName,
+              department: rec.department,
+              jobTitle: rec.jobTitle,
+              daily: {} as Record<string, { lineCode: string; station: string }>,
+            });
+          }
+          const emp = employeeMap.get(nik);
+          const dateKey = new Date(rec.tanggal).toISOString().split('T')[0];
+          emp.daily[dateKey] = { lineCode: rec.lineCode, station: rec.station };
+        });
+        
+        const heatmapArray = Array.from(employeeMap.values()).sort((a, b) => 
+          a.fullName.localeCompare(b.fullName)
+        );
+        setHeatmapData(heatmapArray);
+      }
+    } catch (error) {
+      console.error('Failed to fetch heatmap data', error);
+    } finally {
+      setLoadingHeatmap(false);
+    }
+  }, [heatmapStartDate, heatmapEndDate]);
+
+  useEffect(() => {
+    fetchHeatmapData();
+  }, [fetchHeatmapData]);
+
+  // ========== Daftar tanggal unik untuk heatmap ==========
+  const heatmapDates = useMemo(() => {
+    const dateSet = new Set<string>();
+    heatmapData.forEach(emp => {
+      Object.keys(emp.daily).forEach(date => dateSet.add(date));
+    });
+    return Array.from(dateSet).sort();
+  }, [heatmapData]);
 
   return (
     <div className="p-6">
@@ -222,13 +390,6 @@ const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium mb-1">Filter Station</label>
-            <select className="w-full border rounded-lg p-2 dark:bg-slate-700" value={filterStation} onChange={e => setFilterStation(e.target.value)}>
-              <option value="">Semua Station</option>
-              {uniqueStations.map(st => <option key={st} value={st}>{st}</option>)}
-            </select>
-          </div>
-          <div>
             <label className="block text-xs font-medium mb-1">Filter Karyawan</label>
             <select
               className="w-full border rounded-lg p-2 dark:bg-slate-700"
@@ -237,7 +398,6 @@ const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')
             >
               <option value="">Semua Karyawan</option>
               {uniqueEmployees.map(emp => {
-                // Extract NIK from name (format: "Nama (NIK)")
                 const nikMatch = emp.match(/\(([^)]+)\)/);
                 const nik = nikMatch ? nikMatch[1] : emp;
                 return <option key={nik} value={nik}>{emp}</option>;
@@ -260,30 +420,144 @@ const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')
         </div>
       )}
 
-      {/* Sankey Diagram */}
+      {/* Sankey Diagram: Flow Karyawan → Line per Tanggal */}
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg mb-6">
-        <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-          <TrendingUp size={20} /> Flow Manpower (Karyawan → Line → Station)
-        </h3>
-        {loading ? (
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <TrendingUp size={20} /> Flow Manpower
+          </h3>
+          <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700">
+            Scroll area grafik untuk melihat detail
+          </span>
+        </div>
+        
+        {flowLoading ? (
           <div className="flex justify-center py-12"><Loader2 className="animate-spin text-purple-600" size={32} /></div>
-        ) : flowData.nodes.length === 0 ? (
+        ) : processedFlow.nodes.length === 0 ? (
           <div className="text-center py-12 text-slate-500">Tidak ada data untuk periode dan filter yang dipilih.</div>
         ) : (
-          <div style={{ width: '100%', overflowX: 'auto' }}>
-            <SankeyChart
-              nodes={flowData.nodes}
-              links={flowData.links}
-              width={Math.max(900, flowData.nodes.filter(n => n.type === 'employee').length * 150)}
-              height={Math.max(500, flowData.nodes.length * 25)}
-              nodeWidth={20}
-              nodePadding={30}
-            />
+          <div 
+            className="w-full overflow-auto rounded-lg border border-slate-100 dark:border-slate-700 bg-slate-50/30 dark:bg-slate-900/30"
+            style={{ maxHeight: '600px' }}
+          >
+            <div style={{ padding: '10px' }}>
+              <SankeyChart
+                nodes={processedFlow.nodes}
+                links={processedFlow.links}
+                width={Math.max(900, processedFlow.nodes.filter(n => n.type === 'employee').length * 150)}
+                height={Math.max(500, processedFlow.nodes.length * 25)}
+                nodeWidth={20}
+                nodePadding={30}
+              />
+            </div>
           </div>
         )}
       </div>
 
-      {/* Tabel Data Attendance */}
+      {/* ========== HEATMAP: Employee Daily Activity ========== */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg mb-6">
+        <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
+          <div>
+            <h3 className="text-lg font-bold flex items-center gap-2">
+              🔥 Heatmap: Employee Daily Activity
+            </h3>
+            <p className="text-xs text-slate-500">Visualisasi kehadiran per karyawan per hari (hijau = hadir)</p>
+          </div>
+          <div className="flex gap-3 items-center">
+            <input
+              type="date"
+              className="border rounded-lg p-2 dark:bg-slate-700 text-sm"
+              value={heatmapStartDate}
+              onChange={(e) => setHeatmapStartDate(e.target.value)}
+            />
+            <span>to</span>
+            <input
+              type="date"
+              className="border rounded-lg p-2 dark:bg-slate-700 text-sm"
+              value={heatmapEndDate}
+              onChange={(e) => setHeatmapEndDate(e.target.value)}
+            />
+            <button
+              onClick={fetchHeatmapData}
+              className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm flex items-center gap-1"
+            >
+              <RefreshCw size={14} /> Refresh
+            </button>
+          </div>
+        </div>
+
+        {loadingHeatmap ? (
+          <div className="flex justify-center py-8"><Loader2 className="animate-spin text-indigo-600" size={24} /></div>
+        ) : heatmapData.length === 0 ? (
+          <div className="text-center py-8 text-slate-500">No data for selected period</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <div className="inline-block min-w-full align-middle">
+              <div className="overflow-hidden border border-slate-200 dark:border-slate-700 rounded-lg">
+                <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                  <thead className="bg-slate-50 dark:bg-slate-900/50">
+                    <tr>
+                      <th className="sticky left-0 bg-slate-50 dark:bg-slate-900/50 z-10 px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Employee
+                      </th>
+                      {heatmapDates.map(date => (
+                        <th key={date} className="px-2 py-2 text-center text-xs font-semibold text-slate-700 dark:text-slate-300 min-w-[70px]">
+                          {date}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-800">
+                    {heatmapData.map(emp => (
+                      <tr key={emp.nik} className="hover:bg-slate-50 dark:hover:bg-slate-900/30">
+                        <td className="sticky left-0 bg-white dark:bg-slate-800 z-10 px-3 py-2 text-sm font-medium text-slate-900 dark:text-white whitespace-nowrap">
+                          <div className="truncate max-w-[180px]">{emp.fullName}</div>
+                          <div className="text-xs text-slate-500">{emp.nik}</div>
+                        </td>
+                        {heatmapDates.map(date => {
+                          const activity = emp.daily[date];
+                          const isPresent = !!activity;
+                          const tooltipText = isPresent ? `${activity.lineCode} | ${activity.station}` : 'Tidak hadir';
+                          return (
+                            <td
+                              key={date}
+                              className="px-2 py-2 text-center border-l border-slate-100 dark:border-slate-800"
+                            >
+                              <div
+                                className={`w-8 h-8 mx-auto rounded-md cursor-help transition-all hover:scale-110 ${
+                                  isPresent
+                                    ? 'bg-emerald-500 hover:bg-emerald-600 shadow-md'
+                                    : 'bg-slate-200 dark:bg-slate-700'
+                                }`}
+                                title={tooltipText}
+                              >
+                                {isPresent && (
+                                  <div className="w-full h-full flex items-center justify-center text-white text-xs font-bold">
+                                    ✓
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="mt-3 text-xs text-slate-500 flex justify-between items-center">
+          <span>Total manpower (unique employees): <strong>{heatmapData.length}</strong> people</span>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1"><div className="w-4 h-4 bg-emerald-500 rounded"></div> Hadir</span>
+            <span className="flex items-center gap-1"><div className="w-4 h-4 bg-slate-200 dark:bg-slate-700 rounded"></div> Tidak hadir</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabel Data Attendance (tidak diubah) */}
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg">
         <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
           <h3 className="text-lg font-bold flex items-center gap-2">
@@ -337,7 +611,6 @@ const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')
                 </tbody>
               </table>
             </div>
-            {/* Pagination */}
             {totalRecords > tableLimit && (
               <div className="flex justify-between items-center mt-4 pt-2 border-t border-slate-200 dark:border-slate-700">
                 <button

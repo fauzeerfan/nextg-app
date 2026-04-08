@@ -298,12 +298,13 @@ export const PackingView = () => {
   }, []);
 
   // ========== FETCH FUNCTIONS WITH showLoading PARAM ==========
-  const fetchOps = useCallback(async (showLoading = true) => {
-    if (showLoading) setRefreshing(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/production-orders?station=QC`, {
-        headers: getAuthHeaders(),
-      });
+const fetchOps = useCallback(async (showLoading = true) => {
+  if (showLoading) setRefreshing(true);
+  try {
+    // 🔥 PERUBAHAN: dari station=QC menjadi station=PACKING
+    const res = await fetch(`${API_BASE_URL}/production-orders?station=PACKING`, {
+      headers: getAuthHeaders(),
+    });
       if (res.ok) {
         const data: ProductionOrder[] = await res.json();
         
