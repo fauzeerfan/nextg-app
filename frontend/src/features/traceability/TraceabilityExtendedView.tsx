@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import {
   Search, Package, Truck, FileText, Layers, ClipboardCheck,
-  CheckCircle, AlertCircle, Clock, ArrowRight, Box, Archive,
-  ChevronDown, ChevronRight, X, RefreshCw, Loader2, TrendingUp
+  CheckCircle, AlertCircle, Clock, Box, Archive,
+  ChevronDown, ChevronRight, Loader2, TrendingUp,
+  Scissors, Shirt, QrCode, Grid, Activity
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:3000';
 
+// Types
 interface BcDocument {
   nomor_er: number;
   kode_bc: string;
@@ -14,29 +16,141 @@ interface BcDocument {
   tanggal_dokumen_bc: string;
 }
 
-interface OpDetail {
-  opNumber: string;
-  qty: number;
-  styleCode: string;
-  cuttingBatches: any[];
-  patternProgress: any[];
-  checkPanelInspections: any[];
-  qcInspections: any[];
-  packingSessions: any[];
-  bcDocuments?: BcDocument[];
+interface PatternProgress {
+  patternIndex: number;
+  patternName: string;
+  target: number;
+  good: number;
+  ng: number;
+  completed: boolean;
 }
 
-interface FgItem {
+interface CheckPanelInspection {
+  patternIndex: number;
+  patternName: string;
+  good: number;
+  ng: number;
+  ngReasons: string[];
+  createdAt: string;
+}
+
+interface QcInspection {
+  good: number;
+  ng: number;
+  ngReasons: string[];
+  createdAt: string;
+}
+
+interface PackingSession {
+  sessionId: string;
   fgNumber: string;
-  totalQty: number;
-  ops: OpDetail[];
+  qty: number;
+  qrCode: string;
+  createdAt: string;
+}
+
+// Interface OpTraceResult yang diperbarui sesuai backend
+interface OpTraceResult {
+  opNumber: string;
+  styleCode: string;
+  itemNumberFG: string;
+  itemNameFG: string | null;
+  qtyOp: number;
+  status: string;
+  currentStation: string;
+  cuttingBatches: { batchNumber: number; qty: number; qrCode: string; createdAt: string }[];
+  totalCutQty: number;
+  patternProgress: PatternProgress[];
+  pondTotalGood: number;
+  pondTotalNg: number;
+  pondTotalProcessed: number;
+  checkPanelInspections: CheckPanelInspection[];
+  cpTotalGood: number;
+  cpTotalNg: number;
+  cpTotalInspected: number;
+  setsReadyForSewing: number;
+  sewingStartProgress: { startIndex: number; qty: number }[];
+  sewingFinishProgress: { finishIndex: number; qty: number }[];
+  sewingIn: number;
+  sewingOut: number;
+  qcInspections: QcInspection[];
+  qcGood: number;
+  qcNg: number;
+  packingSessions: PackingSession[];
+  totalPacked: number;
+  fgStockQty: number;
+  bcDocuments: BcDocument[];
+  updatedAt: string;
+  cuttingEntanDetails?: {
+    batches: { batchNumber: number; qty: number; createdAt: string }[];
+    totalCutSets: number;
+    totalCutPatterns: number;
+    targetOpSets: number;
+    fulfillmentPercent: number;
+    dateRange: string;
+  };
+  cuttingPondDetails?: {
+    inputFromEntanPatterns: number;
+    wipPatterns: number;
+    goodPatterns: number;
+    ngPatterns: number;
+    setsReadyForCP: number;
+    dateRange: string;
+  };
+  checkPanelDetails?: {
+    inputFromPondSets: number;
+    wipSets: number;
+    goodSets: number;
+    ngSets: number;
+    setsReadyForSewing: number;
+    ngByPattern: { patternName: string; reason: string; qty: number }[];
+    dateRange: string;
+  };
+  sewingDetails?: {
+    inputFromCPSets: number;
+    wipSets: number;
+    startProgress: { startIndex: number; qty: number }[];
+    finishProgress: { finishIndex: number; qty: number }[];
+    outputSets: number;
+    dateRange: string;
+  };
+  qcDetails?: {
+    inputFromSewingSets: number;
+    wipSets: number;
+    goodSets: number;
+    ngSets: number;
+    ngByReason: { reason: string; qty: number }[];
+    dateRange: string;
+  };
+  packingDetails?: {
+    inputFromQCSets: number;
+    wipSets: number;
+    packedSets: number;
+    sentToFGSets: number;
+    dateRange: string;
+  };
+  fgDetails?: {
+    inputFromPackingSets: number;
+    currentStockSets: number;
+    shippedSets: number;
+    dateRange: string;
+  };
+  stationProgress: {
+    station: string;
+    status: 'not_started' | 'in_progress' | 'completed';
+    percent?: number;
+  }[];
 }
 
 interface TraceResult {
   suratJalan: string;
   shipmentDate: string;
   totalQty: number;
-  fgItems: FgItem[];
+  fgItems: {
+    fgNumber: string;
+    totalQty: number;
+    ops: OpTraceResult[];
+  }[];
 }
 
 interface BcTraceResult {
@@ -58,19 +172,334 @@ const getAuthHeaders = () => {
   };
 };
 
+// Helper: filter unik berdasarkan key
+const uniqueBy = <T, K extends keyof T>(arr: T[], key: K): T[] => {
+  const seen = new Set();
+  return arr.filter(item => {
+    const val = item[key];
+    if (seen.has(val)) return false;
+    seen.add(val);
+    return true;
+  });
+};
+
+// Helper: filter dokumen BC unik berdasarkan nomor_dokumen_bc dan nomor_er
+const uniqueBcDocuments = (docs: BcDocument[]): BcDocument[] => {
+  const seen = new Set();
+  return docs.filter(doc => {
+    const key = `${doc.nomor_dokumen_bc}|${doc.nomor_er}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+// Komponen OpDetailCard dengan properti showProductionInfo
+// Jika showProductionInfo = false, bagian produksi (cutting, pond, cp, sewing, qc, packing, fg, progress) tidak dirender sama sekali.
+const OpDetailCard = ({ 
+  op, 
+  isExpanded, 
+  onToggle, 
+  detailed = true, 
+  showBcDocuments = true,
+  showProductionInfo = true 
+}: { 
+  op: OpTraceResult; 
+  isExpanded: boolean; 
+  onToggle: () => void; 
+  detailed?: boolean; 
+  showBcDocuments?: boolean;
+  showProductionInfo?: boolean;
+}) => {
+  const formatDateRange = (dateRange?: string) => {
+    if (!dateRange || dateRange === '-') return '-';
+    const parts = dateRange.split(' s/d ');
+    if (parts.length === 1) return parts[0];
+    return `${parts[0]} → ${parts[1]}`;
+  };
+
+  const ProgressBar = ({ percent, status }: { percent?: number; status: string }) => {
+    const value = percent !== undefined ? Math.min(100, Math.max(0, percent)) : 0;
+    let color = 'bg-slate-300';
+    if (status === 'completed') color = 'bg-emerald-500';
+    else if (status === 'in_progress') color = 'bg-blue-500';
+    return (
+      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${value}%` }} />
+      </div>
+    );
+  };
+
+  const renderNgList = (items: { reason: string; qty: number }[], title: string) => {
+    if (!items || items.length === 0) return null;
+    return (
+      <div className="mt-2">
+        <div className="text-xs font-semibold text-rose-600">{title}</div>
+        <ul className="list-disc list-inside text-xs text-slate-600 dark:text-slate-400 mt-1">
+          {items.map((item, idx) => (
+            <li key={idx}>{item.reason} : {item.qty} pcs</li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  return (
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg mb-3 overflow-hidden">
+      <div
+        className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+        onClick={onToggle}
+      >
+        <div className="flex items-center gap-2">
+          <Layers size={16} className="text-purple-500" />
+          <span className="font-mono font-bold text-sm">{op.opNumber}</span>
+          <span className="text-xs text-slate-500">({op.styleCode})</span>
+        </div>
+        <div className="flex items-center gap-3 text-xs">
+          {detailed ? (
+            <>
+              <span className="text-emerald-600">Good: {op.cpTotalGood + op.qcGood}</span>
+              <span className="text-rose-600">NG: {op.cpTotalNg + op.qcNg}</span>
+            </>
+          ) : null}
+          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="p-4 space-y-5">
+          {/* BC Documents - selalu ditampilkan jika showBcDocuments true */}
+          {showBcDocuments && op.bcDocuments.length > 0 && (
+            <div className="bg-rose-50 dark:bg-rose-900/20 p-3 rounded-lg">
+              <h5 className="text-sm font-bold text-rose-600 mb-2">📄 Dokumen BC (Material Penerimaan)</h5>
+              {uniqueBcDocuments(op.bcDocuments).map((doc, idx) => (
+                <div key={idx} className="text-xs">No. ER: {doc.nomor_er} | No. Dokumen: {doc.nomor_dokumen_bc} | Tgl: {new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}</div>
+              ))}
+            </div>
+          )}
+
+          {/* Seluruh informasi produksi hanya dirender jika showProductionInfo === true */}
+          {showProductionInfo && (
+            <>
+              {/* CUTTING ENTAN */}
+              <div className="border-l-4 border-orange-500 pl-3">
+                <h4 className="font-bold text-sm text-orange-700 dark:text-orange-400 flex items-center gap-2">
+                  ✂️ Cutting Entan
+                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.cuttingEntanDetails?.dateRange)})</span>
+                </h4>
+                {op.cuttingEntanDetails ? (
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                    <div>Target OP: <strong>{op.cuttingEntanDetails.targetOpSets}</strong> sets</div>
+                    <div>Total Cut: <strong>{op.cuttingEntanDetails.totalCutSets}</strong> sets / <strong>{op.cuttingEntanDetails.totalCutPatterns}</strong> patterns</div>
+                    <div>Fulfillment: <strong>{op.cuttingEntanDetails.fulfillmentPercent}%</strong></div>
+                    <div>Batches: {op.cuttingEntanDetails.batches.map(b => `#${b.batchNumber} (${b.qty})`).join(', ')}</div>
+                  </div>
+                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
+              </div>
+
+              {/* CUTTING POND */}
+              <div className="border-l-4 border-blue-500 pl-3">
+                <h4 className="font-bold text-sm text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                  🔷 Cutting Pond
+                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.cuttingPondDetails?.dateRange)})</span>
+                </h4>
+                {op.cuttingPondDetails ? (
+                  <div className="mt-2 space-y-2 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>Input dari Entan: <strong>{op.cuttingPondDetails.inputFromEntanPatterns}</strong> patterns</div>
+                      <div>WIP: <strong>{op.cuttingPondDetails.wipPatterns}</strong> patterns</div>
+                      <div className="text-emerald-600">Good: {op.cuttingPondDetails.goodPatterns}</div>
+                      <div className="text-rose-600">NG: {op.cuttingPondDetails.ngPatterns}</div>
+                      <div>Sets Ready for CP: <strong>{op.cuttingPondDetails.setsReadyForCP}</strong> sets</div>
+                    </div>
+                    <ProgressBar percent={(op.cuttingPondDetails.goodPatterns + op.cuttingPondDetails.ngPatterns) / (op.cuttingPondDetails.inputFromEntanPatterns || 1) * 100} status={op.cuttingPondDetails.setsReadyForCP > 0 ? 'completed' : 'in_progress'} />
+                  </div>
+                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
+              </div>
+
+              {/* CHECK PANEL */}
+              <div className="border-l-4 border-emerald-500 pl-3">
+                <h4 className="font-bold text-sm text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                  👁️ Check Panel
+                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.checkPanelDetails?.dateRange)})</span>
+                </h4>
+                {op.checkPanelDetails ? (
+                  <div className="mt-2 space-y-2 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>Input dari Pond: <strong>{op.checkPanelDetails.inputFromPondSets}</strong> sets</div>
+                      <div>WIP: <strong>{op.checkPanelDetails.wipSets}</strong> sets</div>
+                      <div className="text-emerald-600">Good: {op.checkPanelDetails.goodSets}</div>
+                      <div className="text-rose-600">NG: {op.checkPanelDetails.ngSets}</div>
+                      <div>Sets Ready for Sewing: <strong>{op.checkPanelDetails.setsReadyForSewing}</strong> sets</div>
+                    </div>
+                    {op.checkPanelDetails.ngByPattern.length > 0 && (
+                      <div className="mt-2 bg-rose-50 dark:bg-rose-900/20 p-2 rounded">
+                        <div className="text-xs font-semibold text-rose-600">Detail NG per Pola:</div>
+                        <ul className="list-disc list-inside text-xs mt-1">
+                          {op.checkPanelDetails.ngByPattern.map((item, idx) => (
+                            <li key={idx}><strong>{item.patternName}</strong> - {item.reason} : {item.qty} pcs</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <ProgressBar percent={(op.checkPanelDetails.goodSets + op.checkPanelDetails.ngSets) / (op.checkPanelDetails.inputFromPondSets || 1) * 100} status={op.checkPanelDetails.setsReadyForSewing > 0 ? 'completed' : 'in_progress'} />
+                  </div>
+                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
+              </div>
+
+              {/* SEWING */}
+              <div className="border-l-4 border-purple-500 pl-3">
+                <h4 className="font-bold text-sm text-purple-700 dark:text-purple-400 flex items-center gap-2">
+                  🧵 Sewing
+                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.sewingDetails?.dateRange)})</span>
+                </h4>
+                {op.sewingDetails ? (
+                  <div className="mt-2 space-y-2 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>Input dari CP: <strong>{op.sewingDetails.inputFromCPSets}</strong> sets</div>
+                      <div>WIP: <strong>{op.sewingDetails.wipSets}</strong> sets</div>
+                      <div>Start Progress: {op.sewingDetails.startProgress.map(s => `Start${s.startIndex}=${s.qty}`).join(', ')}</div>
+                      <div>Finish Progress: {op.sewingDetails.finishProgress.map(f => `Finish${f.finishIndex}=${f.qty}`).join(', ')}</div>
+                      <div>Output: <strong>{op.sewingDetails.outputSets}</strong> sets</div>
+                    </div>
+                    <ProgressBar percent={op.sewingDetails.outputSets / (op.sewingDetails.inputFromCPSets || 1) * 100} status={op.sewingDetails.outputSets >= op.sewingDetails.inputFromCPSets ? 'completed' : 'in_progress'} />
+                  </div>
+                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
+              </div>
+
+              {/* QUALITY CONTROL */}
+              <div className="border-l-4 border-amber-500 pl-3">
+                <h4 className="font-bold text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                  🔍 Quality Control
+                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.qcDetails?.dateRange)})</span>
+                </h4>
+                {op.qcDetails ? (
+                  <div className="mt-2 space-y-2 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>Input dari Sewing: <strong>{op.qcDetails.inputFromSewingSets}</strong> sets</div>
+                      <div>WIP: <strong>{op.qcDetails.wipSets}</strong> sets</div>
+                      <div className="text-emerald-600">Good: {op.qcDetails.goodSets}</div>
+                      <div className="text-rose-600">NG: {op.qcDetails.ngSets}</div>
+                    </div>
+                    {op.qcDetails.ngByReason.length > 0 && renderNgList(op.qcDetails.ngByReason, "Jenis NG:")}
+                    <ProgressBar percent={(op.qcDetails.goodSets + op.qcDetails.ngSets) / (op.qcDetails.inputFromSewingSets || 1) * 100} status={(op.qcDetails.goodSets + op.qcDetails.ngSets) >= op.qcDetails.inputFromSewingSets ? 'completed' : 'in_progress'} />
+                  </div>
+                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
+              </div>
+
+              {/* PACKING */}
+              <div className="border-l-4 border-indigo-500 pl-3">
+                <h4 className="font-bold text-sm text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
+                  📦 Packing
+                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.packingDetails?.dateRange)})</span>
+                </h4>
+                {op.packingDetails ? (
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                    <div>Input dari QC: <strong>{op.packingDetails.inputFromQCSets}</strong> sets</div>
+                    <div>WIP: <strong>{op.packingDetails.wipSets}</strong> sets (menunggu diterima FG)</div>
+                    <div>Packed: <strong>{op.packingDetails.packedSets}</strong> sets</div>
+                    <div>Sent ke FG: <strong>{op.packingDetails.sentToFGSets}</strong> sets</div>
+                    <ProgressBar percent={op.packingDetails.packedSets / (op.packingDetails.inputFromQCSets || 1) * 100} status={op.packingDetails.packedSets >= op.packingDetails.inputFromQCSets ? 'completed' : 'in_progress'} />
+                  </div>
+                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
+              </div>
+
+              {/* FINISHED GOODS */}
+              <div className="border-l-4 border-green-500 pl-3">
+                <h4 className="font-bold text-sm text-green-700 dark:text-green-400 flex items-center gap-2">
+                  ✅ Finished Goods
+                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.fgDetails?.dateRange)})</span>
+                </h4>
+                {op.fgDetails ? (
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                    <div>Input dari Packing: <strong>{op.fgDetails.inputFromPackingSets}</strong> sets</div>
+                    <div>Stock Sekarang: <strong>{op.fgDetails.currentStockSets}</strong> sets</div>
+                    <div>Sudah Dikirim: <strong>{op.fgDetails.shippedSets}</strong> sets</div>
+                    <ProgressBar percent={op.fgDetails.shippedSets / (op.fgDetails.inputFromPackingSets || 1) * 100} status={op.fgDetails.shippedSets >= op.fgDetails.inputFromPackingSets ? 'completed' : 'in_progress'} />
+                  </div>
+                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Komponen StationTimeline tidak digunakan di OpDetailCard baru, namun tetap ada untuk kompatibilitas (tidak diubah)
+const StationTimeline = ({ op }: { op: OpTraceResult }) => {
+  const stations = [
+    { key: 'cutting', name: 'Cutting Entan', icon: Scissors, color: 'orange' },
+    { key: 'pond', name: 'Cutting Pond', icon: Grid, color: 'blue' },
+    { key: 'cp', name: 'Check Panel', icon: ClipboardCheck, color: 'emerald' },
+    { key: 'sewing', name: 'Sewing', icon: Shirt, color: 'purple' },
+    { key: 'qc', name: 'Quality Control', icon: Activity, color: 'amber' },
+    { key: 'packing', name: 'Packing', icon: Package, color: 'indigo' },
+    { key: 'fg', name: 'Finished Goods', icon: Truck, color: 'green' },
+  ];
+
+  const getProgress = (station: string) => {
+    switch (station) {
+      case 'cutting':
+        return { value: op.cuttingBatches.length > 0 ? 100 : 0, max: 1, label: `${op.cuttingBatches.length} batches` };
+      case 'pond':
+        const pondMax = op.qtyOp * (op.patternProgress.length || 1);
+        return { value: op.pondTotalProcessed, max: pondMax || 1, label: `${op.pondTotalProcessed}/${pondMax || 1}` };
+      case 'cp':
+        const cpMax = op.qtyOp * (op.patternProgress.length || 1);
+        return { value: op.cpTotalInspected, max: cpMax || 1, label: `${op.cpTotalInspected}/${cpMax || 1}` };
+      case 'sewing':
+        return { value: op.sewingOut, max: op.sewingIn || 1, label: `${op.sewingOut}/${op.sewingIn || 1}` };
+      case 'qc':
+        return { value: op.qcGood + op.qcNg, max: op.sewingOut || 1, label: `${op.qcGood + op.qcNg}/${op.sewingOut || 1}` };
+      case 'packing':
+        return { value: op.totalPacked, max: op.qcGood || 1, label: `${op.totalPacked}/${op.qcGood || 1}` };
+      case 'fg':
+        return { value: op.fgStockQty, max: op.totalPacked || 1, label: `${op.fgStockQty}/${op.totalPacked || 1}` };
+      default:
+        return { value: 0, max: 1, label: '-' };
+    }
+  };
+
+  return (
+    <div className="mt-4 space-y-2">
+      <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">📊 Progress per Station</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {stations.map(station => {
+          const prog = getProgress(station.key);
+          const percent = prog.max > 0 ? (prog.value / prog.max) * 100 : 0;
+          return (
+            <div key={station.key} className="bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <station.icon size={14} className={`text-${station.color}-500`} />
+                <span className="text-xs font-medium">{station.name}</span>
+                <span className="text-xs text-slate-500 ml-auto">{prog.label}</span>
+              </div>
+              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                <div className={`h-full rounded-full bg-${station.color}-500 transition-all`} style={{ width: `${Math.min(percent, 100)}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export const TraceabilityExtendedView = () => {
-  const [searchType, setSearchType] = useState<'surat-jalan' | 'bc-document'>('surat-jalan');
+  const [searchType, setSearchType] = useState<'surat-jalan' | 'bc-document' | 'op'>('surat-jalan');
   const [searchQuery, setSearchQuery] = useState('');
   const [bcNomorEr, setBcNomorEr] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<TraceResult | BcTraceResult | null>(null);
+  const [result, setResult] = useState<OpTraceResult | TraceResult | BcTraceResult | null>(null);
   const [expandedFg, setExpandedFg] = useState<Set<string>>(new Set());
   const [expandedOp, setExpandedOp] = useState<Set<string>>(new Set());
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
-      setError('Masukkan nomor surat jalan atau nomor dokumen BC');
+      setError('Masukkan nomor OP, surat jalan, atau nomor dokumen BC');
       return;
     }
 
@@ -80,7 +509,9 @@ export const TraceabilityExtendedView = () => {
 
     try {
       let url = '';
-      if (searchType === 'surat-jalan') {
+      if (searchType === 'op') {
+        url = `${API_BASE_URL}/traceability-extended/op/${encodeURIComponent(searchQuery)}`;
+      } else if (searchType === 'surat-jalan') {
         url = `${API_BASE_URL}/traceability-extended/surat-jalan/${encodeURIComponent(searchQuery)}`;
       } else {
         let params = `nomorDokumen=${encodeURIComponent(searchQuery)}`;
@@ -90,8 +521,23 @@ export const TraceabilityExtendedView = () => {
 
       const res = await fetch(url, { headers: getAuthHeaders() });
       if (res.ok) {
-        const data = await res.json();
-        setResult(data);
+        let data = await res.json();
+        // Untuk surat jalan, filter OP unik dan BC unik
+        if (searchType === 'surat-jalan' && data && (data as TraceResult).fgItems) {
+          const traceData = data as TraceResult;
+          traceData.fgItems = traceData.fgItems.map((fg: any) => ({
+            ...fg,
+            ops: uniqueBy(fg.ops, 'opNumber')
+          }));
+          traceData.fgItems.forEach((fg: any) => {
+            fg.ops.forEach((op: OpTraceResult) => {
+              if (op.bcDocuments) op.bcDocuments = uniqueBcDocuments(op.bcDocuments);
+            });
+          });
+          setResult(traceData);
+        } else {
+          setResult(data);
+        }
       } else {
         const err = await res.json();
         setError(err.message || 'Data tidak ditemukan');
@@ -110,12 +556,28 @@ export const TraceabilityExtendedView = () => {
     setExpandedFg(newSet);
   };
 
-  const toggleOp = (opNumber: string) => {
+  const toggleOpDetail = (opNumber: string) => {
     const newSet = new Set(expandedOp);
     if (newSet.has(opNumber)) newSet.delete(opNumber);
     else newSet.add(opNumber);
     setExpandedOp(newSet);
   };
+
+  const renderOpResult = (op: OpTraceResult) => (
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-md">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+          <Layers size={20} className="text-purple-600 dark:text-purple-400" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">{op.opNumber}</h2>
+          <p className="text-sm text-slate-500">{op.styleCode} - {op.itemNumberFG} {op.itemNameFG ? `(${op.itemNameFG})` : ''}</p>
+        </div>
+      </div>
+      {/* Untuk pencarian OP, tampilkan semua informasi produksi (showProductionInfo=true) */}
+      <OpDetailCard op={op} isExpanded={true} onToggle={() => {}} detailed={true} showBcDocuments={false} showProductionInfo={true} />
+    </div>
+  );
 
   const renderSuratJalanResult = (res: TraceResult) => (
     <div className="space-y-6">
@@ -126,16 +588,14 @@ export const TraceabilityExtendedView = () => {
           </div>
           <div>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">{res.suratJalan}</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Tanggal: {new Date(res.shipmentDate).toLocaleString('id-ID')} | Total: {res.totalQty} pcs
-            </p>
+            <p className="text-sm text-slate-500">Tanggal: {new Date(res.shipmentDate).toLocaleString()} | Total: {res.totalQty} pcs</p>
           </div>
         </div>
 
         {res.fgItems.map(fg => (
           <div key={fg.fgNumber} className="mb-4 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
             <div
-              className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900/50 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition"
               onClick={() => toggleFg(fg.fgNumber)}
             >
               <div className="flex items-center gap-2">
@@ -145,59 +605,18 @@ export const TraceabilityExtendedView = () => {
               </div>
               {expandedFg.has(fg.fgNumber) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
             </div>
-
             {expandedFg.has(fg.fgNumber) && (
               <div className="p-3 space-y-3">
                 {fg.ops.map(op => (
-                  <div key={op.opNumber} className="border-l-2 border-blue-300 pl-3">
-                    <div
-                      className="flex items-center justify-between cursor-pointer py-1"
-                      onClick={() => toggleOp(op.opNumber)}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Layers size={16} className="text-purple-500" />
-                        <span className="font-mono font-bold text-sm">{op.opNumber}</span>
-                        <span className="text-xs text-slate-500">(Qty: {op.qty})</span>
-                      </div>
-                      {expandedOp.has(op.opNumber) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    </div>
-
-                    {expandedOp.has(op.opNumber) && (
-                      <div className="mt-2 pl-4 text-sm space-y-2">
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded">
-                            <span className="font-semibold">Style:</span> {op.styleCode}
-                          </div>
-                          <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded">
-                            <span className="font-semibold">Cutting Batches:</span> {op.cuttingBatches?.length || 0}
-                          </div>
-                        </div>
-
-                        {op.bcDocuments && op.bcDocuments.length > 0 && (
-                          <div className="mt-2">
-                            <h4 className="text-xs font-bold text-amber-600 mb-1">📄 Dokumen BC Terkait</h4>
-                            <div className="space-y-1">
-                              {op.bcDocuments.map((doc, idx) => (
-                                <div key={idx} className="bg-amber-50 dark:bg-amber-900/20 p-2 rounded text-xs">
-                                  <div>No. ER: {doc.nomor_er}</div>
-                                  <div>No. Dokumen: {doc.nomor_dokumen_bc}</div>
-                                  <div>Tanggal: {new Date(doc.tanggal_dokumen_bc).toLocaleDateString('id-ID')}</div>
-                                  <div>Kode BC: {doc.kode_bc}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="flex flex-wrap gap-2 text-xs text-slate-500">
-                          <span>✅ CP Good: {op.checkPanelInspections?.reduce((s, i) => s + i.good, 0) || 0}</span>
-                          <span>❌ CP NG: {op.checkPanelInspections?.reduce((s, i) => s + i.ng, 0) || 0}</span>
-                          <span>🔍 QC Good: {op.qcInspections?.reduce((s, i) => s + i.good, 0) || 0}</span>
-                          <span>⚠️ QC NG: {op.qcInspections?.reduce((s, i) => s + i.ng, 0) || 0}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <OpDetailCard
+                    key={op.opNumber}
+                    op={op}
+                    isExpanded={expandedOp.has(op.opNumber)}
+                    onToggle={() => toggleOpDetail(op.opNumber)}
+                    detailed={false}
+                    showBcDocuments={true}
+                    showProductionInfo={false}   // ← informasi produksi dihilangkan
+                  />
                 ))}
               </div>
             )}
@@ -218,7 +637,6 @@ export const TraceabilityExtendedView = () => {
           {res.bcEr && <p className="text-sm text-slate-500">No. ER: {res.bcEr}</p>}
         </div>
       </div>
-
       <h3 className="font-bold text-md mt-4 mb-2">🚚 Surat Jalan Terkait</h3>
       {res.relatedShipments.length === 0 ? (
         <p className="text-slate-500">Tidak ditemukan surat jalan yang menggunakan material ini.</p>
@@ -229,7 +647,7 @@ export const TraceabilityExtendedView = () => {
               <div className="flex justify-between items-center">
                 <div>
                   <span className="font-bold text-blue-600">{ship.suratJalan}</span>
-                  <div className="text-xs text-slate-500">{new Date(ship.shipmentDate).toLocaleDateString('id-ID')}</div>
+                  <div className="text-xs text-slate-500">{new Date(ship.shipmentDate).toLocaleDateString()}</div>
                 </div>
                 <div className="text-right text-sm">
                   <div>Total: {ship.totalQty} pcs</div>
@@ -253,7 +671,7 @@ export const TraceabilityExtendedView = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-900 dark:text-white">Traceability End-to-End</h1>
-              <p className="text-sm text-slate-600 dark:text-slate-400">Lacak dari Surat Jalan hingga Dokumen BC dan sebaliknya</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Lacak dari OP, Surat Jalan, hingga Dokumen BC</p>
             </div>
           </div>
         </div>
@@ -266,20 +684,33 @@ export const TraceabilityExtendedView = () => {
             <select
               className="w-full px-3 py-2 border rounded-lg dark:bg-slate-700"
               value={searchType}
-              onChange={e => setSearchType(e.target.value as any)}
+              onChange={e => {
+                setResult(null);
+                setError('');
+                setSearchQuery('');
+                setBcNomorEr('');
+                setExpandedFg(new Set());
+                setExpandedOp(new Set());
+                setSearchType(e.target.value as any);
+              }}
             >
               <option value="surat-jalan">Berdasarkan Surat Jalan</option>
               <option value="bc-document">Berdasarkan Dokumen BC</option>
+              <option value="op">Berdasarkan OP Number</option>
             </select>
           </div>
           <div className="md:col-span-2">
             <label className="block text-xs font-medium mb-1">
-              {searchType === 'surat-jalan' ? 'Nomor Surat Jalan' : 'Nomor Dokumen BC'}
+              {searchType === 'op' ? 'Nomor OP' : searchType === 'surat-jalan' ? 'Nomor Surat Jalan' : 'Nomor Dokumen BC'}
             </label>
             <input
               type="text"
               className="w-full px-3 py-2 border rounded-lg dark:bg-slate-700"
-              placeholder={searchType === 'surat-jalan' ? 'Contoh: SJ-2024-001' : 'Contoh: 134746'}
+              placeholder={
+                searchType === 'op' ? 'Contoh: K1YH260001' :
+                searchType === 'surat-jalan' ? 'Contoh: 26007466' :
+                'Contoh: 134746'
+              }
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
@@ -317,7 +748,9 @@ export const TraceabilityExtendedView = () => {
 
       {result && (
         <div className="mt-6">
-          {searchType === 'surat-jalan' ? renderSuratJalanResult(result as TraceResult) : renderBcResult(result as BcTraceResult)}
+          {searchType === 'surat-jalan' && renderSuratJalanResult(result as TraceResult)}
+          {searchType === 'bc-document' && renderBcResult(result as BcTraceResult)}
+          {searchType === 'op' && renderOpResult(result as OpTraceResult)}
         </div>
       )}
 
@@ -326,8 +759,8 @@ export const TraceabilityExtendedView = () => {
           <Archive size={48} className="mx-auto text-slate-400 mb-3" />
           <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300">Traceability End-to-End</h3>
           <p className="text-sm text-slate-500 max-w-md mx-auto">
-            Masukkan nomor Surat Jalan untuk melihat seluruh rantai produksi hingga material dan dokumen BC.<br />
-            Atau masukkan nomor Dokumen BC untuk mengetahui ke mana material tersebut dikirim.
+            Masukkan nomor OP untuk melihat detail proses produksi.<br />
+            Atau masukkan Surat Jalan untuk menelusuri ke dokumen BC, atau sebaliknya.
           </p>
         </div>
       )}

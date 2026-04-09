@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
-import { TraceabilityExtendedService, TraceResult, BcTraceResult } from './traceability-extended.service';
+import { TraceabilityExtendedService } from './traceability-extended.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('traceability-extended')
@@ -7,8 +7,13 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class TraceabilityExtendedController {
   constructor(private readonly service: TraceabilityExtendedService) {}
 
+  @Get('op/:opNumber')
+  async traceByOp(@Param('opNumber') opNumber: string) {
+    return this.service.traceByOpNumberFull(opNumber);
+  }
+
   @Get('surat-jalan/:suratJalan')
-  async traceBySuratJalan(@Param('suratJalan') suratJalan: string): Promise<TraceResult> {
+  async traceBySuratJalan(@Param('suratJalan') suratJalan: string) {
     return this.service.traceBySuratJalanFull(suratJalan);
   }
 
@@ -16,7 +21,7 @@ export class TraceabilityExtendedController {
   async traceByBcDocument(
     @Query('nomorDokumen') nomorDokumen: string,
     @Query('nomorEr') nomorEr?: string,
-  ): Promise<BcTraceResult> {
+  ) {
     return this.service.traceByBcDocument(nomorDokumen, nomorEr);
   }
 }
