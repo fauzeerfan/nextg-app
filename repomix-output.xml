@@ -4121,650 +4121,6 @@ export class StationLogsController {
 }
 </file>
 
-<file path="backend/src/traceability/traceability-extended.controller.ts">
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
-import { TraceabilityExtendedService } from './traceability-extended.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-
-@Controller('traceability-extended')
-@UseGuards(JwtAuthGuard)
-export class TraceabilityExtendedController {
-  constructor(private readonly service: TraceabilityExtendedService) {}
-
-  @Get('op/:opNumber')
-  async traceByOp(@Param('opNumber') opNumber: string) {
-    return this.service.traceByOpNumberFull(opNumber);
-  }
-
-  @Get('surat-jalan/:suratJalan')
-  async traceBySuratJalan(@Param('suratJalan') suratJalan: string) {
-    return this.service.traceBySuratJalanFull(suratJalan);
-  }
-
-  @Get('bc-document')
-  async traceByBcDocument(
-    @Query('nomorDokumen') nomorDokumen: string,
-    @Query('nomorEr') nomorEr?: string,
-  ) {
-    return this.service.traceByBcDocument(nomorDokumen, nomorEr);
-  }
-}
-</file>
-
-<file path="backend/src/traceability/traceability-extended.service.ts">
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
-
-// ========== EXPORTED INTERFACES ==========
-export interface BcDocument {
-  nomor_er: number;
-  kode_bc: string;
-  nomor_dokumen_bc: string;
-  tanggal_dokumen_bc: string;
-}
-
-export interface CuttingBatchDetail {
-  batchNumber: number;
-  qty: number;
-  qrCode: string;
-  createdAt: Date;
-}
-
-export interface PatternProgressDetail {
-  patternIndex: number;
-  patternName: string;
-  target: number;
-  good: number;
-  ng: number;
-  completed: boolean;
-  updatedAt?: Date;
-}
-
-export interface CheckPanelInspectionDetail {
-  patternIndex: number;
-  patternName: string;
-  good: number;
-  ng: number;
-  ngReasons: string[];
-  createdAt: Date;
-}
-
-export interface QcInspectionDetail {
-  good: number;
-  ng: number;
-  ngReasons: string[];
-  createdAt: Date;
-}
-
-export interface SewingProgressDetail {
-  startProgress: { startIndex: number; qty: number }[];
-  finishProgress: { finishIndex: number; qty: number }[];
-}
-
-export interface PackingSessionDetail {
-  sessionId: string;
-  fgNumber: string;
-  qty: number;
-  qrCode: string;
-  createdAt: Date;
-}
-
-export interface OpTraceFullResult {
-  opNumber: string;
-  styleCode: string;
-  itemNumberFG: string;
-  itemNameFG: string | null;
-  qtyOp: number;
-  status: string;
-  currentStation: string;
-  // Cutting Entan
-  cuttingBatches: CuttingBatchDetail[];
-  totalCutQty: number;
-  // Cutting Pond
-  patternProgress: PatternProgressDetail[];
-  pondTotalGood: number;
-  pondTotalNg: number;
-  pondTotalProcessed: number;
-  // Check Panel
-  checkPanelInspections: CheckPanelInspectionDetail[];
-  cpTotalGood: number;
-  cpTotalNg: number;
-  cpTotalInspected: number;
-  setsReadyForSewing: number;
-  // Sewing
-  sewingStartProgress: { startIndex: number; qty: number }[];
-  sewingFinishProgress: { finishIndex: number; qty: number }[];
-  sewingIn: number;
-  sewingOut: number;
-  // Quality Control
-  qcInspections: QcInspectionDetail[];
-  qcGood: number;
-  qcNg: number;
-  // Packing
-  packingSessions: PackingSessionDetail[];
-  totalPacked: number;
-  // Finished Goods
-  fgStockQty: number;
-  // BC Documents
-  bcDocuments: BcDocument[];
-  // Detailed station info
-  cuttingEntanDetails?: {
-    batches: { batchNumber: number; qty: number; createdAt: string }[];
-    totalCutSets: number;
-    totalCutPatterns: number;
-    targetOpSets: number;
-    fulfillmentPercent: number;
-    dateRange: string;
-  };
-  cuttingPondDetails?: {
-    inputFromEntanPatterns: number;
-    wipPatterns: number;
-    goodPatterns: number;
-    ngPatterns: number;
-    setsReadyForCP: number;
-    dateRange: string;
-  };
-  checkPanelDetails?: {
-    inputFromPondSets: number;
-    wipSets: number;
-    goodSets: number;
-    ngSets: number;
-    setsReadyForSewing: number;
-    ngByPattern: { patternName: string; reason: string; qty: number }[];
-    dateRange: string;
-  };
-  sewingDetails?: {
-    inputFromCPSets: number;
-    wipSets: number;
-    startProgress: { startIndex: number; qty: number }[];
-    finishProgress: { finishIndex: number; qty: number }[];
-    outputSets: number;
-    dateRange: string;
-  };
-  qcDetails?: {
-    inputFromSewingSets: number;
-    wipSets: number;
-    goodSets: number;
-    ngSets: number;
-    ngByReason: { reason: string; qty: number }[];
-    dateRange: string;
-  };
-  packingDetails?: {
-    inputFromQCSets: number;
-    wipSets: number;
-    packedSets: number;
-    sentToFGSets: number;
-    dateRange: string;
-  };
-  fgDetails?: {
-    inputFromPackingSets: number;
-    currentStockSets: number;
-    shippedSets: number;
-    dateRange: string;
-  };
-  stationProgress: {
-    station: string;
-    status: 'not_started' | 'in_progress' | 'completed';
-    percent?: number;
-  }[];
-}
-
-export interface TraceResult {
-  suratJalan: string;
-  shipmentDate: Date;
-  totalQty: number;
-  fgItems: {
-    fgNumber: string;
-    totalQty: number;
-    ops: OpTraceFullResult[];
-  }[];
-}
-
-export interface ShipmentSummary {
-  suratJalan: string;
-  shipmentDate: Date;
-  totalQty: number;
-  ops: { opNumber: string; qty: number }[];
-}
-
-export interface BcTraceResult {
-  bcDocument: string;
-  bcEr: string | null;
-  relatedShipments: ShipmentSummary[];
-}
-
-@Injectable()
-export class TraceabilityExtendedService {
-  private readonly externalApiUrl = 'http://202.52.15.30:998/miniapps/admin/api/traceability';
-
-  constructor(
-    private prisma: PrismaService,
-    private httpService: HttpService,
-  ) {}
-
-  /**
-   * Memanggil API eksternal untuk mendapatkan dokumen BC berdasarkan satu OP + FG
-   */
-  async getBcDocumentsForOp(op_number: string, item_fg: string): Promise<BcDocument[]> {
-    try {
-      const response = await firstValueFrom(
-        this.httpService.post(this.externalApiUrl, [{ op_number, item_fg }]),
-      );
-      return response.data || [];
-    } catch (error) {
-      console.error(`Error fetching BC for OP ${op_number}:`, error instanceof Error ? error.message : String(error));
-      return [];
-    }
-  }
-
-  /**
-   * Trace lengkap berdasarkan OP Number (detail dari semua station)
-   */
-  async traceByOpNumberFull(opNumber: string): Promise<OpTraceFullResult> {
-    const op = await this.prisma.productionOrder.findUnique({
-      where: { opNumber },
-      include: {
-        line: true,
-        cuttingBatches: { orderBy: { batchNumber: 'asc' } },
-        patternProgress: { orderBy: { patternIndex: 'asc' } },
-        checkPanelInspections: { orderBy: { patternIndex: 'asc' } },
-        qcInspections: { orderBy: { createdAt: 'asc' } },
-        sewingStartProgress: { orderBy: { startIndex: 'asc' } },
-        sewingFinishProgress: { orderBy: { finishIndex: 'asc' } },
-        packingItems: {
-          include: { session: true },
-          orderBy: { session: { createdAt: 'asc' } }
-        },
-        fgItems: true,
-        shipmentItems: { include: { shipment: true } },
-      },
-    });
-
-    if (!op) {
-      throw new NotFoundException(`OP ${opNumber} tidak ditemukan`);
-    }
-
-    // Format Cutting Batches
-    const cuttingBatches: CuttingBatchDetail[] = op.cuttingBatches.map(b => ({
-      batchNumber: b.batchNumber,
-      qty: b.qty,
-      qrCode: b.qrCode,
-      createdAt: b.createdAt,
-    }));
-
-    const multiplier = op.line?.patternMultiplier || 1;
-    const totalCutQty = (op.qtyEntan || 0) * multiplier; // konversi sets ke patterns
-
-    // Format Pattern Progress (Cutting Pond)
-    const patternProgress: PatternProgressDetail[] = op.patternProgress.map(p => ({
-      patternIndex: p.patternIndex,
-      patternName: p.patternName,
-      target: p.target,
-      good: p.good,
-      ng: p.ng,
-      completed: p.completed,
-      updatedAt: p.updatedAt,
-    }));
-
-    const pondTotalGood = op.patternProgress.reduce((sum, p) => sum + p.good, 0);
-    const pondTotalNg = op.patternProgress.reduce((sum, p) => sum + p.ng, 0);
-    const pondTotalProcessed = pondTotalGood + pondTotalNg;
-
-    // Format Check Panel Inspections
-    const checkPanelInspections: CheckPanelInspectionDetail[] = op.checkPanelInspections.map(c => ({
-      patternIndex: c.patternIndex,
-      patternName: c.patternName,
-      good: c.good,
-      ng: c.ng,
-      ngReasons: (c.ngReasons as string[]) || [],
-      createdAt: c.createdAt,
-    }));
-
-    const cpTotalGood = op.cpGoodQty || 0;
-    const cpTotalNg = op.cpNgQty || 0;
-    const cpTotalInspected = cpTotalGood + cpTotalNg;
-    const setsReadyForSewing = op.setsReadyForSewing || 0;
-
-    // Sewing Progress
-    const sewingStartProgress = op.sewingStartProgress.map(s => ({ startIndex: s.startIndex, qty: s.qty }));
-    const sewingFinishProgress = op.sewingFinishProgress.map(f => ({ finishIndex: f.finishIndex, qty: f.qty }));
-    const sewingIn = op.qtySewingIn || 0;
-    const sewingOut = op.qtySewingOut || 0;
-
-    // QC Inspections
-    const qcInspections: QcInspectionDetail[] = op.qcInspections.map(q => ({
-      good: q.good,
-      ng: q.ng,
-      ngReasons: (q.ngReasons as string[]) || [],
-      createdAt: q.createdAt,
-    }));
-    const qcGood = op.qtyQC || 0;
-    const qcNg = op.qcNgQty || 0;
-
-    // Packing Sessions
-    const packingSessionsMap = new Map<string, PackingSessionDetail>();
-    for (const item of op.packingItems) {
-      const session = item.session;
-      if (!packingSessionsMap.has(session.id)) {
-        packingSessionsMap.set(session.id, {
-          sessionId: session.id,
-          fgNumber: session.fgNumber,
-          qty: 0,
-          qrCode: session.qrCode || '',
-          createdAt: session.createdAt,
-        });
-      }
-      packingSessionsMap.get(session.id)!.qty += item.qty;
-    }
-    const packingSessions = Array.from(packingSessionsMap.values());
-    const totalPacked = packingSessions.reduce((sum, s) => sum + s.qty, 0);
-
-    // Finished Goods
-    const fgStockQty = op.fgItems.reduce((sum, f) => sum + f.qty, 0);
-
-    // BC Documents from external API
-    const bcDocuments = await this.getBcDocumentsForOp(op.opNumber, op.itemNumberFG);
-
-    // Build result
-    const result: OpTraceFullResult = {
-      opNumber: op.opNumber,
-      styleCode: op.styleCode,
-      itemNumberFG: op.itemNumberFG,
-      itemNameFG: op.itemNameFG ?? null,
-      qtyOp: op.qtyOp,
-      status: op.status,
-      currentStation: op.currentStation || 'UNKNOWN',
-      cuttingBatches,
-      totalCutQty,
-      patternProgress,
-      pondTotalGood,
-      pondTotalNg,
-      pondTotalProcessed,
-      checkPanelInspections,
-      cpTotalGood,
-      cpTotalNg,
-      cpTotalInspected,
-      setsReadyForSewing,
-      sewingStartProgress,
-      sewingFinishProgress,
-      sewingIn,
-      sewingOut,
-      qcInspections,
-      qcGood,
-      qcNg,
-      packingSessions,
-      totalPacked,
-      fgStockQty,
-      bcDocuments,
-      stationProgress: [], // <-- TAMBAHKAN BARIS INI
-    };
-
-    // ========== BUILD DETAILED STATION INFO ==========
-    const getDateRange = (dates: Date[]): string => {
-      if (dates.length === 0) return '-';
-      const uniqueDates = [...new Set(dates.map(d => d.toISOString().split('T')[0]))].sort();
-      if (uniqueDates.length === 1) return uniqueDates[0];
-      return `${uniqueDates[0]} s/d ${uniqueDates[uniqueDates.length - 1]}`;
-    };
-
-    // 1. Cutting Entan
-    const entanDates = cuttingBatches.map(b => b.createdAt);
-    const entanTargetSets = op.qtyOp;
-    const entanTotalCutSets = op.qtyEntan || 0; // langsung dari database (dalam sets)
-    const entanTotalCutPatterns = totalCutQty; // sudah dikalikan multiplier
-    const entanFulfillment = entanTargetSets > 0 ? (entanTotalCutSets / entanTargetSets) * 100 : 0;
-    const cuttingEntanDetails = {
-      batches: cuttingBatches.map(b => ({ batchNumber: b.batchNumber, qty: b.qty, createdAt: b.createdAt.toISOString() })),
-      totalCutSets: entanTotalCutSets,
-      totalCutPatterns: entanTotalCutPatterns,
-      targetOpSets: entanTargetSets,
-      fulfillmentPercent: Math.round(entanFulfillment),
-      dateRange: getDateRange(entanDates)
-    };
-
-    // 2. Cutting Pond
-    const pondDates = patternProgress.map(p => p.updatedAt ? new Date(p.updatedAt) : new Date());
-    const pondInputPatterns = totalCutQty;
-    const pondGoodPatterns = pondTotalGood;
-    const pondNgPatterns = pondTotalNg;
-    const pondProcessedPatterns = pondGoodPatterns + pondNgPatterns;
-    const pondWipPatterns = pondInputPatterns - pondProcessedPatterns;
-    const pondSetsReadyForCP = op.qtyCP;
-    const cuttingPondDetails = {
-      inputFromEntanPatterns: pondInputPatterns,
-      wipPatterns: pondWipPatterns,
-      goodPatterns: pondGoodPatterns,
-      ngPatterns: pondNgPatterns,
-      setsReadyForCP: pondSetsReadyForCP,
-      dateRange: getDateRange(pondDates)
-    };
-
-// 3. Check Panel
-const cpDates = checkPanelInspections.map(i => i.createdAt);
-const cpInputSets = op.qtyCP;                    // tetap sama dengan Sets Ready for CP
-const cpGoodSets = cpTotalGood;
-const cpNgSets = cpTotalNg;
-const cpInspectedSets = cpGoodSets + cpNgSets;
-const cpWipSets = cpInputSets > cpInspectedSets 
-    ? cpInputSets - cpInspectedSets 
-    : 0;                                         // tidak boleh negatif
-const cpSetsReadyForSewing = op.setsReadyForSewing;
-    const ngByPatternMap = new Map<string, Map<string, number>>();
-    for (const insp of checkPanelInspections) {
-      if (insp.ng > 0 && insp.ngReasons) {
-        const patternName = insp.patternName;
-        const reasons = Array.isArray(insp.ngReasons) ? insp.ngReasons : [];
-        for (const reason of reasons) {
-          if (!ngByPatternMap.has(patternName)) ngByPatternMap.set(patternName, new Map());
-          const reasonMap = ngByPatternMap.get(patternName)!;
-          reasonMap.set(reason, (reasonMap.get(reason) || 0) + 1);
-        }
-      }
-    }
-    const ngByPattern: { patternName: string; reason: string; qty: number }[] = [];
-    for (const [patternName, reasonMap] of ngByPatternMap.entries()) {
-      for (const [reason, qty] of reasonMap.entries()) {
-        ngByPattern.push({ patternName, reason, qty });
-      }
-    }
-    const checkPanelDetails = {
-      inputFromPondSets: cpInputSets,
-      wipSets: cpWipSets,
-      goodSets: cpGoodSets,
-      ngSets: cpNgSets,
-      setsReadyForSewing: cpSetsReadyForSewing,
-      ngByPattern,
-      dateRange: getDateRange(cpDates)
-    };
-
-    // 4. Sewing
-    const sewingDates = [...sewingStartProgress.map(s => new Date()), ...sewingFinishProgress.map(f => new Date())];
-    const sewingInputSets = op.qtySewingIn;
-    const sewingOutputSets = op.qtySewingOut;
-    const sewingWipSets = sewingInputSets - sewingOutputSets;
-    const sewingDetails = {
-      inputFromCPSets: sewingInputSets,
-      wipSets: sewingWipSets,
-      startProgress: sewingStartProgress.map(s => ({ startIndex: s.startIndex, qty: s.qty })),
-      finishProgress: sewingFinishProgress.map(f => ({ finishIndex: f.finishIndex, qty: f.qty })),
-      outputSets: sewingOutputSets,
-      dateRange: getDateRange(sewingDates)
-    };
-
-    // 5. Quality Control
-    const qcDates = qcInspections.map(q => q.createdAt);
-    const qcInputSets = op.qtySewingOut;
-    const qcGoodSets = qcGood;
-    const qcNgSets = qcNg;
-    const qcInspectedSets = qcGoodSets + qcNgSets;
-    const qcWipSets = qcInputSets - qcInspectedSets;
-    const ngByReasonMap = new Map<string, number>();
-    for (const insp of qcInspections) {
-      if (insp.ng > 0 && insp.ngReasons) {
-        const reasons = Array.isArray(insp.ngReasons) ? insp.ngReasons : [];
-        for (const reason of reasons) {
-          ngByReasonMap.set(reason, (ngByReasonMap.get(reason) || 0) + 1);
-        }
-      }
-    }
-    const ngByReason = Array.from(ngByReasonMap.entries()).map(([reason, qty]) => ({ reason, qty }));
-    const qcDetails = {
-      inputFromSewingSets: qcInputSets,
-      wipSets: qcWipSets,
-      goodSets: qcGoodSets,
-      ngSets: qcNgSets,
-      ngByReason,
-      dateRange: getDateRange(qcDates)
-    };
-
-    // 6. Packing
-    const packingDates = packingSessions.map(p => p.createdAt);
-    const packingInputSets = qcGoodSets;
-    const packedSets = totalPacked;
-    const sentToFGSets = fgStockQty;
-    const packingWipSets = packedSets - sentToFGSets;
-    const packingDetails = {
-      inputFromQCSets: packingInputSets,
-      wipSets: packingWipSets,
-      packedSets: packedSets,
-      sentToFGSets: sentToFGSets,
-      dateRange: getDateRange(packingDates)
-    };
-
-    // 7. Finished Goods
-    const fgDates = op.fgItems.map(f => f.createdAt);
-    const fgInputSets = totalPacked;
-    const fgCurrentStockSets = fgStockQty;
-    const fgShippedSets = op.shipmentItems.reduce((sum, si) => sum + si.qty, 0);
-    const fgDetails = {
-      inputFromPackingSets: fgInputSets,
-      currentStockSets: fgCurrentStockSets,
-      shippedSets: fgShippedSets,
-      dateRange: getDateRange(fgDates)
-    };
-
-    // 8. Station Progress
-    const stationProgress = [
-      { station: 'CUTTING_ENTAN', status: (entanTotalCutSets >= entanTargetSets ? 'completed' : (entanTotalCutSets > 0 ? 'in_progress' : 'not_started')) as any, percent: Math.min(100, entanFulfillment) },
-      { station: 'CUTTING_POND', status: (pondSetsReadyForCP > 0 ? 'completed' : (pondProcessedPatterns > 0 ? 'in_progress' : 'not_started')) as any, percent: (pondProcessedPatterns / (pondInputPatterns || 1)) * 100 },
-      { station: 'CP', status: (cpSetsReadyForSewing > 0 ? 'completed' : (cpInspectedSets > 0 ? 'in_progress' : 'not_started')) as any, percent: (cpInspectedSets / (cpInputSets || 1)) * 100 },
-      { station: 'SEWING', status: (sewingOutputSets >= sewingInputSets ? 'completed' : (sewingOutputSets > 0 ? 'in_progress' : 'not_started')) as any, percent: (sewingOutputSets / (sewingInputSets || 1)) * 100 },
-      { station: 'QC', status: (qcInspectedSets >= qcInputSets ? 'completed' : (qcInspectedSets > 0 ? 'in_progress' : 'not_started')) as any, percent: (qcInspectedSets / (qcInputSets || 1)) * 100 },
-      { station: 'PACKING', status: (packedSets >= packingInputSets ? 'completed' : (packedSets > 0 ? 'in_progress' : 'not_started')) as any, percent: (packedSets / (packingInputSets || 1)) * 100 },
-      { station: 'FG', status: (fgShippedSets >= fgInputSets ? 'completed' : (fgCurrentStockSets > 0 ? 'in_progress' : 'not_started')) as any, percent: (fgShippedSets / (fgInputSets || 1)) * 100 }
-    ];
-
-    // Assign ke result
-    result.cuttingEntanDetails = cuttingEntanDetails;
-    result.cuttingPondDetails = cuttingPondDetails;
-    result.checkPanelDetails = checkPanelDetails;
-    result.sewingDetails = sewingDetails;
-    result.qcDetails = qcDetails;
-    result.packingDetails = packingDetails;
-    result.fgDetails = fgDetails;
-    result.stationProgress = stationProgress;
-
-    return result;
-  }
-
-  /**
-   * Trace lengkap dari Surat Jalan → FG → OP → Dokumen BC
-   */
-  async traceBySuratJalanFull(suratJalan: string): Promise<TraceResult> {
-    const shipment = await this.prisma.shipment.findFirst({
-      where: { suratJalan },
-      include: {
-        items: {
-          include: {
-            op: true,
-          },
-        },
-      },
-    });
-
-    if (!shipment) {
-      throw new NotFoundException(`Surat Jalan ${suratJalan} tidak ditemukan di database. Pastikan sudah dilakukan proses shipping.`);
-    }
-
-    const fgMap = new Map<string, { fgNumber: string; totalQty: number; ops: OpTraceFullResult[] }>();
-
-    for (const item of shipment.items) {
-      const opTrace = await this.traceByOpNumberFull(item.op.opNumber);
-      const fgNumber = item.op.itemNumberFG;
-      if (!fgMap.has(fgNumber)) {
-        fgMap.set(fgNumber, {
-          fgNumber,
-          totalQty: 0,
-          ops: [],
-        });
-      }
-      const fgEntry = fgMap.get(fgNumber)!;
-      fgEntry.totalQty += item.qty;
-      fgEntry.ops.push(opTrace);
-    }
-
-    return {
-      suratJalan: shipment.suratJalan,
-      shipmentDate: shipment.createdAt,
-      totalQty: shipment.totalQty,
-      fgItems: Array.from(fgMap.values()),
-    };
-  }
-
-  /**
-   * Trace balik dari nomor dokumen BC → semua Surat Jalan yang terkait
-   */
-  async traceByBcDocument(bcNomorDokumen: string, bcNomorEr?: string): Promise<BcTraceResult> {
-    const allShipments = await this.prisma.shipment.findMany({
-      include: {
-        items: {
-          include: {
-            op: true,
-          },
-        },
-      },
-    });
-
-    const matchedShipments: ShipmentSummary[] = [];
-
-    for (const shipment of allShipments) {
-      let found = false;
-      for (const item of shipment.items) {
-        const bcDocs = await this.getBcDocumentsForOp(item.op.opNumber, item.op.itemNumberFG);
-        const matched = bcDocs.some(doc =>
-          doc.nomor_dokumen_bc === bcNomorDokumen ||
-          (bcNomorEr && doc.nomor_er.toString() === bcNomorEr)
-        );
-        if (matched) {
-          found = true;
-          break;
-        }
-      }
-      if (found) {
-        matchedShipments.push({
-          suratJalan: shipment.suratJalan,
-          shipmentDate: shipment.createdAt,
-          totalQty: shipment.totalQty,
-          ops: shipment.items.map(i => ({ opNumber: i.op.opNumber, qty: i.qty })),
-        });
-      }
-    }
-
-    if (matchedShipments.length === 0) {
-      throw new NotFoundException(`Tidak ditemukan surat jalan yang menggunakan dokumen BC ${bcNomorDokumen}`);
-    }
-
-    return {
-      bcDocument: bcNomorDokumen,
-      bcEr: bcNomorEr || null,
-      relatedShipments: matchedShipments,
-    };
-  }
-}
-</file>
-
 <file path="backend/src/traceability/traceability.controller.ts">
 import {
   Controller,
@@ -6667,798 +6023,6 @@ export const ReportsView = () => {
 };
 </file>
 
-<file path="frontend/src/features/traceability/TraceabilityExtendedView.tsx">
-import React, { useState } from 'react';
-import {
-  Search, Package, Truck, FileText, Layers, ClipboardCheck,
-  CheckCircle, AlertCircle, Clock, Box, Archive,
-  ChevronDown, ChevronRight, Loader2, TrendingUp,
-  Scissors, Shirt, QrCode, Grid, Activity
-} from 'lucide-react';
-
-const API_BASE_URL = 'http://localhost:3000';
-
-// Types
-interface BcDocument {
-  nomor_er: number;
-  kode_bc: string;
-  nomor_dokumen_bc: string;
-  tanggal_dokumen_bc: string;
-}
-
-interface PatternProgress {
-  patternIndex: number;
-  patternName: string;
-  target: number;
-  good: number;
-  ng: number;
-  completed: boolean;
-}
-
-interface CheckPanelInspection {
-  patternIndex: number;
-  patternName: string;
-  good: number;
-  ng: number;
-  ngReasons: string[];
-  createdAt: string;
-}
-
-interface QcInspection {
-  good: number;
-  ng: number;
-  ngReasons: string[];
-  createdAt: string;
-}
-
-interface PackingSession {
-  sessionId: string;
-  fgNumber: string;
-  qty: number;
-  qrCode: string;
-  createdAt: string;
-}
-
-// Interface OpTraceResult yang diperbarui sesuai backend
-interface OpTraceResult {
-  opNumber: string;
-  styleCode: string;
-  itemNumberFG: string;
-  itemNameFG: string | null;
-  qtyOp: number;
-  status: string;
-  currentStation: string;
-  cuttingBatches: { batchNumber: number; qty: number; qrCode: string; createdAt: string }[];
-  totalCutQty: number;
-  patternProgress: PatternProgress[];
-  pondTotalGood: number;
-  pondTotalNg: number;
-  pondTotalProcessed: number;
-  checkPanelInspections: CheckPanelInspection[];
-  cpTotalGood: number;
-  cpTotalNg: number;
-  cpTotalInspected: number;
-  setsReadyForSewing: number;
-  sewingStartProgress: { startIndex: number; qty: number }[];
-  sewingFinishProgress: { finishIndex: number; qty: number }[];
-  sewingIn: number;
-  sewingOut: number;
-  qcInspections: QcInspection[];
-  qcGood: number;
-  qcNg: number;
-  packingSessions: PackingSession[];
-  totalPacked: number;
-  fgStockQty: number;
-  bcDocuments: BcDocument[];
-  updatedAt: string;
-  cuttingEntanDetails?: {
-    batches: { batchNumber: number; qty: number; createdAt: string }[];
-    totalCutSets: number;
-    totalCutPatterns: number;
-    targetOpSets: number;
-    fulfillmentPercent: number;
-    dateRange: string;
-  };
-  cuttingPondDetails?: {
-    inputFromEntanPatterns: number;
-    wipPatterns: number;
-    goodPatterns: number;
-    ngPatterns: number;
-    setsReadyForCP: number;
-    dateRange: string;
-  };
-  checkPanelDetails?: {
-    inputFromPondSets: number;
-    wipSets: number;
-    goodSets: number;
-    ngSets: number;
-    setsReadyForSewing: number;
-    ngByPattern: { patternName: string; reason: string; qty: number }[];
-    dateRange: string;
-  };
-  sewingDetails?: {
-    inputFromCPSets: number;
-    wipSets: number;
-    startProgress: { startIndex: number; qty: number }[];
-    finishProgress: { finishIndex: number; qty: number }[];
-    outputSets: number;
-    dateRange: string;
-  };
-  qcDetails?: {
-    inputFromSewingSets: number;
-    wipSets: number;
-    goodSets: number;
-    ngSets: number;
-    ngByReason: { reason: string; qty: number }[];
-    dateRange: string;
-  };
-  packingDetails?: {
-    inputFromQCSets: number;
-    wipSets: number;
-    packedSets: number;
-    sentToFGSets: number;
-    dateRange: string;
-  };
-  fgDetails?: {
-    inputFromPackingSets: number;
-    currentStockSets: number;
-    shippedSets: number;
-    dateRange: string;
-  };
-  stationProgress: {
-    station: string;
-    status: 'not_started' | 'in_progress' | 'completed';
-    percent?: number;
-  }[];
-}
-
-interface TraceResult {
-  suratJalan: string;
-  shipmentDate: string;
-  totalQty: number;
-  fgItems: {
-    fgNumber: string;
-    totalQty: number;
-    ops: OpTraceResult[];
-  }[];
-}
-
-interface BcTraceResult {
-  bcDocument: string;
-  bcEr: string | null;
-  relatedShipments: {
-    suratJalan: string;
-    shipmentDate: string;
-    totalQty: number;
-    ops: { opNumber: string; qty: number }[];
-  }[];
-}
-
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('nextg_token');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-};
-
-// Helper: filter unik berdasarkan key
-const uniqueBy = <T, K extends keyof T>(arr: T[], key: K): T[] => {
-  const seen = new Set();
-  return arr.filter(item => {
-    const val = item[key];
-    if (seen.has(val)) return false;
-    seen.add(val);
-    return true;
-  });
-};
-
-// Helper: filter dokumen BC unik berdasarkan nomor_dokumen_bc dan nomor_er
-const uniqueBcDocuments = (docs: BcDocument[]): BcDocument[] => {
-  const seen = new Set();
-  return docs.filter(doc => {
-    const key = `${doc.nomor_dokumen_bc}|${doc.nomor_er}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-};
-
-// Komponen OpDetailCard dengan properti showProductionInfo
-// Jika showProductionInfo = false, bagian produksi (cutting, pond, cp, sewing, qc, packing, fg, progress) tidak dirender sama sekali.
-const OpDetailCard = ({ 
-  op, 
-  isExpanded, 
-  onToggle, 
-  detailed = true, 
-  showBcDocuments = true,
-  showProductionInfo = true 
-}: { 
-  op: OpTraceResult; 
-  isExpanded: boolean; 
-  onToggle: () => void; 
-  detailed?: boolean; 
-  showBcDocuments?: boolean;
-  showProductionInfo?: boolean;
-}) => {
-  const formatDateRange = (dateRange?: string) => {
-    if (!dateRange || dateRange === '-') return '-';
-    const parts = dateRange.split(' s/d ');
-    if (parts.length === 1) return parts[0];
-    return `${parts[0]} → ${parts[1]}`;
-  };
-
-  const ProgressBar = ({ percent, status }: { percent?: number; status: string }) => {
-    const value = percent !== undefined ? Math.min(100, Math.max(0, percent)) : 0;
-    let color = 'bg-slate-300';
-    if (status === 'completed') color = 'bg-emerald-500';
-    else if (status === 'in_progress') color = 'bg-blue-500';
-    return (
-      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${value}%` }} />
-      </div>
-    );
-  };
-
-  const renderNgList = (items: { reason: string; qty: number }[], title: string) => {
-    if (!items || items.length === 0) return null;
-    return (
-      <div className="mt-2">
-        <div className="text-xs font-semibold text-rose-600">{title}</div>
-        <ul className="list-disc list-inside text-xs text-slate-600 dark:text-slate-400 mt-1">
-          {items.map((item, idx) => (
-            <li key={idx}>{item.reason} : {item.qty} pcs</li>
-          ))}
-        </ul>
-      </div>
-    );
-  };
-
-  return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg mb-3 overflow-hidden">
-      <div
-        className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-        onClick={onToggle}
-      >
-        <div className="flex items-center gap-2">
-          <Layers size={16} className="text-purple-500" />
-          <span className="font-mono font-bold text-sm">{op.opNumber}</span>
-          <span className="text-xs text-slate-500">({op.styleCode})</span>
-        </div>
-        <div className="flex items-center gap-3 text-xs">
-          {detailed ? (
-            <>
-              <span className="text-emerald-600">Good: {op.cpTotalGood + op.qcGood}</span>
-              <span className="text-rose-600">NG: {op.cpTotalNg + op.qcNg}</span>
-            </>
-          ) : (
-            <span className="text-blue-600">Qty: {op.qtyOp}</span>
-          )}
-          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        </div>
-      </div>
-
-      {isExpanded && (
-        <div className="p-4 space-y-5">
-          {/* BC Documents - selalu ditampilkan jika showBcDocuments true */}
-          {showBcDocuments && op.bcDocuments.length > 0 && (
-            <div className="bg-rose-50 dark:bg-rose-900/20 p-3 rounded-lg">
-              <h5 className="text-sm font-bold text-rose-600 mb-2">📄 Dokumen BC (Material Penerimaan)</h5>
-              {uniqueBcDocuments(op.bcDocuments).map((doc, idx) => (
-                <div key={idx} className="text-xs">No. ER: {doc.nomor_er} | No. Dokumen: {doc.nomor_dokumen_bc} | Tgl: {new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}</div>
-              ))}
-            </div>
-          )}
-
-          {/* Seluruh informasi produksi hanya dirender jika showProductionInfo === true */}
-          {showProductionInfo && (
-            <>
-              {/* CUTTING ENTAN */}
-              <div className="border-l-4 border-orange-500 pl-3">
-                <h4 className="font-bold text-sm text-orange-700 dark:text-orange-400 flex items-center gap-2">
-                  ✂️ Cutting Entan
-                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.cuttingEntanDetails?.dateRange)})</span>
-                </h4>
-                {op.cuttingEntanDetails ? (
-                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                    <div>Target OP: <strong>{op.cuttingEntanDetails.targetOpSets}</strong> sets</div>
-                    <div>Total Cut: <strong>{op.cuttingEntanDetails.totalCutSets}</strong> sets / <strong>{op.cuttingEntanDetails.totalCutPatterns}</strong> patterns</div>
-                    <div>Fulfillment: <strong>{op.cuttingEntanDetails.fulfillmentPercent}%</strong></div>
-                    <div>Batches: {op.cuttingEntanDetails.batches.map(b => `#${b.batchNumber} (${b.qty})`).join(', ')}</div>
-                  </div>
-                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
-              </div>
-
-              {/* CUTTING POND */}
-              <div className="border-l-4 border-blue-500 pl-3">
-                <h4 className="font-bold text-sm text-blue-700 dark:text-blue-400 flex items-center gap-2">
-                  🔷 Cutting Pond
-                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.cuttingPondDetails?.dateRange)})</span>
-                </h4>
-                {op.cuttingPondDetails ? (
-                  <div className="mt-2 space-y-2 text-sm">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>Input dari Entan: <strong>{op.cuttingPondDetails.inputFromEntanPatterns}</strong> patterns</div>
-                      <div>WIP: <strong>{op.cuttingPondDetails.wipPatterns}</strong> patterns</div>
-                      <div className="text-emerald-600">Good: {op.cuttingPondDetails.goodPatterns}</div>
-                      <div className="text-rose-600">NG: {op.cuttingPondDetails.ngPatterns}</div>
-                      <div>Sets Ready for CP: <strong>{op.cuttingPondDetails.setsReadyForCP}</strong> sets</div>
-                    </div>
-                    <ProgressBar percent={(op.cuttingPondDetails.goodPatterns + op.cuttingPondDetails.ngPatterns) / (op.cuttingPondDetails.inputFromEntanPatterns || 1) * 100} status={op.cuttingPondDetails.setsReadyForCP > 0 ? 'completed' : 'in_progress'} />
-                  </div>
-                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
-              </div>
-
-              {/* CHECK PANEL */}
-              <div className="border-l-4 border-emerald-500 pl-3">
-                <h4 className="font-bold text-sm text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                  👁️ Check Panel
-                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.checkPanelDetails?.dateRange)})</span>
-                </h4>
-                {op.checkPanelDetails ? (
-                  <div className="mt-2 space-y-2 text-sm">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>Input dari Pond: <strong>{op.checkPanelDetails.inputFromPondSets}</strong> sets</div>
-                      <div>WIP: <strong>{op.checkPanelDetails.wipSets}</strong> sets</div>
-                      <div className="text-emerald-600">Good: {op.checkPanelDetails.goodSets}</div>
-                      <div className="text-rose-600">NG: {op.checkPanelDetails.ngSets}</div>
-                      <div>Sets Ready for Sewing: <strong>{op.checkPanelDetails.setsReadyForSewing}</strong> sets</div>
-                    </div>
-                    {op.checkPanelDetails.ngByPattern.length > 0 && (
-                      <div className="mt-2 bg-rose-50 dark:bg-rose-900/20 p-2 rounded">
-                        <div className="text-xs font-semibold text-rose-600">Detail NG per Pola:</div>
-                        <ul className="list-disc list-inside text-xs mt-1">
-                          {op.checkPanelDetails.ngByPattern.map((item, idx) => (
-                            <li key={idx}><strong>{item.patternName}</strong> - {item.reason} : {item.qty} pcs</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    <ProgressBar percent={(op.checkPanelDetails.goodSets + op.checkPanelDetails.ngSets) / (op.checkPanelDetails.inputFromPondSets || 1) * 100} status={op.checkPanelDetails.setsReadyForSewing > 0 ? 'completed' : 'in_progress'} />
-                  </div>
-                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
-              </div>
-
-              {/* SEWING */}
-              <div className="border-l-4 border-purple-500 pl-3">
-                <h4 className="font-bold text-sm text-purple-700 dark:text-purple-400 flex items-center gap-2">
-                  🧵 Sewing
-                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.sewingDetails?.dateRange)})</span>
-                </h4>
-                {op.sewingDetails ? (
-                  <div className="mt-2 space-y-2 text-sm">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>Input dari CP: <strong>{op.sewingDetails.inputFromCPSets}</strong> sets</div>
-                      <div>WIP: <strong>{op.sewingDetails.wipSets}</strong> sets</div>
-                      <div>Start Progress: {op.sewingDetails.startProgress.map(s => `Start${s.startIndex}=${s.qty}`).join(', ')}</div>
-                      <div>Finish Progress: {op.sewingDetails.finishProgress.map(f => `Finish${f.finishIndex}=${f.qty}`).join(', ')}</div>
-                      <div>Output: <strong>{op.sewingDetails.outputSets}</strong> sets</div>
-                    </div>
-                    <ProgressBar percent={op.sewingDetails.outputSets / (op.sewingDetails.inputFromCPSets || 1) * 100} status={op.sewingDetails.outputSets >= op.sewingDetails.inputFromCPSets ? 'completed' : 'in_progress'} />
-                  </div>
-                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
-              </div>
-
-              {/* QUALITY CONTROL */}
-              <div className="border-l-4 border-amber-500 pl-3">
-                <h4 className="font-bold text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
-                  🔍 Quality Control
-                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.qcDetails?.dateRange)})</span>
-                </h4>
-                {op.qcDetails ? (
-                  <div className="mt-2 space-y-2 text-sm">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>Input dari Sewing: <strong>{op.qcDetails.inputFromSewingSets}</strong> sets</div>
-                      <div>WIP: <strong>{op.qcDetails.wipSets}</strong> sets</div>
-                      <div className="text-emerald-600">Good: {op.qcDetails.goodSets}</div>
-                      <div className="text-rose-600">NG: {op.qcDetails.ngSets}</div>
-                    </div>
-                    {op.qcDetails.ngByReason.length > 0 && renderNgList(op.qcDetails.ngByReason, "Jenis NG:")}
-                    <ProgressBar percent={(op.qcDetails.goodSets + op.qcDetails.ngSets) / (op.qcDetails.inputFromSewingSets || 1) * 100} status={(op.qcDetails.goodSets + op.qcDetails.ngSets) >= op.qcDetails.inputFromSewingSets ? 'completed' : 'in_progress'} />
-                  </div>
-                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
-              </div>
-
-              {/* PACKING */}
-              <div className="border-l-4 border-indigo-500 pl-3">
-                <h4 className="font-bold text-sm text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
-                  📦 Packing
-                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.packingDetails?.dateRange)})</span>
-                </h4>
-                {op.packingDetails ? (
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                    <div>Input dari QC: <strong>{op.packingDetails.inputFromQCSets}</strong> sets</div>
-                    <div>WIP: <strong>{op.packingDetails.wipSets}</strong> sets (menunggu diterima FG)</div>
-                    <div>Packed: <strong>{op.packingDetails.packedSets}</strong> sets</div>
-                    <div>Sent ke FG: <strong>{op.packingDetails.sentToFGSets}</strong> sets</div>
-                    <ProgressBar percent={op.packingDetails.packedSets / (op.packingDetails.inputFromQCSets || 1) * 100} status={op.packingDetails.packedSets >= op.packingDetails.inputFromQCSets ? 'completed' : 'in_progress'} />
-                  </div>
-                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
-              </div>
-
-              {/* FINISHED GOODS */}
-              <div className="border-l-4 border-green-500 pl-3">
-                <h4 className="font-bold text-sm text-green-700 dark:text-green-400 flex items-center gap-2">
-                  ✅ Finished Goods
-                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.fgDetails?.dateRange)})</span>
-                </h4>
-                {op.fgDetails ? (
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                    <div>Input dari Packing: <strong>{op.fgDetails.inputFromPackingSets}</strong> sets</div>
-                    <div>Stock Sekarang: <strong>{op.fgDetails.currentStockSets}</strong> sets</div>
-                    <div>Sudah Dikirim: <strong>{op.fgDetails.shippedSets}</strong> sets</div>
-                    <ProgressBar percent={op.fgDetails.shippedSets / (op.fgDetails.inputFromPackingSets || 1) * 100} status={op.fgDetails.shippedSets >= op.fgDetails.inputFromPackingSets ? 'completed' : 'in_progress'} />
-                  </div>
-                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
-              </div>
-
-              {/* PROGRESS PER STATION */}
-              <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
-                <h5 className="font-bold text-sm mb-2">📊 Progress per Station</h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {op.stationProgress?.map((sp, idx) => (
-                    <div key={idx} className="bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg">
-                      <div className="flex justify-between text-xs">
-                        <span className="font-medium">{sp.station.replace('_', ' ')}</span>
-                        <span className={`${sp.status === 'completed' ? 'text-emerald-600' : sp.status === 'in_progress' ? 'text-blue-600' : 'text-slate-400'}`}>
-                          {sp.status === 'completed' ? 'Selesai' : sp.status === 'in_progress' ? 'Proses' : 'Belum mulai'}
-                        </span>
-                      </div>
-                      <ProgressBar percent={sp.percent} status={sp.status} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Komponen StationTimeline tidak digunakan di OpDetailCard baru, namun tetap ada untuk kompatibilitas (tidak diubah)
-const StationTimeline = ({ op }: { op: OpTraceResult }) => {
-  const stations = [
-    { key: 'cutting', name: 'Cutting Entan', icon: Scissors, color: 'orange' },
-    { key: 'pond', name: 'Cutting Pond', icon: Grid, color: 'blue' },
-    { key: 'cp', name: 'Check Panel', icon: ClipboardCheck, color: 'emerald' },
-    { key: 'sewing', name: 'Sewing', icon: Shirt, color: 'purple' },
-    { key: 'qc', name: 'Quality Control', icon: Activity, color: 'amber' },
-    { key: 'packing', name: 'Packing', icon: Package, color: 'indigo' },
-    { key: 'fg', name: 'Finished Goods', icon: Truck, color: 'green' },
-  ];
-
-  const getProgress = (station: string) => {
-    switch (station) {
-      case 'cutting':
-        return { value: op.cuttingBatches.length > 0 ? 100 : 0, max: 1, label: `${op.cuttingBatches.length} batches` };
-      case 'pond':
-        const pondMax = op.qtyOp * (op.patternProgress.length || 1);
-        return { value: op.pondTotalProcessed, max: pondMax || 1, label: `${op.pondTotalProcessed}/${pondMax || 1}` };
-      case 'cp':
-        const cpMax = op.qtyOp * (op.patternProgress.length || 1);
-        return { value: op.cpTotalInspected, max: cpMax || 1, label: `${op.cpTotalInspected}/${cpMax || 1}` };
-      case 'sewing':
-        return { value: op.sewingOut, max: op.sewingIn || 1, label: `${op.sewingOut}/${op.sewingIn || 1}` };
-      case 'qc':
-        return { value: op.qcGood + op.qcNg, max: op.sewingOut || 1, label: `${op.qcGood + op.qcNg}/${op.sewingOut || 1}` };
-      case 'packing':
-        return { value: op.totalPacked, max: op.qcGood || 1, label: `${op.totalPacked}/${op.qcGood || 1}` };
-      case 'fg':
-        return { value: op.fgStockQty, max: op.totalPacked || 1, label: `${op.fgStockQty}/${op.totalPacked || 1}` };
-      default:
-        return { value: 0, max: 1, label: '-' };
-    }
-  };
-
-  return (
-    <div className="mt-4 space-y-2">
-      <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">📊 Progress per Station</h4>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        {stations.map(station => {
-          const prog = getProgress(station.key);
-          const percent = prog.max > 0 ? (prog.value / prog.max) * 100 : 0;
-          return (
-            <div key={station.key} className="bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg">
-              <div className="flex items-center gap-2 mb-1">
-                <station.icon size={14} className={`text-${station.color}-500`} />
-                <span className="text-xs font-medium">{station.name}</span>
-                <span className="text-xs text-slate-500 ml-auto">{prog.label}</span>
-              </div>
-              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
-                <div className={`h-full rounded-full bg-${station.color}-500 transition-all`} style={{ width: `${Math.min(percent, 100)}%` }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-export const TraceabilityExtendedView = () => {
-  const [searchType, setSearchType] = useState<'surat-jalan' | 'bc-document' | 'op'>('surat-jalan');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [bcNomorEr, setBcNomorEr] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [result, setResult] = useState<OpTraceResult | TraceResult | BcTraceResult | null>(null);
-  const [expandedFg, setExpandedFg] = useState<Set<string>>(new Set());
-  const [expandedOp, setExpandedOp] = useState<Set<string>>(new Set());
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      setError('Masukkan nomor OP, surat jalan, atau nomor dokumen BC');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    setResult(null);
-
-    try {
-      let url = '';
-      if (searchType === 'op') {
-        url = `${API_BASE_URL}/traceability-extended/op/${encodeURIComponent(searchQuery)}`;
-      } else if (searchType === 'surat-jalan') {
-        url = `${API_BASE_URL}/traceability-extended/surat-jalan/${encodeURIComponent(searchQuery)}`;
-      } else {
-        let params = `nomorDokumen=${encodeURIComponent(searchQuery)}`;
-        if (bcNomorEr) params += `&nomorEr=${encodeURIComponent(bcNomorEr)}`;
-        url = `${API_BASE_URL}/traceability-extended/bc-document?${params}`;
-      }
-
-      const res = await fetch(url, { headers: getAuthHeaders() });
-      if (res.ok) {
-        let data = await res.json();
-        // Untuk surat jalan, filter OP unik dan BC unik
-        if (searchType === 'surat-jalan' && data && (data as TraceResult).fgItems) {
-          const traceData = data as TraceResult;
-          traceData.fgItems = traceData.fgItems.map((fg: any) => ({
-            ...fg,
-            ops: uniqueBy(fg.ops, 'opNumber')
-          }));
-          traceData.fgItems.forEach((fg: any) => {
-            fg.ops.forEach((op: OpTraceResult) => {
-              if (op.bcDocuments) op.bcDocuments = uniqueBcDocuments(op.bcDocuments);
-            });
-          });
-          setResult(traceData);
-        } else {
-          setResult(data);
-        }
-      } else {
-        const err = await res.json();
-        setError(err.message || 'Data tidak ditemukan');
-      }
-    } catch (err) {
-      setError('Gagal terhubung ke server');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleFg = (fgNumber: string) => {
-    const newSet = new Set(expandedFg);
-    if (newSet.has(fgNumber)) newSet.delete(fgNumber);
-    else newSet.add(fgNumber);
-    setExpandedFg(newSet);
-  };
-
-  const toggleOpDetail = (opNumber: string) => {
-    const newSet = new Set(expandedOp);
-    if (newSet.has(opNumber)) newSet.delete(opNumber);
-    else newSet.add(opNumber);
-    setExpandedOp(newSet);
-  };
-
-  const renderOpResult = (op: OpTraceResult) => (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-md">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-          <Layers size={20} className="text-purple-600 dark:text-purple-400" />
-        </div>
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">{op.opNumber}</h2>
-          <p className="text-sm text-slate-500">{op.styleCode} - {op.itemNumberFG} {op.itemNameFG ? `(${op.itemNameFG})` : ''}</p>
-        </div>
-      </div>
-      {/* Untuk pencarian OP, tampilkan semua informasi produksi (showProductionInfo=true) */}
-      <OpDetailCard op={op} isExpanded={true} onToggle={() => {}} detailed={true} showBcDocuments={false} showProductionInfo={true} />
-    </div>
-  );
-
-  const renderSuratJalanResult = (res: TraceResult) => (
-    <div className="space-y-6">
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-md">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-            <Truck size={20} className="text-blue-600 dark:text-blue-400" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">{res.suratJalan}</h2>
-            <p className="text-sm text-slate-500">Tanggal: {new Date(res.shipmentDate).toLocaleString()} | Total: {res.totalQty} pcs</p>
-          </div>
-        </div>
-
-        {res.fgItems.map(fg => (
-          <div key={fg.fgNumber} className="mb-4 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-            <div
-              className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-              onClick={() => toggleFg(fg.fgNumber)}
-            >
-              <div className="flex items-center gap-2">
-                <Package size={18} className="text-emerald-600" />
-                <span className="font-bold text-slate-900 dark:text-white">{fg.fgNumber}</span>
-                <span className="text-xs text-slate-500">({fg.totalQty} pcs)</span>
-              </div>
-              {expandedFg.has(fg.fgNumber) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-            </div>
-            {expandedFg.has(fg.fgNumber) && (
-              <div className="p-3 space-y-3">
-                {fg.ops.map(op => (
-                  <OpDetailCard
-                    key={op.opNumber}
-                    op={op}
-                    isExpanded={expandedOp.has(op.opNumber)}
-                    onToggle={() => toggleOpDetail(op.opNumber)}
-                    detailed={false}
-                    showBcDocuments={true}
-                    showProductionInfo={false}   // ← informasi produksi dihilangkan
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const renderBcResult = (res: BcTraceResult) => (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-md">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-          <FileText size={20} className="text-amber-600 dark:text-amber-400" />
-        </div>
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Dokumen BC: {res.bcDocument}</h2>
-          {res.bcEr && <p className="text-sm text-slate-500">No. ER: {res.bcEr}</p>}
-        </div>
-      </div>
-      <h3 className="font-bold text-md mt-4 mb-2">🚚 Surat Jalan Terkait</h3>
-      {res.relatedShipments.length === 0 ? (
-        <p className="text-slate-500">Tidak ditemukan surat jalan yang menggunakan material ini.</p>
-      ) : (
-        <div className="space-y-3">
-          {res.relatedShipments.map(ship => (
-            <div key={ship.suratJalan} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-              <div className="flex justify-between items-center">
-                <div>
-                  <span className="font-bold text-blue-600">{ship.suratJalan}</span>
-                  <div className="text-xs text-slate-500">{new Date(ship.shipmentDate).toLocaleDateString()}</div>
-                </div>
-                <div className="text-right text-sm">
-                  <div>Total: {ship.totalQty} pcs</div>
-                  <div className="text-xs">OP: {ship.ops.map(o => o.opNumber).join(', ')}</div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
-  return (
-    <div className="p-6">
-      <div className="bg-gradient-to-br from-white to-purple-50/30 dark:from-slate-900 dark:to-purple-900/10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl mb-6">
-        <div className="p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-              <TrendingUp size={24} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white">Traceability End-to-End</h1>
-              <p className="text-sm text-slate-600 dark:text-slate-400">Lacak dari OP, Surat Jalan, hingga Dokumen BC</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-xs font-medium mb-1">Jenis Pencarian</label>
-            <select
-              className="w-full px-3 py-2 border rounded-lg dark:bg-slate-700"
-              value={searchType}
-              onChange={e => {
-                setResult(null);
-                setError('');
-                setSearchQuery('');
-                setBcNomorEr('');
-                setExpandedFg(new Set());
-                setExpandedOp(new Set());
-                setSearchType(e.target.value as any);
-              }}
-            >
-              <option value="op">Berdasarkan OP Number</option>
-              <option value="surat-jalan">Berdasarkan Surat Jalan</option>
-              <option value="bc-document">Berdasarkan Dokumen BC</option>
-            </select>
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs font-medium mb-1">
-              {searchType === 'op' ? 'Nomor OP' : searchType === 'surat-jalan' ? 'Nomor Surat Jalan' : 'Nomor Dokumen BC'}
-            </label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border rounded-lg dark:bg-slate-700"
-              placeholder={
-                searchType === 'op' ? 'Contoh: K1YH260001' :
-                searchType === 'surat-jalan' ? 'Contoh: 26007466' :
-                'Contoh: 134746'
-              }
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-            />
-          </div>
-          {searchType === 'bc-document' && (
-            <div>
-              <label className="block text-xs font-medium mb-1">Nomor ER (Opsional)</label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border rounded-lg dark:bg-slate-700"
-                placeholder="Contoh: 25002828"
-                value={bcNomorEr}
-                onChange={e => setBcNomorEr(e.target.value)}
-              />
-            </div>
-          )}
-          <div className="flex items-end">
-            <button
-              onClick={handleSearch}
-              disabled={loading}
-              className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-purple-700 disabled:opacity-50"
-            >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-              Trace
-            </button>
-          </div>
-        </div>
-
-        {error && (
-          <div className="mt-4 p-3 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 rounded-lg flex items-center gap-2 text-rose-600">
-            <AlertCircle size={16} /> {error}
-          </div>
-        )}
-      </div>
-
-      {result && (
-        <div className="mt-6">
-          {searchType === 'surat-jalan' && renderSuratJalanResult(result as TraceResult)}
-          {searchType === 'bc-document' && renderBcResult(result as BcTraceResult)}
-          {searchType === 'op' && renderOpResult(result as OpTraceResult)}
-        </div>
-      )}
-
-      {!result && !loading && !error && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border-2 border-dashed border-slate-300 p-12 text-center">
-          <Archive size={48} className="mx-auto text-slate-400 mb-3" />
-          <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300">Traceability End-to-End</h3>
-          <p className="text-sm text-slate-500 max-w-md mx-auto">
-            Masukkan nomor OP untuk melihat detail proses produksi.<br />
-            Atau masukkan Surat Jalan untuk menelusuri ke dokumen BC, atau sebaliknya.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-};
-</file>
-
 <file path="frontend/src/features/traceability/TraceabilityView.tsx">
 import React, { useState } from 'react';
 import {
@@ -9215,6 +7779,661 @@ import { IotModule } from '../iot/iot.module';
 export class StationLogsModule {}
 </file>
 
+<file path="backend/src/traceability/traceability-extended.controller.ts">
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { TraceabilityExtendedService } from './traceability-extended.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+
+@Controller('traceability-extended')
+@UseGuards(JwtAuthGuard)
+export class TraceabilityExtendedController {
+  constructor(private readonly service: TraceabilityExtendedService) {}
+
+  @Get('op/:opNumber')
+  async traceByOp(@Param('opNumber') opNumber: string) {
+    return this.service.traceByOpNumberFull(opNumber);
+  }
+
+  @Get('surat-jalan/:suratJalan')
+  async traceBySuratJalan(@Param('suratJalan') suratJalan: string) {
+    return this.service.traceBySuratJalanFull(suratJalan);
+  }
+
+  @Get('bc-document')
+  async traceByBcDocument(
+    @Query('nomorDokumen') nomorDokumen: string,
+    @Query('nomorEr') nomorEr?: string,
+  ) {
+    return this.service.traceByBcDocument(nomorDokumen, nomorEr);
+  }
+}
+</file>
+
+<file path="backend/src/traceability/traceability-extended.service.ts">
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
+
+// ========== EXPORTED INTERFACES ==========
+export interface BcDocument {
+  nomor_er: number;
+  kode_bc: string;
+  nomor_dokumen_bc: string;
+  tanggal_dokumen_bc: string;
+}
+
+export interface CuttingBatchDetail {
+  batchNumber: number;
+  qty: number;
+  qrCode: string;
+  createdAt: Date;
+}
+
+export interface PatternProgressDetail {
+  patternIndex: number;
+  patternName: string;
+  target: number;
+  good: number;
+  ng: number;
+  completed: boolean;
+  updatedAt?: Date;
+}
+
+export interface CheckPanelInspectionDetail {
+  patternIndex: number;
+  patternName: string;
+  good: number;
+  ng: number;
+  ngReasons: string[];
+  createdAt: Date;
+}
+
+export interface QcInspectionDetail {
+  good: number;
+  ng: number;
+  ngReasons: string[];
+  createdAt: Date;
+}
+
+export interface SewingProgressDetail {
+  startProgress: { startIndex: number; qty: number }[];
+  finishProgress: { finishIndex: number; qty: number }[];
+}
+
+export interface PackingSessionDetail {
+  sessionId: string;
+  fgNumber: string;
+  qty: number;
+  qrCode: string;
+  createdAt: Date;
+  receivedAt?: Date | null;
+}
+
+export interface OpTraceFullResult {
+  opNumber: string;
+  styleCode: string;
+  itemNumberFG: string;
+  itemNameFG: string | null;
+  qtyOp: number;
+  status: string;
+  currentStation: string;
+  // Cutting Entan
+  cuttingBatches: CuttingBatchDetail[];
+  totalCutQty: number;
+  // Cutting Pond
+  patternProgress: PatternProgressDetail[];
+  pondTotalGood: number;
+  pondTotalNg: number;
+  pondTotalProcessed: number;
+  // Check Panel
+  checkPanelInspections: CheckPanelInspectionDetail[];
+  cpTotalGood: number;
+  cpTotalNg: number;
+  cpTotalInspected: number;
+  setsReadyForSewing: number;
+  // Sewing
+  sewingStartProgress: { startIndex: number; qty: number }[];
+  sewingFinishProgress: { finishIndex: number; qty: number }[];
+  sewingIn: number;
+  sewingOut: number;
+  // Quality Control
+  qcInspections: QcInspectionDetail[];
+  qcGood: number;
+  qcNg: number;
+  // Packing
+  packingSessions: PackingSessionDetail[];
+  totalPacked: number;
+  // Finished Goods
+  fgStockQty: number;
+  // BC Documents
+  bcDocuments: BcDocument[];
+  // Detailed station info
+  cuttingEntanDetails?: {
+    batches: { batchNumber: number; qty: number; createdAt: string }[];
+    totalCutSets: number;
+    totalCutPatterns: number;
+    targetOpSets: number;
+    fulfillmentPercent: number;
+    dateRange: string;
+  };
+  cuttingPondDetails?: {
+    inputFromEntanPatterns: number;
+    wipPatterns: number;
+    goodPatterns: number;
+    ngPatterns: number;
+    setsReadyForCP: number;
+    dateRange: string;
+  };
+  checkPanelDetails?: {
+    inputFromPondSets: number;
+    wipSets: number;
+    goodSets: number;
+    ngSets: number;
+    setsReadyForSewing: number;
+    ngByPattern: { patternName: string; reason: string; qty: number }[];
+    dateRange: string;
+  };
+  sewingDetails?: {
+    inputFromCPSets: number;
+    wipSets: number;
+    startProgress: { startIndex: number; qty: number }[];
+    finishProgress: { finishIndex: number; qty: number }[];
+    outputSets: number;
+    dateRange: string;
+  };
+  qcDetails?: {
+    inputFromSewingSets: number;
+    wipSets: number;
+    goodSets: number;
+    ngSets: number;
+    ngByReason: { reason: string; qty: number }[];
+    dateRange: string;
+  };
+  packingDetails?: {
+    inputFromQCSets: number;
+    wipSets: number;
+    packedSets: number;
+    sentToFGSets: number;
+    dateRange: string;
+  };
+  fgDetails?: {
+    inputFromPackingSets: number;
+    currentStockSets: number;
+    shippedSets: number;
+    dateRange: string;
+  };
+  stationProgress: {
+    station: string;
+    status: 'not_started' | 'in_progress' | 'completed';
+    percent?: number;
+  }[];
+}
+
+export interface TraceResult {
+  suratJalan: string;
+  shipmentDate: Date;
+  totalQty: number;
+  fgItems: {
+    fgNumber: string;
+    totalQty: number;
+    ops: OpTraceFullResult[];
+  }[];
+}
+
+export interface ShipmentSummary {
+  suratJalan: string;
+  shipmentDate: Date;
+  totalQty: number;
+  ops: { opNumber: string; qty: number }[];
+}
+
+export interface BcTraceResult {
+  bcDocument: string;
+  bcEr: string | null;
+  relatedShipments: ShipmentSummary[];
+}
+
+@Injectable()
+export class TraceabilityExtendedService {
+  private readonly externalApiUrl = 'http://202.52.15.30:998/miniapps/admin/api/traceability';
+
+  constructor(
+    private prisma: PrismaService,
+    private httpService: HttpService,
+  ) {}
+
+  /**
+   * Memanggil API eksternal untuk mendapatkan dokumen BC berdasarkan satu OP + FG
+   */
+  async getBcDocumentsForOp(op_number: string, item_fg: string): Promise<BcDocument[]> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(this.externalApiUrl, [{ op_number, item_fg }]),
+      );
+      return response.data || [];
+    } catch (error) {
+      console.error(`Error fetching BC for OP ${op_number}:`, error instanceof Error ? error.message : String(error));
+      return [];
+    }
+  }
+
+  /**
+   * Trace lengkap berdasarkan OP Number (detail dari semua station)
+   */
+  async traceByOpNumberFull(opNumber: string): Promise<OpTraceFullResult> {
+    const op = await this.prisma.productionOrder.findUnique({
+      where: { opNumber },
+      include: {
+        line: true,
+        cuttingBatches: { orderBy: { batchNumber: 'asc' } },
+        patternProgress: { orderBy: { patternIndex: 'asc' } },
+        checkPanelInspections: { orderBy: { patternIndex: 'asc' } },
+        qcInspections: { orderBy: { createdAt: 'asc' } },
+        sewingStartProgress: { orderBy: { startIndex: 'asc' } },
+        sewingFinishProgress: { orderBy: { finishIndex: 'asc' } },
+        packingItems: {
+          include: { session: true },
+          orderBy: { session: { createdAt: 'asc' } }
+        },
+        fgItems: true,
+        shipmentItems: { include: { shipment: true } },
+      },
+    });
+
+    if (!op) {
+      throw new NotFoundException(`OP ${opNumber} tidak ditemukan`);
+    }
+
+    // Format Cutting Batches
+    const cuttingBatches: CuttingBatchDetail[] = op.cuttingBatches.map(b => ({
+      batchNumber: b.batchNumber,
+      qty: b.qty,
+      qrCode: b.qrCode,
+      createdAt: b.createdAt,
+    }));
+
+    const multiplier = op.line?.patternMultiplier || 1;
+    const totalCutQty = (op.qtyEntan || 0) * multiplier;
+
+    // Format Pattern Progress (Cutting Pond)
+    const patternProgress: PatternProgressDetail[] = op.patternProgress.map(p => ({
+      patternIndex: p.patternIndex,
+      patternName: p.patternName,
+      target: p.target,
+      good: p.good,
+      ng: p.ng,
+      completed: p.completed,
+      updatedAt: p.updatedAt,
+    }));
+
+    const pondTotalGood = op.patternProgress.reduce((sum, p) => sum + p.good, 0);
+    const pondTotalNg = op.patternProgress.reduce((sum, p) => sum + p.ng, 0);
+    const pondTotalProcessed = pondTotalGood + pondTotalNg;
+
+    // Format Check Panel Inspections
+    const checkPanelInspections: CheckPanelInspectionDetail[] = op.checkPanelInspections.map(c => ({
+      patternIndex: c.patternIndex,
+      patternName: c.patternName,
+      good: c.good,
+      ng: c.ng,
+      ngReasons: (c.ngReasons as string[]) || [],
+      createdAt: c.createdAt,
+    }));
+
+    const cpTotalGood = op.cpGoodQty || 0;
+    const cpTotalNg = op.cpNgQty || 0;
+    const cpTotalInspected = cpTotalGood + cpTotalNg;
+    const setsReadyForSewing = op.setsReadyForSewing || 0;
+
+    // Sewing Progress
+    const sewingStartProgress = op.sewingStartProgress.map(s => ({ startIndex: s.startIndex, qty: s.qty }));
+    const sewingFinishProgress = op.sewingFinishProgress.map(f => ({ finishIndex: f.finishIndex, qty: f.qty }));
+    const sewingIn = op.qtySewingIn || 0;
+    const sewingOut = op.qtySewingOut || 0;
+
+    // QC Inspections
+    const qcInspections: QcInspectionDetail[] = op.qcInspections.map(q => ({
+      good: q.good,
+      ng: q.ng,
+      ngReasons: (q.ngReasons as string[]) || [],
+      createdAt: q.createdAt,
+    }));
+    const qcGood = op.qtyQC || 0;
+    const qcNg = op.qcNgQty || 0;
+
+    // ========== PACKING SESSIONS (FIX) ==========
+    const packingSessionsMap = new Map<string, PackingSessionDetail & { receivedAt: Date | null }>();
+    for (const item of op.packingItems) {
+      const session = item.session;
+      if (!packingSessionsMap.has(session.id)) {
+        packingSessionsMap.set(session.id, {
+          sessionId: session.id,
+          fgNumber: session.fgNumber,
+          qty: 0,
+          qrCode: session.qrCode || '',
+          createdAt: session.createdAt,
+          receivedAt: session.receivedAt || null,
+        });
+      }
+      packingSessionsMap.get(session.id)!.qty += item.qty;
+    }
+    const packingSessions = Array.from(packingSessionsMap.values());
+
+    // Total semua packing (untuk date range)
+    const totalPackedAll = packingSessions.reduce((sum, s) => sum + s.qty, 0);
+    // Pisahkan yang sudah diterima FG vs belum
+    const packedSetsNotReceived = packingSessions
+      .filter(s => !s.receivedAt)
+      .reduce((sum, s) => sum + s.qty, 0);
+    const packedSetsReceived = totalPackedAll - packedSetsNotReceived;
+
+    // Input dari QC (langsung dari op.qtyQC)
+    const packingInputSets = op.qtyQC || 0;
+    // WIP = yang belum dipacking sama sekali
+    const packingWipSets = packingInputSets - totalPackedAll;
+
+    // Date range untuk packing
+    const packingDates = packingSessions.map(p => p.createdAt);
+    // ========== END OF PACKING SESSIONS ==========
+
+    // Finished Goods
+    const fgStockQty = op.fgItems.reduce((sum, f) => sum + f.qty, 0);
+
+    // BC Documents from external API
+    const bcDocuments = await this.getBcDocumentsForOp(op.opNumber, op.itemNumberFG);
+
+    // Build result
+    const result: OpTraceFullResult = {
+      opNumber: op.opNumber,
+      styleCode: op.styleCode,
+      itemNumberFG: op.itemNumberFG,
+      itemNameFG: op.itemNameFG ?? null,
+      qtyOp: op.qtyOp,
+      status: op.status,
+      currentStation: op.currentStation || 'UNKNOWN',
+      cuttingBatches,
+      totalCutQty,
+      patternProgress,
+      pondTotalGood,
+      pondTotalNg,
+      pondTotalProcessed,
+      checkPanelInspections,
+      cpTotalGood,
+      cpTotalNg,
+      cpTotalInspected,
+      setsReadyForSewing,
+      sewingStartProgress,
+      sewingFinishProgress,
+      sewingIn,
+      sewingOut,
+      qcInspections,
+      qcGood,
+      qcNg,
+      packingSessions,
+      totalPacked: totalPackedAll,
+      fgStockQty,
+      bcDocuments,
+      stationProgress: [],
+    };
+
+    // ========== BUILD DETAILED STATION INFO ==========
+    const getDateRange = (dates: Date[]): string => {
+      if (dates.length === 0) return '-';
+      const uniqueDates = [...new Set(dates.map(d => d.toISOString().split('T')[0]))].sort();
+      if (uniqueDates.length === 1) return uniqueDates[0];
+      return `${uniqueDates[0]} s/d ${uniqueDates[uniqueDates.length - 1]}`;
+    };
+
+    // 1. Cutting Entan
+    const entanDates = cuttingBatches.map(b => b.createdAt);
+    const entanTargetSets = op.qtyOp;
+    const entanTotalCutSets = op.qtyEntan || 0;
+    const entanTotalCutPatterns = totalCutQty;
+    const entanFulfillment = entanTargetSets > 0 ? (entanTotalCutSets / entanTargetSets) * 100 : 0;
+    const cuttingEntanDetails = {
+      batches: cuttingBatches.map(b => ({ batchNumber: b.batchNumber, qty: b.qty, createdAt: b.createdAt.toISOString() })),
+      totalCutSets: entanTotalCutSets,
+      totalCutPatterns: entanTotalCutPatterns,
+      targetOpSets: entanTargetSets,
+      fulfillmentPercent: Math.round(entanFulfillment),
+      dateRange: getDateRange(entanDates)
+    };
+
+    // 2. Cutting Pond
+    const pondDates = patternProgress.map(p => p.updatedAt ? new Date(p.updatedAt) : new Date());
+    const pondInputPatterns = totalCutQty;
+    const pondGoodPatterns = pondTotalGood;
+    const pondNgPatterns = pondTotalNg;
+    const pondProcessedPatterns = pondGoodPatterns + pondNgPatterns;
+    const pondWipPatterns = pondInputPatterns - pondProcessedPatterns;
+    const pondSetsReadyForCP = op.qtyCP;
+    const cuttingPondDetails = {
+      inputFromEntanPatterns: pondInputPatterns,
+      wipPatterns: pondWipPatterns,
+      goodPatterns: pondGoodPatterns,
+      ngPatterns: pondNgPatterns,
+      setsReadyForCP: pondSetsReadyForCP,
+      dateRange: getDateRange(pondDates)
+    };
+
+    // 3. Check Panel
+    const cpDates = checkPanelInspections.map(i => i.createdAt);
+    const cpInputSets = op.qtyCP;
+    const cpGoodSets = cpTotalGood;
+    const cpNgSets = cpTotalNg;
+    const cpInspectedSets = cpGoodSets + cpNgSets;
+    const cpWipSets = cpInputSets > cpInspectedSets ? cpInputSets - cpInspectedSets : 0;
+    const cpSetsReadyForSewing = op.setsReadyForSewing;
+    const ngByPatternMap = new Map<string, Map<string, number>>();
+    for (const insp of checkPanelInspections) {
+      if (insp.ng > 0 && insp.ngReasons) {
+        const patternName = insp.patternName;
+        const reasons = Array.isArray(insp.ngReasons) ? insp.ngReasons : [];
+        for (const reason of reasons) {
+          if (!ngByPatternMap.has(patternName)) ngByPatternMap.set(patternName, new Map());
+          const reasonMap = ngByPatternMap.get(patternName)!;
+          reasonMap.set(reason, (reasonMap.get(reason) || 0) + 1);
+        }
+      }
+    }
+    const ngByPattern: { patternName: string; reason: string; qty: number }[] = [];
+    for (const [patternName, reasonMap] of ngByPatternMap.entries()) {
+      for (const [reason, qty] of reasonMap.entries()) {
+        ngByPattern.push({ patternName, reason, qty });
+      }
+    }
+    const checkPanelDetails = {
+      inputFromPondSets: cpInputSets,
+      wipSets: cpWipSets,
+      goodSets: cpGoodSets,
+      ngSets: cpNgSets,
+      setsReadyForSewing: cpSetsReadyForSewing,
+      ngByPattern,
+      dateRange: getDateRange(cpDates)
+    };
+
+    // 4. Sewing
+    const sewingDates = [...sewingStartProgress.map(s => new Date()), ...sewingFinishProgress.map(f => new Date())];
+    const sewingInputSets = op.qtySewingIn;
+    const sewingOutputSets = op.qtySewingOut;
+    const sewingWipSets = sewingInputSets - sewingOutputSets;
+    const sewingDetails = {
+      inputFromCPSets: sewingInputSets,
+      wipSets: sewingWipSets,
+      startProgress: sewingStartProgress.map(s => ({ startIndex: s.startIndex, qty: s.qty })),
+      finishProgress: sewingFinishProgress.map(f => ({ finishIndex: f.finishIndex, qty: f.qty })),
+      outputSets: sewingOutputSets,
+      dateRange: getDateRange(sewingDates)
+    };
+
+    // 5. Quality Control
+    const qcDates = qcInspections.map(q => q.createdAt);
+    const qcInputSets = op.qtySewingOut;
+    const qcGoodSets = qcGood;
+    const qcNgSets = qcNg;
+    const qcInspectedSets = qcGoodSets + qcNgSets;
+    const qcWipSets = qcInputSets - qcInspectedSets;
+    const ngByReasonMap = new Map<string, number>();
+    for (const insp of qcInspections) {
+      if (insp.ng > 0 && insp.ngReasons) {
+        const reasons = Array.isArray(insp.ngReasons) ? insp.ngReasons : [];
+        for (const reason of reasons) {
+          ngByReasonMap.set(reason, (ngByReasonMap.get(reason) || 0) + 1);
+        }
+      }
+    }
+    const ngByReason = Array.from(ngByReasonMap.entries()).map(([reason, qty]) => ({ reason, qty }));
+    const qcDetails = {
+      inputFromSewingSets: qcInputSets,
+      wipSets: qcWipSets,
+      goodSets: qcGoodSets,
+      ngSets: qcNgSets,
+      ngByReason,
+      dateRange: getDateRange(qcDates)
+    };
+
+    // 6. Packing
+    const packingDetails = {
+      inputFromQCSets: packingInputSets,
+      wipSets: packingWipSets,
+      packedSets: packedSetsNotReceived,
+      sentToFGSets: packedSetsReceived,
+      dateRange: getDateRange(packingDates)
+    };
+
+    // 7. Finished Goods
+    const fgDates = op.fgItems.map(f => f.createdAt);
+    const fgInputSets = totalPackedAll;
+    const fgCurrentStockSets = fgStockQty;
+    const fgShippedSets = op.shipmentItems.reduce((sum, si) => sum + si.qty, 0);
+    const fgDetails = {
+      inputFromPackingSets: fgInputSets,
+      currentStockSets: fgCurrentStockSets,
+      shippedSets: fgShippedSets,
+      dateRange: getDateRange(fgDates)
+    };
+
+    // 8. Station Progress
+    const stationProgress = [
+      { station: 'CUTTING_ENTAN', status: (entanTotalCutSets >= entanTargetSets ? 'completed' : (entanTotalCutSets > 0 ? 'in_progress' : 'not_started')) as any, percent: Math.min(100, entanFulfillment) },
+      { station: 'CUTTING_POND', status: (pondSetsReadyForCP > 0 ? 'completed' : (pondProcessedPatterns > 0 ? 'in_progress' : 'not_started')) as any, percent: (pondProcessedPatterns / (pondInputPatterns || 1)) * 100 },
+      { station: 'CP', status: (cpSetsReadyForSewing > 0 ? 'completed' : (cpInspectedSets > 0 ? 'in_progress' : 'not_started')) as any, percent: (cpInspectedSets / (cpInputSets || 1)) * 100 },
+      { station: 'SEWING', status: (sewingOutputSets >= sewingInputSets ? 'completed' : (sewingOutputSets > 0 ? 'in_progress' : 'not_started')) as any, percent: (sewingOutputSets / (sewingInputSets || 1)) * 100 },
+      { station: 'QC', status: (qcInspectedSets >= qcInputSets ? 'completed' : (qcInspectedSets > 0 ? 'in_progress' : 'not_started')) as any, percent: (qcInspectedSets / (qcInputSets || 1)) * 100 },
+      { station: 'PACKING', status: (packedSetsNotReceived >= packingInputSets ? 'completed' : (packedSetsNotReceived > 0 ? 'in_progress' : 'not_started')) as any, percent: (packedSetsNotReceived / (packingInputSets || 1)) * 100 },
+      { station: 'FG', status: (fgShippedSets >= fgInputSets ? 'completed' : (fgCurrentStockSets > 0 ? 'in_progress' : 'not_started')) as any, percent: (fgShippedSets / (fgInputSets || 1)) * 100 }
+    ];
+
+    // Assign ke result
+    result.cuttingEntanDetails = cuttingEntanDetails;
+    result.cuttingPondDetails = cuttingPondDetails;
+    result.checkPanelDetails = checkPanelDetails;
+    result.sewingDetails = sewingDetails;
+    result.qcDetails = qcDetails;
+    result.packingDetails = packingDetails;
+    result.fgDetails = fgDetails;
+    result.stationProgress = stationProgress;
+
+    return result;
+  }
+
+  /**
+   * Trace lengkap dari Surat Jalan → FG → OP → Dokumen BC
+   */
+  async traceBySuratJalanFull(suratJalan: string): Promise<TraceResult> {
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { suratJalan },
+      include: {
+        items: {
+          include: {
+            op: true,
+          },
+        },
+      },
+    });
+
+    if (!shipment) {
+      throw new NotFoundException(`Surat Jalan ${suratJalan} tidak ditemukan di database. Pastikan sudah dilakukan proses shipping.`);
+    }
+
+    const fgMap = new Map<string, { fgNumber: string; totalQty: number; ops: OpTraceFullResult[] }>();
+
+    for (const item of shipment.items) {
+      const opTrace = await this.traceByOpNumberFull(item.op.opNumber);
+      const fgNumber = item.op.itemNumberFG;
+      if (!fgMap.has(fgNumber)) {
+        fgMap.set(fgNumber, {
+          fgNumber,
+          totalQty: 0,
+          ops: [],
+        });
+      }
+      const fgEntry = fgMap.get(fgNumber)!;
+      fgEntry.totalQty += item.qty;
+      fgEntry.ops.push(opTrace);
+    }
+
+    return {
+      suratJalan: shipment.suratJalan,
+      shipmentDate: shipment.createdAt,
+      totalQty: shipment.totalQty,
+      fgItems: Array.from(fgMap.values()),
+    };
+  }
+
+  /**
+   * Trace balik dari nomor dokumen BC → semua Surat Jalan yang terkait
+   */
+  async traceByBcDocument(bcNomorDokumen: string, bcNomorEr?: string): Promise<BcTraceResult> {
+    const allShipments = await this.prisma.shipment.findMany({
+      include: {
+        items: {
+          include: {
+            op: true,
+          },
+        },
+      },
+    });
+
+    const matchedShipments: ShipmentSummary[] = [];
+
+    for (const shipment of allShipments) {
+      let found = false;
+      for (const item of shipment.items) {
+        const bcDocs = await this.getBcDocumentsForOp(item.op.opNumber, item.op.itemNumberFG);
+        const matched = bcDocs.some(doc =>
+          doc.nomor_dokumen_bc === bcNomorDokumen ||
+          (bcNomorEr && doc.nomor_er.toString() === bcNomorEr)
+        );
+        if (matched) {
+          found = true;
+          break;
+        }
+      }
+      if (found) {
+        matchedShipments.push({
+          suratJalan: shipment.suratJalan,
+          shipmentDate: shipment.createdAt,
+          totalQty: shipment.totalQty,
+          ops: shipment.items.map(i => ({ opNumber: i.op.opNumber, qty: i.qty })),
+        });
+      }
+    }
+
+    if (matchedShipments.length === 0) {
+      throw new NotFoundException(`Tidak ditemukan surat jalan yang menggunakan dokumen BC ${bcNomorDokumen}`);
+    }
+
+    return {
+      bcDocument: bcNomorDokumen,
+      bcEr: bcNomorEr || null,
+      relatedShipments: matchedShipments,
+    };
+  }
+}
+</file>
+
 <file path="backend/src/traceability/traceability.module.ts">
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
@@ -10766,6 +9985,778 @@ export const ManpowerMonitoringView = () => {
               )}
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+};
+</file>
+
+<file path="frontend/src/features/traceability/TraceabilityExtendedView.tsx">
+import React, { useState } from 'react';
+import {
+  Search, Package, Truck, FileText, Layers, ClipboardCheck,
+  CheckCircle, AlertCircle, Clock, Box, Archive,
+  ChevronDown, ChevronRight, Loader2, TrendingUp,
+  Scissors, Shirt, QrCode, Grid, Activity
+} from 'lucide-react';
+
+const API_BASE_URL = 'http://localhost:3000';
+
+// Types
+interface BcDocument {
+  nomor_er: number;
+  kode_bc: string;
+  nomor_dokumen_bc: string;
+  tanggal_dokumen_bc: string;
+}
+
+interface PatternProgress {
+  patternIndex: number;
+  patternName: string;
+  target: number;
+  good: number;
+  ng: number;
+  completed: boolean;
+}
+
+interface CheckPanelInspection {
+  patternIndex: number;
+  patternName: string;
+  good: number;
+  ng: number;
+  ngReasons: string[];
+  createdAt: string;
+}
+
+interface QcInspection {
+  good: number;
+  ng: number;
+  ngReasons: string[];
+  createdAt: string;
+}
+
+interface PackingSession {
+  sessionId: string;
+  fgNumber: string;
+  qty: number;
+  qrCode: string;
+  createdAt: string;
+}
+
+// Interface OpTraceResult yang diperbarui sesuai backend
+interface OpTraceResult {
+  opNumber: string;
+  styleCode: string;
+  itemNumberFG: string;
+  itemNameFG: string | null;
+  qtyOp: number;
+  status: string;
+  currentStation: string;
+  cuttingBatches: { batchNumber: number; qty: number; qrCode: string; createdAt: string }[];
+  totalCutQty: number;
+  patternProgress: PatternProgress[];
+  pondTotalGood: number;
+  pondTotalNg: number;
+  pondTotalProcessed: number;
+  checkPanelInspections: CheckPanelInspection[];
+  cpTotalGood: number;
+  cpTotalNg: number;
+  cpTotalInspected: number;
+  setsReadyForSewing: number;
+  sewingStartProgress: { startIndex: number; qty: number }[];
+  sewingFinishProgress: { finishIndex: number; qty: number }[];
+  sewingIn: number;
+  sewingOut: number;
+  qcInspections: QcInspection[];
+  qcGood: number;
+  qcNg: number;
+  packingSessions: PackingSession[];
+  totalPacked: number;
+  fgStockQty: number;
+  bcDocuments: BcDocument[];
+  updatedAt: string;
+  cuttingEntanDetails?: {
+    batches: { batchNumber: number; qty: number; createdAt: string }[];
+    totalCutSets: number;
+    totalCutPatterns: number;
+    targetOpSets: number;
+    fulfillmentPercent: number;
+    dateRange: string;
+  };
+  cuttingPondDetails?: {
+    inputFromEntanPatterns: number;
+    wipPatterns: number;
+    goodPatterns: number;
+    ngPatterns: number;
+    setsReadyForCP: number;
+    dateRange: string;
+  };
+  checkPanelDetails?: {
+    inputFromPondSets: number;
+    wipSets: number;
+    goodSets: number;
+    ngSets: number;
+    setsReadyForSewing: number;
+    ngByPattern: { patternName: string; reason: string; qty: number }[];
+    dateRange: string;
+  };
+  sewingDetails?: {
+    inputFromCPSets: number;
+    wipSets: number;
+    startProgress: { startIndex: number; qty: number }[];
+    finishProgress: { finishIndex: number; qty: number }[];
+    outputSets: number;
+    dateRange: string;
+  };
+  qcDetails?: {
+    inputFromSewingSets: number;
+    wipSets: number;
+    goodSets: number;
+    ngSets: number;
+    ngByReason: { reason: string; qty: number }[];
+    dateRange: string;
+  };
+  packingDetails?: {
+    inputFromQCSets: number;
+    wipSets: number;
+    packedSets: number;
+    sentToFGSets: number;
+    dateRange: string;
+  };
+  fgDetails?: {
+    inputFromPackingSets: number;
+    currentStockSets: number;
+    shippedSets: number;
+    dateRange: string;
+  };
+  stationProgress: {
+    station: string;
+    status: 'not_started' | 'in_progress' | 'completed';
+    percent?: number;
+  }[];
+}
+
+interface TraceResult {
+  suratJalan: string;
+  shipmentDate: string;
+  totalQty: number;
+  fgItems: {
+    fgNumber: string;
+    totalQty: number;
+    ops: OpTraceResult[];
+  }[];
+}
+
+interface BcTraceResult {
+  bcDocument: string;
+  bcEr: string | null;
+  relatedShipments: {
+    suratJalan: string;
+    shipmentDate: string;
+    totalQty: number;
+    ops: { opNumber: string; qty: number }[];
+  }[];
+}
+
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('nextg_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+};
+
+// Helper: filter unik berdasarkan key
+const uniqueBy = <T, K extends keyof T>(arr: T[], key: K): T[] => {
+  const seen = new Set();
+  return arr.filter(item => {
+    const val = item[key];
+    if (seen.has(val)) return false;
+    seen.add(val);
+    return true;
+  });
+};
+
+// Helper: filter dokumen BC unik berdasarkan nomor_dokumen_bc dan nomor_er
+const uniqueBcDocuments = (docs: BcDocument[]): BcDocument[] => {
+  const seen = new Set();
+  return docs.filter(doc => {
+    const key = `${doc.nomor_dokumen_bc}|${doc.nomor_er}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+// Komponen OpDetailCard dengan properti showProductionInfo
+// Jika showProductionInfo = false, bagian produksi (cutting, pond, cp, sewing, qc, packing, fg, progress) tidak dirender sama sekali.
+const OpDetailCard = ({ 
+  op, 
+  isExpanded, 
+  onToggle, 
+  detailed = true, 
+  showBcDocuments = true,
+  showProductionInfo = true 
+}: { 
+  op: OpTraceResult; 
+  isExpanded: boolean; 
+  onToggle: () => void; 
+  detailed?: boolean; 
+  showBcDocuments?: boolean;
+  showProductionInfo?: boolean;
+}) => {
+  const formatDateRange = (dateRange?: string) => {
+    if (!dateRange || dateRange === '-') return '-';
+    const parts = dateRange.split(' s/d ');
+    if (parts.length === 1) return parts[0];
+    return `${parts[0]} → ${parts[1]}`;
+  };
+
+  const ProgressBar = ({ percent, status }: { percent?: number; status: string }) => {
+    const value = percent !== undefined ? Math.min(100, Math.max(0, percent)) : 0;
+    let color = 'bg-slate-300';
+    if (status === 'completed') color = 'bg-emerald-500';
+    else if (status === 'in_progress') color = 'bg-blue-500';
+    return (
+      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${value}%` }} />
+      </div>
+    );
+  };
+
+  const renderNgList = (items: { reason: string; qty: number }[], title: string) => {
+    if (!items || items.length === 0) return null;
+    return (
+      <div className="mt-2">
+        <div className="text-xs font-semibold text-rose-600">{title}</div>
+        <ul className="list-disc list-inside text-xs text-slate-600 dark:text-slate-400 mt-1">
+          {items.map((item, idx) => (
+            <li key={idx}>{item.reason} : {item.qty} pcs</li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  return (
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg mb-3 overflow-hidden">
+      <div
+        className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+        onClick={onToggle}
+      >
+        <div className="flex items-center gap-2">
+          <Layers size={16} className="text-purple-500" />
+          <span className="font-mono font-bold text-sm">{op.opNumber}</span>
+          <span className="text-xs text-slate-500">({op.styleCode})</span>
+        </div>
+        <div className="flex items-center gap-3 text-xs">
+          {detailed ? (
+            <>
+              <span className="text-emerald-600">Good: {op.cpTotalGood + op.qcGood}</span>
+              <span className="text-rose-600">NG: {op.cpTotalNg + op.qcNg}</span>
+            </>
+          ) : null}
+          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="p-4 space-y-5">
+          {/* BC Documents - selalu ditampilkan jika showBcDocuments true */}
+          {showBcDocuments && op.bcDocuments.length > 0 && (
+            <div className="bg-rose-50 dark:bg-rose-900/20 p-3 rounded-lg">
+              <h5 className="text-sm font-bold text-rose-600 mb-2">📄 Dokumen BC (Material Penerimaan)</h5>
+              {uniqueBcDocuments(op.bcDocuments).map((doc, idx) => (
+                <div key={idx} className="text-xs">No. ER: {doc.nomor_er} | No. Dokumen: {doc.nomor_dokumen_bc} | Tgl: {new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}</div>
+              ))}
+            </div>
+          )}
+
+          {/* Seluruh informasi produksi hanya dirender jika showProductionInfo === true */}
+          {showProductionInfo && (
+            <>
+              {/* CUTTING ENTAN */}
+              <div className="border-l-4 border-orange-500 pl-3">
+                <h4 className="font-bold text-sm text-orange-700 dark:text-orange-400 flex items-center gap-2">
+                  ✂️ Cutting Entan
+                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.cuttingEntanDetails?.dateRange)})</span>
+                </h4>
+                {op.cuttingEntanDetails ? (
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                    <div>Target OP: <strong>{op.cuttingEntanDetails.targetOpSets}</strong> sets</div>
+                    <div>Total Cut: <strong>{op.cuttingEntanDetails.totalCutSets}</strong> sets / <strong>{op.cuttingEntanDetails.totalCutPatterns}</strong> patterns</div>
+                    <div>Fulfillment: <strong>{op.cuttingEntanDetails.fulfillmentPercent}%</strong></div>
+                    <div>Batches: {op.cuttingEntanDetails.batches.map(b => `#${b.batchNumber} (${b.qty})`).join(', ')}</div>
+                  </div>
+                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
+              </div>
+
+              {/* CUTTING POND */}
+              <div className="border-l-4 border-blue-500 pl-3">
+                <h4 className="font-bold text-sm text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                  🔷 Cutting Pond
+                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.cuttingPondDetails?.dateRange)})</span>
+                </h4>
+                {op.cuttingPondDetails ? (
+                  <div className="mt-2 space-y-2 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>Input dari Entan: <strong>{op.cuttingPondDetails.inputFromEntanPatterns}</strong> patterns</div>
+                      <div>WIP: <strong>{op.cuttingPondDetails.wipPatterns}</strong> patterns</div>
+                      <div className="text-emerald-600">Good: {op.cuttingPondDetails.goodPatterns}</div>
+                      <div className="text-rose-600">NG: {op.cuttingPondDetails.ngPatterns}</div>
+                      <div>Sets Ready for CP: <strong>{op.cuttingPondDetails.setsReadyForCP}</strong> sets</div>
+                    </div>
+                    <ProgressBar percent={(op.cuttingPondDetails.goodPatterns + op.cuttingPondDetails.ngPatterns) / (op.cuttingPondDetails.inputFromEntanPatterns || 1) * 100} status={op.cuttingPondDetails.setsReadyForCP > 0 ? 'completed' : 'in_progress'} />
+                  </div>
+                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
+              </div>
+
+              {/* CHECK PANEL */}
+              <div className="border-l-4 border-emerald-500 pl-3">
+                <h4 className="font-bold text-sm text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                  👁️ Check Panel
+                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.checkPanelDetails?.dateRange)})</span>
+                </h4>
+                {op.checkPanelDetails ? (
+                  <div className="mt-2 space-y-2 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>Input dari Pond: <strong>{op.checkPanelDetails.inputFromPondSets}</strong> sets</div>
+                      <div>WIP: <strong>{op.checkPanelDetails.wipSets}</strong> sets</div>
+                      <div className="text-emerald-600">Good: {op.checkPanelDetails.goodSets}</div>
+                      <div className="text-rose-600">NG: {op.checkPanelDetails.ngSets}</div>
+                      <div>Sets Ready for Sewing: <strong>{op.checkPanelDetails.setsReadyForSewing}</strong> sets</div>
+                    </div>
+                    {op.checkPanelDetails.ngByPattern.length > 0 && (
+                      <div className="mt-2 bg-rose-50 dark:bg-rose-900/20 p-2 rounded">
+                        <div className="text-xs font-semibold text-rose-600">Detail NG per Pola:</div>
+                        <ul className="list-disc list-inside text-xs mt-1">
+                          {op.checkPanelDetails.ngByPattern.map((item, idx) => (
+                            <li key={idx}><strong>{item.patternName}</strong> - {item.reason} : {item.qty} pcs</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <ProgressBar percent={(op.checkPanelDetails.goodSets + op.checkPanelDetails.ngSets) / (op.checkPanelDetails.inputFromPondSets || 1) * 100} status={op.checkPanelDetails.setsReadyForSewing > 0 ? 'completed' : 'in_progress'} />
+                  </div>
+                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
+              </div>
+
+              {/* SEWING */}
+              <div className="border-l-4 border-purple-500 pl-3">
+                <h4 className="font-bold text-sm text-purple-700 dark:text-purple-400 flex items-center gap-2">
+                  🧵 Sewing
+                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.sewingDetails?.dateRange)})</span>
+                </h4>
+                {op.sewingDetails ? (
+                  <div className="mt-2 space-y-2 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>Input dari CP: <strong>{op.sewingDetails.inputFromCPSets}</strong> sets</div>
+                      <div>WIP: <strong>{op.sewingDetails.wipSets}</strong> sets</div>
+                      <div>Start Progress: {op.sewingDetails.startProgress.map(s => `Start${s.startIndex}=${s.qty}`).join(', ')}</div>
+                      <div>Finish Progress: {op.sewingDetails.finishProgress.map(f => `Finish${f.finishIndex}=${f.qty}`).join(', ')}</div>
+                      <div>Output: <strong>{op.sewingDetails.outputSets}</strong> sets</div>
+                    </div>
+                    <ProgressBar percent={op.sewingDetails.outputSets / (op.sewingDetails.inputFromCPSets || 1) * 100} status={op.sewingDetails.outputSets >= op.sewingDetails.inputFromCPSets ? 'completed' : 'in_progress'} />
+                  </div>
+                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
+              </div>
+
+              {/* QUALITY CONTROL */}
+              <div className="border-l-4 border-amber-500 pl-3">
+                <h4 className="font-bold text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                  🔍 Quality Control
+                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.qcDetails?.dateRange)})</span>
+                </h4>
+                {op.qcDetails ? (
+                  <div className="mt-2 space-y-2 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>Input dari Sewing: <strong>{op.qcDetails.inputFromSewingSets}</strong> sets</div>
+                      <div>WIP: <strong>{op.qcDetails.wipSets}</strong> sets</div>
+                      <div className="text-emerald-600">Good: {op.qcDetails.goodSets}</div>
+                      <div className="text-rose-600">NG: {op.qcDetails.ngSets}</div>
+                    </div>
+                    {op.qcDetails.ngByReason.length > 0 && renderNgList(op.qcDetails.ngByReason, "Jenis NG:")}
+                    <ProgressBar percent={(op.qcDetails.goodSets + op.qcDetails.ngSets) / (op.qcDetails.inputFromSewingSets || 1) * 100} status={(op.qcDetails.goodSets + op.qcDetails.ngSets) >= op.qcDetails.inputFromSewingSets ? 'completed' : 'in_progress'} />
+                  </div>
+                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
+              </div>
+
+              {/* PACKING */}
+              <div className="border-l-4 border-indigo-500 pl-3">
+                <h4 className="font-bold text-sm text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
+                  📦 Packing
+                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.packingDetails?.dateRange)})</span>
+                </h4>
+                {op.packingDetails ? (
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                    <div>Input dari QC: <strong>{op.packingDetails.inputFromQCSets}</strong> sets</div>
+                    <div>WIP: <strong>{op.packingDetails.wipSets}</strong> sets (menunggu diterima FG)</div>
+                    <div>Packed: <strong>{op.packingDetails.packedSets}</strong> sets</div>
+                    <div>Sent ke FG: <strong>{op.packingDetails.sentToFGSets}</strong> sets</div>
+                    <ProgressBar percent={op.packingDetails.packedSets / (op.packingDetails.inputFromQCSets || 1) * 100} status={op.packingDetails.packedSets >= op.packingDetails.inputFromQCSets ? 'completed' : 'in_progress'} />
+                  </div>
+                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
+              </div>
+
+              {/* FINISHED GOODS */}
+              <div className="border-l-4 border-green-500 pl-3">
+                <h4 className="font-bold text-sm text-green-700 dark:text-green-400 flex items-center gap-2">
+                  ✅ Finished Goods
+                  <span className="text-xs font-normal text-slate-500">({formatDateRange(op.fgDetails?.dateRange)})</span>
+                </h4>
+                {op.fgDetails ? (
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                    <div>Input dari Packing: <strong>{op.fgDetails.inputFromPackingSets}</strong> sets</div>
+                    <div>Stock Sekarang: <strong>{op.fgDetails.currentStockSets}</strong> sets</div>
+                    <div>Sudah Dikirim: <strong>{op.fgDetails.shippedSets}</strong> sets</div>
+                    <ProgressBar percent={op.fgDetails.shippedSets / (op.fgDetails.inputFromPackingSets || 1) * 100} status={op.fgDetails.shippedSets >= op.fgDetails.inputFromPackingSets ? 'completed' : 'in_progress'} />
+                  </div>
+                ) : <div className="text-xs text-slate-500">Belum ada data</div>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Komponen StationTimeline tidak digunakan di OpDetailCard baru, namun tetap ada untuk kompatibilitas (tidak diubah)
+const StationTimeline = ({ op }: { op: OpTraceResult }) => {
+  const stations = [
+    { key: 'cutting', name: 'Cutting Entan', icon: Scissors, color: 'orange' },
+    { key: 'pond', name: 'Cutting Pond', icon: Grid, color: 'blue' },
+    { key: 'cp', name: 'Check Panel', icon: ClipboardCheck, color: 'emerald' },
+    { key: 'sewing', name: 'Sewing', icon: Shirt, color: 'purple' },
+    { key: 'qc', name: 'Quality Control', icon: Activity, color: 'amber' },
+    { key: 'packing', name: 'Packing', icon: Package, color: 'indigo' },
+    { key: 'fg', name: 'Finished Goods', icon: Truck, color: 'green' },
+  ];
+
+  const getProgress = (station: string) => {
+    switch (station) {
+      case 'cutting':
+        return { value: op.cuttingBatches.length > 0 ? 100 : 0, max: 1, label: `${op.cuttingBatches.length} batches` };
+      case 'pond':
+        const pondMax = op.qtyOp * (op.patternProgress.length || 1);
+        return { value: op.pondTotalProcessed, max: pondMax || 1, label: `${op.pondTotalProcessed}/${pondMax || 1}` };
+      case 'cp':
+        const cpMax = op.qtyOp * (op.patternProgress.length || 1);
+        return { value: op.cpTotalInspected, max: cpMax || 1, label: `${op.cpTotalInspected}/${cpMax || 1}` };
+      case 'sewing':
+        return { value: op.sewingOut, max: op.sewingIn || 1, label: `${op.sewingOut}/${op.sewingIn || 1}` };
+      case 'qc':
+        return { value: op.qcGood + op.qcNg, max: op.sewingOut || 1, label: `${op.qcGood + op.qcNg}/${op.sewingOut || 1}` };
+      case 'packing':
+        return { value: op.totalPacked, max: op.qcGood || 1, label: `${op.totalPacked}/${op.qcGood || 1}` };
+      case 'fg':
+        return { value: op.fgStockQty, max: op.totalPacked || 1, label: `${op.fgStockQty}/${op.totalPacked || 1}` };
+      default:
+        return { value: 0, max: 1, label: '-' };
+    }
+  };
+
+  return (
+    <div className="mt-4 space-y-2">
+      <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">📊 Progress per Station</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {stations.map(station => {
+          const prog = getProgress(station.key);
+          const percent = prog.max > 0 ? (prog.value / prog.max) * 100 : 0;
+          return (
+            <div key={station.key} className="bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <station.icon size={14} className={`text-${station.color}-500`} />
+                <span className="text-xs font-medium">{station.name}</span>
+                <span className="text-xs text-slate-500 ml-auto">{prog.label}</span>
+              </div>
+              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                <div className={`h-full rounded-full bg-${station.color}-500 transition-all`} style={{ width: `${Math.min(percent, 100)}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+export const TraceabilityExtendedView = () => {
+  const [searchType, setSearchType] = useState<'surat-jalan' | 'bc-document' | 'op'>('surat-jalan');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [bcNomorEr, setBcNomorEr] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState<OpTraceResult | TraceResult | BcTraceResult | null>(null);
+  const [expandedFg, setExpandedFg] = useState<Set<string>>(new Set());
+  const [expandedOp, setExpandedOp] = useState<Set<string>>(new Set());
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      setError('Masukkan nomor OP, surat jalan, atau nomor dokumen BC');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setResult(null);
+
+    try {
+      let url = '';
+      if (searchType === 'op') {
+        url = `${API_BASE_URL}/traceability-extended/op/${encodeURIComponent(searchQuery)}`;
+      } else if (searchType === 'surat-jalan') {
+        url = `${API_BASE_URL}/traceability-extended/surat-jalan/${encodeURIComponent(searchQuery)}`;
+      } else {
+        let params = `nomorDokumen=${encodeURIComponent(searchQuery)}`;
+        if (bcNomorEr) params += `&nomorEr=${encodeURIComponent(bcNomorEr)}`;
+        url = `${API_BASE_URL}/traceability-extended/bc-document?${params}`;
+      }
+
+      const res = await fetch(url, { headers: getAuthHeaders() });
+      if (res.ok) {
+        let data = await res.json();
+        // Untuk surat jalan, filter OP unik dan BC unik
+        if (searchType === 'surat-jalan' && data && (data as TraceResult).fgItems) {
+          const traceData = data as TraceResult;
+          traceData.fgItems = traceData.fgItems.map((fg: any) => ({
+            ...fg,
+            ops: uniqueBy(fg.ops, 'opNumber')
+          }));
+          traceData.fgItems.forEach((fg: any) => {
+            fg.ops.forEach((op: OpTraceResult) => {
+              if (op.bcDocuments) op.bcDocuments = uniqueBcDocuments(op.bcDocuments);
+            });
+          });
+          setResult(traceData);
+        } else {
+          setResult(data);
+        }
+      } else {
+        const err = await res.json();
+        setError(err.message || 'Data tidak ditemukan');
+      }
+    } catch (err) {
+      setError('Gagal terhubung ke server');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleFg = (fgNumber: string) => {
+    const newSet = new Set(expandedFg);
+    if (newSet.has(fgNumber)) newSet.delete(fgNumber);
+    else newSet.add(fgNumber);
+    setExpandedFg(newSet);
+  };
+
+  const toggleOpDetail = (opNumber: string) => {
+    const newSet = new Set(expandedOp);
+    if (newSet.has(opNumber)) newSet.delete(opNumber);
+    else newSet.add(opNumber);
+    setExpandedOp(newSet);
+  };
+
+  const renderOpResult = (op: OpTraceResult) => (
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-md">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+          <Layers size={20} className="text-purple-600 dark:text-purple-400" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">{op.opNumber}</h2>
+          <p className="text-sm text-slate-500">{op.styleCode} - {op.itemNumberFG} {op.itemNameFG ? `(${op.itemNameFG})` : ''}</p>
+        </div>
+      </div>
+      {/* Untuk pencarian OP, tampilkan semua informasi produksi (showProductionInfo=true) */}
+      <OpDetailCard op={op} isExpanded={true} onToggle={() => {}} detailed={true} showBcDocuments={false} showProductionInfo={true} />
+    </div>
+  );
+
+  const renderSuratJalanResult = (res: TraceResult) => (
+    <div className="space-y-6">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-md">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+            <Truck size={20} className="text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">{res.suratJalan}</h2>
+            <p className="text-sm text-slate-500">Tanggal: {new Date(res.shipmentDate).toLocaleString()} | Total: {res.totalQty} pcs</p>
+          </div>
+        </div>
+
+        {res.fgItems.map(fg => (
+          <div key={fg.fgNumber} className="mb-4 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+            <div
+              className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              onClick={() => toggleFg(fg.fgNumber)}
+            >
+              <div className="flex items-center gap-2">
+                <Package size={18} className="text-emerald-600" />
+                <span className="font-bold text-slate-900 dark:text-white">{fg.fgNumber}</span>
+                <span className="text-xs text-slate-500">({fg.totalQty} pcs)</span>
+              </div>
+              {expandedFg.has(fg.fgNumber) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+            </div>
+            {expandedFg.has(fg.fgNumber) && (
+              <div className="p-3 space-y-3">
+                {fg.ops.map(op => (
+                  <OpDetailCard
+                    key={op.opNumber}
+                    op={op}
+                    isExpanded={expandedOp.has(op.opNumber)}
+                    onToggle={() => toggleOpDetail(op.opNumber)}
+                    detailed={false}
+                    showBcDocuments={true}
+                    showProductionInfo={false}   // ← informasi produksi dihilangkan
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderBcResult = (res: BcTraceResult) => (
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-md">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+          <FileText size={20} className="text-amber-600 dark:text-amber-400" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Dokumen BC: {res.bcDocument}</h2>
+          {res.bcEr && <p className="text-sm text-slate-500">No. ER: {res.bcEr}</p>}
+        </div>
+      </div>
+      <h3 className="font-bold text-md mt-4 mb-2">🚚 Surat Jalan Terkait</h3>
+      {res.relatedShipments.length === 0 ? (
+        <p className="text-slate-500">Tidak ditemukan surat jalan yang menggunakan material ini.</p>
+      ) : (
+        <div className="space-y-3">
+          {res.relatedShipments.map(ship => (
+            <div key={ship.suratJalan} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="font-bold text-blue-600">{ship.suratJalan}</span>
+                  <div className="text-xs text-slate-500">{new Date(ship.shipmentDate).toLocaleDateString()}</div>
+                </div>
+                <div className="text-right text-sm">
+                  <div>Total: {ship.totalQty} pcs</div>
+                  <div className="text-xs">OP: {ship.ops.map(o => o.opNumber).join(', ')}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="p-6">
+      <div className="bg-gradient-to-br from-white to-purple-50/30 dark:from-slate-900 dark:to-purple-900/10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl mb-6">
+        <div className="p-6">
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+              <TrendingUp size={24} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white">Traceability End-to-End</h1>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Lacak dari OP, Surat Jalan, hingga Dokumen BC</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-xs font-medium mb-1">Jenis Pencarian</label>
+            <select
+              className="w-full px-3 py-2 border rounded-lg dark:bg-slate-700"
+              value={searchType}
+              onChange={e => {
+                setResult(null);
+                setError('');
+                setSearchQuery('');
+                setBcNomorEr('');
+                setExpandedFg(new Set());
+                setExpandedOp(new Set());
+                setSearchType(e.target.value as any);
+              }}
+            >
+              <option value="surat-jalan">Berdasarkan Surat Jalan</option>
+              <option value="bc-document">Berdasarkan Dokumen BC</option>
+              <option value="op">Berdasarkan OP Number</option>
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium mb-1">
+              {searchType === 'op' ? 'Nomor OP' : searchType === 'surat-jalan' ? 'Nomor Surat Jalan' : 'Nomor Dokumen BC'}
+            </label>
+            <input
+              type="text"
+              className="w-full px-3 py-2 border rounded-lg dark:bg-slate-700"
+              placeholder={
+                searchType === 'op' ? 'Contoh: K1YH260001' :
+                searchType === 'surat-jalan' ? 'Contoh: 26007466' :
+                'Contoh: 134746'
+              }
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+          </div>
+          {searchType === 'bc-document' && (
+            <div>
+              <label className="block text-xs font-medium mb-1">Nomor ER (Opsional)</label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 border rounded-lg dark:bg-slate-700"
+                placeholder="Contoh: 25002828"
+                value={bcNomorEr}
+                onChange={e => setBcNomorEr(e.target.value)}
+              />
+            </div>
+          )}
+          <div className="flex items-end">
+            <button
+              onClick={handleSearch}
+              disabled={loading}
+              className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-purple-700 disabled:opacity-50"
+            >
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+              Trace
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-4 p-3 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 rounded-lg flex items-center gap-2 text-rose-600">
+            <AlertCircle size={16} /> {error}
+          </div>
+        )}
+      </div>
+
+      {result && (
+        <div className="mt-6">
+          {searchType === 'surat-jalan' && renderSuratJalanResult(result as TraceResult)}
+          {searchType === 'bc-document' && renderBcResult(result as BcTraceResult)}
+          {searchType === 'op' && renderOpResult(result as OpTraceResult)}
+        </div>
+      )}
+
+      {!result && !loading && !error && (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border-2 border-dashed border-slate-300 p-12 text-center">
+          <Archive size={48} className="mx-auto text-slate-400 mb-3" />
+          <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300">Traceability End-to-End</h3>
+          <p className="text-sm text-slate-500 max-w-md mx-auto">
+            Masukkan nomor OP untuk melihat detail proses produksi.<br />
+            Atau masukkan Surat Jalan untuk menelusuri ke dokumen BC, atau sebaliknya.
+          </p>
         </div>
       )}
     </div>
@@ -14607,6 +14598,24 @@ const JobCard = ({ op, lastUpdated }: { op: ProductionOrderWithLine; lastUpdated
               </div>
             </div>
           </div>
+
+          {/* === TAMBAHAN: DAFTAR PATTERN YANG NG === */}
+          {op.patterns && op.patterns.some(p => p.ng > 0) && (
+            <div className="mt-3 p-2 bg-rose-50 dark:bg-rose-900/20 rounded-lg border border-rose-200 dark:border-rose-800">
+              <div className="text-xs font-semibold text-rose-700 dark:text-rose-400 mb-1 flex items-center gap-1">
+                <AlertCircle size={12} />
+                Detail NG per Pattern:
+              </div>
+              <div className="space-y-1">
+                {op.patterns.filter(p => p.ng > 0).map(p => (
+                  <div key={p.index} className="flex justify-between text-xs">
+                    <span className="text-slate-700 dark:text-slate-300">{p.name}</span>
+                    <span className="font-bold text-rose-600 dark:text-rose-400">{p.ng} pcs</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           
           <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg mb-3">
             <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs">

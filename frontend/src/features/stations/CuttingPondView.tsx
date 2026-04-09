@@ -113,6 +113,24 @@ const JobCard = ({ op, lastUpdated }: { op: ProductionOrderWithLine; lastUpdated
               </div>
             </div>
           </div>
+
+          {/* === TAMBAHAN: DAFTAR PATTERN YANG NG === */}
+          {op.patterns && op.patterns.some(p => p.ng > 0) && (
+            <div className="mt-3 p-2 bg-rose-50 dark:bg-rose-900/20 rounded-lg border border-rose-200 dark:border-rose-800">
+              <div className="text-xs font-semibold text-rose-700 dark:text-rose-400 mb-1 flex items-center gap-1">
+                <AlertCircle size={12} />
+                Detail NG per Pattern:
+              </div>
+              <div className="space-y-1">
+                {op.patterns.filter(p => p.ng > 0).map(p => (
+                  <div key={p.index} className="flex justify-between text-xs">
+                    <span className="text-slate-700 dark:text-slate-300">{p.name}</span>
+                    <span className="font-bold text-rose-600 dark:text-rose-400">{p.ng} pcs</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           
           <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg mb-3">
             <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs">
