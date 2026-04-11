@@ -75,15 +75,49 @@ export class CheckPanelService {
         },
       });
 
-      // 3. Upsert ke CheckPanelInspection
-      const completed = newTotal >= targetPatterns;
+      // 3. Upsert ke CheckPanelInspection dengan handling array yang sangat ketat
+      let incomingReasons: string[] = [];
+      if (ngReasons) {
+        if (Array.isArray(ngReasons)) {
+          incomingReasons = ngReasons;
+        } else if (typeof ngReasons === 'string') {
+          try {
+            const parsed = JSON.parse(ngReasons);
+            incomingReasons = Array.isArray(parsed) ? parsed : [ngReasons];
+          } catch {
+            incomingReasons = [ngReasons];
+          }
+        }
+      }
 
+      let existingReasons: string[] = [];
+      if (existing?.ngReasons) {
+        const rawExist = existing.ngReasons as any;
+        if (Array.isArray(rawExist)) {
+          existingReasons = rawExist;
+        } else if (typeof rawExist === 'string') {
+          try {
+            const parsed = JSON.parse(rawExist);
+            existingReasons = Array.isArray(parsed) ? parsed : [rawExist];
+          } catch {
+            existingReasons = [rawExist];
+          }
+        }
+      }
+
+      // Gabungkan, bersihkan elemen kosong, pastikan semua berbentuk string murni
+      const allReasons = [...existingReasons, ...incomingReasons]
+        .flat()
+        .filter(r => r && String(r).trim() !== '')
+        .map(String);
+
+      // Simpan sebagai JSON array
       await tx.checkPanelInspection.upsert({
         where: { opId_patternIndex: { opId, patternIndex } },
         update: {
           good: { increment: good },
           ng: { increment: ng },
-          ngReasons: ngReasons ? { push: ngReasons } : undefined,
+          ngReasons: allReasons,
           updatedAt: new Date(),
         },
         create: {
@@ -92,18 +126,19 @@ export class CheckPanelService {
           patternName,
           good,
           ng,
-          ngReasons: ngReasons || [],
+          ngReasons: allReasons,
         },
       });
 
       // 4. ProductionLog
+      const logNote = allReasons.length > 0 ? `NG Reasons: ${incomingReasons.join(', ')}` : null;
       await tx.productionLog.create({
         data: {
           opId,
           station: StationCode.CP,
           type: 'INSPECT',
           qty: good + ng,
-          note: ngReasons?.join(', ') || null,
+          note: logNote,
         },
       });
 

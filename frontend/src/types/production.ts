@@ -83,6 +83,17 @@ export interface ProductionOrder {
 
   lineCode?: string;                // tambah
   setsReadyForSewing?: number;      // tambah
+  
+  // 🔥 Tambahan untuk detail NG per pattern dari Check Panel
+  checkPanelInspections?: Array<{
+    id: string;
+    patternIndex: number;
+    patternName: string;
+    good: number;
+    ng: number;
+    ngReasons?: string[];
+    createdAt: string;
+  }>;
 }
 
 export type OpStatus = 'SCHEDULED' | 'WIP' | 'COMPLETED' | 'HOLD' | 'CLOSED_FG';

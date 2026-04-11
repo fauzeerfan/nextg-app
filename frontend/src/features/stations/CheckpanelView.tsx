@@ -617,6 +617,23 @@ export const CheckPanelView = ({
                             />
                           </div>
                         )}
+
+                        {/* 🔥 TAMBAHAN: Detail NG per Pattern (hanya jika ada NG) */}
+                        {op.checkPanelInspections && op.checkPanelInspections.some(insp => insp.ng > 0) && (
+                          <div className="mt-2 pt-1 border-t border-slate-100 dark:border-slate-700">
+                            <div className="text-[9px] font-semibold text-rose-600 dark:text-rose-400 mb-1">NG per Pattern:</div>
+                            <div className="space-y-0.5">
+                              {op.checkPanelInspections
+                                .filter(insp => insp.ng > 0)
+                                .map(insp => (
+                                  <div key={insp.patternIndex} className="flex justify-between text-[9px]">
+                                    <span className="text-slate-600 dark:text-slate-400 truncate max-w-[100px]">{insp.patternName}</span>
+                                    <span className="font-bold text-rose-600 dark:text-rose-400">{insp.ng} pcs</span>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -770,45 +787,82 @@ export const CheckPanelView = ({
                     </div>
                   </div>
 
-                  {allPatternsCompleted ? (
-                    <div className="text-center py-6">
-                      <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-emerald-400 rounded-lg flex items-center justify-center mx-auto mb-3">
-                        <CheckCircle size={24} className="text-white" />
-                      </div>
-                      <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">All Patterns Completed!</h3>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
-                        OP ready for Sewing ({sets} sets)
-                      </p>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 max-w-2xl mx-auto mb-3">
-                        <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2 rounded-lg">
-                          <div className="text-[10px] text-emerald-700 dark:text-emerald-400">Total Pattern Good</div>
-                          <div className="text-lg font-bold text-emerald-600">{totalGoodPola}</div>
-                        </div>
-                        <div className="bg-rose-50 dark:bg-rose-900/20 p-2 rounded-lg">
-                          <div className="text-[10px] text-rose-700 dark:text-rose-400">Total Pattern NG</div>
-                          <div className="text-lg font-bold text-rose-600">{totalNgPola}</div>
-                        </div>
-                        <div className="bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg">
-                          <div className="text-[10px] text-amber-700 dark:text-amber-400">Unused Good Patterns</div>
-                          <div className="text-lg font-bold text-amber-600">{polaSisa}</div>
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-slate-600 dark:text-slate-400 max-w-xl mx-auto">
-                        Out of {totalGoodPola} good patterns, only {sets * patterns.length} patterns can form{' '}
-                        {sets} complete sets. The remaining {polaSisa} good patterns cannot form a set and will be
-                        considered NG.
-                      </p>
-                      <p className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 mt-2">
-                        Effective NG: {totalNgEfektif} patterns ({setNgEfektif} sets)
-                      </p>
-                      <button
-                        onClick={back}
-                        className="mt-3 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg font-medium flex items-center gap-1.5 mx-auto hover:from-blue-700 transition-all text-xs"
-                      >
-                        <ArrowLeft size={12} />
-                        Back to Queue
-                      </button>
-                    </div>
+{allPatternsCompleted ? (
+  <div className="text-center py-6">
+    <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-emerald-400 rounded-lg flex items-center justify-center mx-auto mb-3">
+      <CheckCircle size={24} className="text-white" />
+    </div>
+    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">All Patterns Completed!</h3>
+    <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+      OP ready for Sewing ({sets} sets)
+    </p>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 max-w-2xl mx-auto mb-3">
+      <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2 rounded-lg">
+        <div className="text-[10px] text-emerald-700 dark:text-emerald-400">Total Pattern Good</div>
+        <div className="text-lg font-bold text-emerald-600">{totalGoodPola}</div>
+      </div>
+      <div className="bg-rose-50 dark:bg-rose-900/20 p-2 rounded-lg">
+        <div className="text-[10px] text-rose-700 dark:text-rose-400">Total Pattern NG</div>
+        <div className="text-lg font-bold text-rose-600">{totalNgPola}</div>
+      </div>
+      <div className="bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg">
+        <div className="text-[10px] text-amber-700 dark:text-amber-400">Unused Good Patterns</div>
+        <div className="text-lg font-bold text-amber-600">{polaSisa}</div>
+      </div>
+    </div>
+
+    {/* Detail NG per Pattern - SELALU DITAMPILKAN */}
+    <div className="mt-4 max-w-md mx-auto">
+      <h4 className="text-sm font-semibold text-rose-600 dark:text-rose-400 mb-2">Detail NG per Pattern</h4>
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-rose-200 dark:border-rose-800 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-rose-50 dark:bg-rose-900/20">
+            <tr>
+              <th className="py-2 px-3 text-left text-xs font-medium text-rose-700 dark:text-rose-300">Pattern</th>
+              <th className="py-2 px-3 text-right text-xs font-medium text-rose-700 dark:text-rose-300">NG Count</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-rose-100 dark:divide-rose-800/50">
+            {patterns.map((pat, idx) => {
+              const ngCount = prog[idx]?.ng || 0;
+              return (
+                <tr key={idx} className="hover:bg-rose-50 dark:hover:bg-rose-900/10">
+                  <td className="py-2 px-3 text-left text-slate-800 dark:text-slate-200">{pat.name}</td>
+                  <td className="py-2 px-3 text-right font-bold text-rose-600 dark:text-rose-400">
+                    {ngCount > 0 ? ngCount : <span className="text-slate-400">-</span>}
+                  </td>
+                </tr>
+              );
+            })}
+            {/* Jika semua pattern memiliki ngCount === 0, tetap tampilkan baris dengan pesan opsional */}
+            {patterns.every((_, idx) => (prog[idx]?.ng || 0) === 0) && (
+              <tr>
+                <td colSpan={2} className="py-3 px-3 text-center text-xs text-slate-500">
+                  Tidak ada catatan NG untuk OP ini
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <p className="text-[10px] text-slate-600 dark:text-slate-400 max-w-xl mx-auto mt-4">
+      Out of {totalGoodPola} good patterns, only {sets * patterns.length} patterns can form{' '}
+      {sets} complete sets. The remaining {polaSisa} good patterns cannot form a set and will be
+      considered NG.
+    </p>
+    <p className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 mt-2">
+      Effective NG: {totalNgEfektif} patterns ({setNgEfektif} sets)
+    </p>
+    <button
+      onClick={back}
+      className="mt-3 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg font-medium flex items-center gap-1.5 mx-auto hover:from-blue-700 transition-all text-xs"
+    >
+      <ArrowLeft size={12} />
+      Back to Queue
+    </button>
+  </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {/* GOOD Button */}

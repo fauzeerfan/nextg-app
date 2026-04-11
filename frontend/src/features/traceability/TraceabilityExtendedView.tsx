@@ -49,7 +49,6 @@ interface PackingSession {
   createdAt: string;
 }
 
-// Interface OpTraceResult yang diperbarui sesuai backend
 interface OpTraceResult {
   opNumber: string;
   styleCode: string;
@@ -96,6 +95,7 @@ interface OpTraceResult {
     ngPatterns: number;
     setsReadyForCP: number;
     dateRange: string;
+    ngByPattern?: { patternName: string; ngQty: number }[];
   };
   checkPanelDetails?: {
     inputFromPondSets: number;
@@ -172,7 +172,6 @@ const getAuthHeaders = () => {
   };
 };
 
-// Helper: filter unik berdasarkan key
 const uniqueBy = <T, K extends keyof T>(arr: T[], key: K): T[] => {
   const seen = new Set();
   return arr.filter(item => {
@@ -183,7 +182,6 @@ const uniqueBy = <T, K extends keyof T>(arr: T[], key: K): T[] => {
   });
 };
 
-// Helper: filter dokumen BC unik berdasarkan nomor_dokumen_bc dan nomor_er
 const uniqueBcDocuments = (docs: BcDocument[]): BcDocument[] => {
   const seen = new Set();
   return docs.filter(doc => {
@@ -194,8 +192,6 @@ const uniqueBcDocuments = (docs: BcDocument[]): BcDocument[] => {
   });
 };
 
-// Komponen OpDetailCard dengan properti showProductionInfo
-// Jika showProductionInfo = false, bagian produksi (cutting, pond, cp, sewing, qc, packing, fg, progress) tidak dirender sama sekali.
 const OpDetailCard = ({ 
   op, 
   isExpanded, 
@@ -268,7 +264,6 @@ const OpDetailCard = ({
 
       {isExpanded && (
         <div className="p-4 space-y-5">
-          {/* BC Documents - selalu ditampilkan jika showBcDocuments true */}
           {showBcDocuments && op.bcDocuments.length > 0 && (
             <div className="bg-rose-50 dark:bg-rose-900/20 p-3 rounded-lg">
               <h5 className="text-sm font-bold text-rose-600 mb-2">📄 Dokumen BC (Material Penerimaan)</h5>
@@ -278,7 +273,6 @@ const OpDetailCard = ({
             </div>
           )}
 
-          {/* Seluruh informasi produksi hanya dirender jika showProductionInfo === true */}
           {showProductionInfo && (
             <>
               {/* CUTTING ENTAN */}
@@ -312,6 +306,18 @@ const OpDetailCard = ({
                       <div className="text-rose-600">NG: {op.cuttingPondDetails.ngPatterns}</div>
                       <div>Sets Ready for CP: <strong>{op.cuttingPondDetails.setsReadyForCP}</strong> sets</div>
                     </div>
+
+                    {op.cuttingPondDetails.ngByPattern && op.cuttingPondDetails.ngByPattern.length > 0 && (
+                      <div className="mt-2 bg-rose-50 dark:bg-rose-900/20 p-2 rounded">
+                        <div className="text-xs font-semibold text-rose-600">Detail NG per Pattern:</div>
+                        <ul className="list-disc list-inside text-xs mt-1">
+                          {op.cuttingPondDetails.ngByPattern.map((item, idx) => (
+                            <li key={idx}><strong>{item.patternName}</strong> : {item.ngQty} pcs</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
                     <ProgressBar percent={(op.cuttingPondDetails.goodPatterns + op.cuttingPondDetails.ngPatterns) / (op.cuttingPondDetails.inputFromEntanPatterns || 1) * 100} status={op.cuttingPondDetails.setsReadyForCP > 0 ? 'completed' : 'in_progress'} />
                   </div>
                 ) : <div className="text-xs text-slate-500">Belum ada data</div>}
@@ -332,16 +338,52 @@ const OpDetailCard = ({
                       <div className="text-rose-600">NG: {op.checkPanelDetails.ngSets}</div>
                       <div>Sets Ready for Sewing: <strong>{op.checkPanelDetails.setsReadyForSewing}</strong> sets</div>
                     </div>
-                    {op.checkPanelDetails.ngByPattern.length > 0 && (
-                      <div className="mt-2 bg-rose-50 dark:bg-rose-900/20 p-2 rounded">
-                        <div className="text-xs font-semibold text-rose-600">Detail NG per Pola:</div>
-                        <ul className="list-disc list-inside text-xs mt-1">
-                          {op.checkPanelDetails.ngByPattern.map((item, idx) => (
-                            <li key={idx}><strong>{item.patternName}</strong> - {item.reason} : {item.qty} pcs</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+
+{/* Detail NG per Pola */}
+                    <div className="mt-2 bg-rose-50 dark:bg-rose-900/20 p-2 rounded">
+                      <div className="text-xs font-semibold text-rose-600 mb-1">Detail NG per Pola:</div>
+                      {op.checkPanelInspections && op.checkPanelInspections.some(insp => insp.ng > 0) ? (
+                        <div className="space-y-2">
+                          {op.checkPanelInspections
+                            .filter(insp => insp.ng > 0)
+                            .map((insp, idx) => {
+                              const reasonsList = Array.isArray(insp.ngReasons) ? insp.ngReasons : [];
+                              
+                              // Hitung jumlah (qty) masing-masing reason
+                              const reasonCounts: Record<string, number> = {};
+                              reasonsList.forEach(reason => {
+                                reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+                              });
+                              
+                              const reasonEntries = Object.entries(reasonCounts);
+
+                              return (
+                                <div key={idx} className="text-xs border-b border-rose-200 dark:border-rose-800 pb-1 last:border-0">
+                                  <div className="font-semibold">{insp.patternName}</div>
+                                  <div className="text-rose-600">NG: {insp.ng} pcs</div>
+                                  <div className="text-slate-600 dark:text-slate-400 mt-1">
+                                    {reasonEntries.length > 0 ? (
+                                      <>
+                                        <div>Reasons:</div>
+                                        <ul className="list-none ml-2">
+                                          {reasonEntries.map(([reason, qty], i) => (
+                                            <li key={i}>{reason} : {qty}</li>
+                                          ))}
+                                        </ul>
+                                      </>
+                                    ) : (
+                                      <div>Reasons: Tidak ada keterangan</div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-500 mt-1">Tidak ada catatan NG untuk Check Panel</div>
+                      )}
+                    </div>
+
                     <ProgressBar percent={(op.checkPanelDetails.goodSets + op.checkPanelDetails.ngSets) / (op.checkPanelDetails.inputFromPondSets || 1) * 100} status={op.checkPanelDetails.setsReadyForSewing > 0 ? 'completed' : 'in_progress'} />
                   </div>
                 ) : <div className="text-xs text-slate-500">Belum ada data</div>}
@@ -427,66 +469,6 @@ const OpDetailCard = ({
   );
 };
 
-// Komponen StationTimeline tidak digunakan di OpDetailCard baru, namun tetap ada untuk kompatibilitas (tidak diubah)
-const StationTimeline = ({ op }: { op: OpTraceResult }) => {
-  const stations = [
-    { key: 'cutting', name: 'Cutting Entan', icon: Scissors, color: 'orange' },
-    { key: 'pond', name: 'Cutting Pond', icon: Grid, color: 'blue' },
-    { key: 'cp', name: 'Check Panel', icon: ClipboardCheck, color: 'emerald' },
-    { key: 'sewing', name: 'Sewing', icon: Shirt, color: 'purple' },
-    { key: 'qc', name: 'Quality Control', icon: Activity, color: 'amber' },
-    { key: 'packing', name: 'Packing', icon: Package, color: 'indigo' },
-    { key: 'fg', name: 'Finished Goods', icon: Truck, color: 'green' },
-  ];
-
-  const getProgress = (station: string) => {
-    switch (station) {
-      case 'cutting':
-        return { value: op.cuttingBatches.length > 0 ? 100 : 0, max: 1, label: `${op.cuttingBatches.length} batches` };
-      case 'pond':
-        const pondMax = op.qtyOp * (op.patternProgress.length || 1);
-        return { value: op.pondTotalProcessed, max: pondMax || 1, label: `${op.pondTotalProcessed}/${pondMax || 1}` };
-      case 'cp':
-        const cpMax = op.qtyOp * (op.patternProgress.length || 1);
-        return { value: op.cpTotalInspected, max: cpMax || 1, label: `${op.cpTotalInspected}/${cpMax || 1}` };
-      case 'sewing':
-        return { value: op.sewingOut, max: op.sewingIn || 1, label: `${op.sewingOut}/${op.sewingIn || 1}` };
-      case 'qc':
-        return { value: op.qcGood + op.qcNg, max: op.sewingOut || 1, label: `${op.qcGood + op.qcNg}/${op.sewingOut || 1}` };
-      case 'packing':
-        return { value: op.totalPacked, max: op.qcGood || 1, label: `${op.totalPacked}/${op.qcGood || 1}` };
-      case 'fg':
-        return { value: op.fgStockQty, max: op.totalPacked || 1, label: `${op.fgStockQty}/${op.totalPacked || 1}` };
-      default:
-        return { value: 0, max: 1, label: '-' };
-    }
-  };
-
-  return (
-    <div className="mt-4 space-y-2">
-      <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">📊 Progress per Station</h4>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        {stations.map(station => {
-          const prog = getProgress(station.key);
-          const percent = prog.max > 0 ? (prog.value / prog.max) * 100 : 0;
-          return (
-            <div key={station.key} className="bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg">
-              <div className="flex items-center gap-2 mb-1">
-                <station.icon size={14} className={`text-${station.color}-500`} />
-                <span className="text-xs font-medium">{station.name}</span>
-                <span className="text-xs text-slate-500 ml-auto">{prog.label}</span>
-              </div>
-              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
-                <div className={`h-full rounded-full bg-${station.color}-500 transition-all`} style={{ width: `${Math.min(percent, 100)}%` }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
 export const TraceabilityExtendedView = () => {
   const [searchType, setSearchType] = useState<'surat-jalan' | 'bc-document' | 'op'>('surat-jalan');
   const [searchQuery, setSearchQuery] = useState('');
@@ -522,7 +504,6 @@ export const TraceabilityExtendedView = () => {
       const res = await fetch(url, { headers: getAuthHeaders() });
       if (res.ok) {
         let data = await res.json();
-        // Untuk surat jalan, filter OP unik dan BC unik
         if (searchType === 'surat-jalan' && data && (data as TraceResult).fgItems) {
           const traceData = data as TraceResult;
           traceData.fgItems = traceData.fgItems.map((fg: any) => ({
@@ -574,7 +555,6 @@ export const TraceabilityExtendedView = () => {
           <p className="text-sm text-slate-500">{op.styleCode} - {op.itemNumberFG} {op.itemNameFG ? `(${op.itemNameFG})` : ''}</p>
         </div>
       </div>
-      {/* Untuk pencarian OP, tampilkan semua informasi produksi (showProductionInfo=true) */}
       <OpDetailCard op={op} isExpanded={true} onToggle={() => {}} detailed={true} showBcDocuments={false} showProductionInfo={true} />
     </div>
   );
@@ -615,7 +595,7 @@ export const TraceabilityExtendedView = () => {
                     onToggle={() => toggleOpDetail(op.opNumber)}
                     detailed={false}
                     showBcDocuments={true}
-                    showProductionInfo={false}   // ← informasi produksi dihilangkan
+                    showProductionInfo={false}
                   />
                 ))}
               </div>
