@@ -280,6 +280,7 @@ if (station === 'CP') {
         data: {
           qtyQC: { increment: good },
           qcNgQty: { increment: ng },
+          updatedAt: new Date(), // Paksa update timestamp
         },
       });
 

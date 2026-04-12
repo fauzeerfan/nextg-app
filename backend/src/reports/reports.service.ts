@@ -16,14 +16,15 @@ export class ReportsService {
   constructor(private prisma: PrismaService) {}
 
   // ========== NEW: RUNNING OPS ==========
-  async getRunningOps() {
+async getRunningOps() {
     const ops = await this.prisma.productionOrder.findMany({
       where: {
         status: 'WIP',
         OR: [
           { qtyEntan: { gt: 0 } },
           { qtyPond: { gt: 0 } },
-          { qtyCP: { gt: 0 } }
+          { qtyCP: { gt: 0 } },
+          { qtySewingOut: { gt: 0 } } // Tambahan: Agar OP yang sedang di QC muncul di filter
         ]
       },
       select: {
@@ -39,13 +40,17 @@ export class ReportsService {
 
   // ========== NG CUTTING POND & CHECK PANEL GABUNGAN ==========
   async getNgCuttingPondCheckPanel(filter: ReportFilter) {
+// Inisialisasi endOfDay di awal method
+    const endOfDay = filter.endDate ? new Date(filter.endDate) : undefined;
+    if (endOfDay) endOfDay.setHours(23, 59, 59, 999);
+
     // 1. NG Cutting Pond (dari ProductionLog)
     const pondWhere: any = {
       station: StationCode.CUTTING_POND,
       type: 'NG',
     };
-    if (filter.startDate && filter.endDate) {
-      pondWhere.createdAt = { gte: filter.startDate, lte: filter.endDate };
+    if (filter.startDate && endOfDay) {
+      pondWhere.createdAt = { gte: filter.startDate, lte: endOfDay };
     }
     if (filter.lineCode) {
       const line = await this.prisma.lineMaster.findUnique({ where: { code: filter.lineCode } });
@@ -67,9 +72,9 @@ export class ReportsService {
     });
 
     // 2. NG Check Panel (dari CheckPanelInspection)
-    const cpWhere: any = {};
-    if (filter.startDate && filter.endDate) {
-      cpWhere.createdAt = { gte: filter.startDate, lte: filter.endDate };
+const cpWhere: any = {};
+    if (filter.startDate && endOfDay) {
+      cpWhere.createdAt = { gte: filter.startDate, lte: endOfDay };
     }
     if (filter.lineCode) {
       const line = await this.prisma.lineMaster.findUnique({ where: { code: filter.lineCode } });
@@ -204,12 +209,21 @@ export class ReportsService {
   }
 
   // ========== NG QUALITY CONTROL (tambah filter opId) ==========
-  async getNgQualityControlReport(filter: ReportFilter) {
-    const where: any = {};
-    if (filter.startDate && filter.endDate) {
-      where.createdAt = { gte: filter.startDate, lte: filter.endDate };
-    }
-    if (filter.opId) {
+async getNgQualityControlReport(filter: ReportFilter) {
+  const where: any = {};
+  
+  // Perbaikan: Pastikan endDate mencakup hingga akhir hari (23:59:59)
+  if (filter.startDate && filter.endDate) {
+    const endOfDay = new Date(filter.endDate);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    where.createdAt = { 
+      gte: filter.startDate, 
+      lte: endOfDay 
+    };
+  }
+
+  if (filter.opId) {
       where.opId = filter.opId;
     }
     const inspections = await this.prisma.qcInspection.findMany({

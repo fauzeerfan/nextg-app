@@ -5,6 +5,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { LoginView } from './features/auth/LoginView';
 import { AppRouter } from './routes/AppRouter';
 import { Sidebar } from './components/layout/Sidebar';
+import { SplashPopup } from './components/ui/SplashPopup'; // 👈 TAMBAHKAN IMPORT
 
 // Types - Perbarui untuk mencocokkan dengan yang diharapkan oleh Sidebar
 type UserData = {
@@ -41,6 +42,7 @@ const AppContent = () => {
   });
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [showSplashPopup, setShowSplashPopup] = useState(false); // 👈 STATE BARU
 
   // Setup responsive dan authentication
   useEffect(() => {
@@ -157,6 +159,7 @@ const AppContent = () => {
     localStorage.setItem('nextg_user', JSON.stringify(userForState));
     localStorage.setItem('nextg_token', token);
     setActiveTab('dashboard');
+    setShowSplashPopup(true); // 👈 TAMPILKAN POPUP SETELAH LOGIN
   };
 
   const handleLogout = () => {
@@ -166,6 +169,7 @@ const AppContent = () => {
     localStorage.removeItem('nextg_token');
     localStorage.removeItem('nextg_active_tab');
     setActiveTab('dashboard');
+    setShowSplashPopup(false); // 👈 RESET SAAT LOGOUT
     navigate('/');
   };
 
@@ -185,7 +189,7 @@ const AppContent = () => {
     return <LoginView onLogin={handleLogin} />;
   }
 
-  // Get page title
+  // Get page title (tidak digunakan, tetapi dipertahankan)
   const getPageTitle = () => {
     const titleMap: Record<string, string> = {
       'dashboard': 'Production Dashboard',
@@ -209,33 +213,13 @@ const AppContent = () => {
   };
 
   return (
-    <div className="flex min-h-screen font-sans transition-colors duration-300 bg-slate-100 dark:bg-slate-950 text-black dark:text-white">
-      {/* Sidebar - Hanya tampil di desktop */}
-      <div className="hidden md:block">
-        <Sidebar 
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          isMobile={isMobile}
-          isOpen={isSidebarOpen}
-          toggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
-          currentUser={currentUser}
-          onLogout={handleLogout}
-        />
-      </div>
+    <>
+      {/* Popup Splash Screen */}
+      <SplashPopup show={showSplashPopup} onClose={() => setShowSplashPopup(false)} />
 
-      {/* Mobile Overlay */}
-      {isMobile && isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Mobile Sidebar */}
-      {isMobile && (
-        <div className={`fixed inset-y-0 left-0 z-50 md:hidden transition-transform duration-300 ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}>
+      <div className="flex min-h-screen font-sans transition-colors duration-300 bg-slate-100 dark:bg-slate-950 text-black dark:text-white">
+        {/* Sidebar - Hanya tampil di desktop */}
+        <div className="hidden md:block">
           <Sidebar 
             activeTab={activeTab}
             setActiveTab={setActiveTab}
@@ -246,24 +230,49 @@ const AppContent = () => {
             onLogout={handleLogout}
           />
         </div>
-      )}
 
-      {/* Main Content Area */}
-      <div className={`flex-1 flex flex-col min-h-screen overflow-hidden transition-all duration-300 ${
-        !isMobile && isSidebarOpen ? 'md:ml-64 lg:ml-72' : 'md:ml-20'
-      }`}>
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-100 dark:bg-slate-950">
-          <div className="max-w-[1600px] mx-auto">
-            <AppRouter 
+        {/* Mobile Overlay */}
+        {isMobile && isSidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* Mobile Sidebar */}
+        {isMobile && (
+          <div className={`fixed inset-y-0 left-0 z-50 md:hidden transition-transform duration-300 ${
+            isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}>
+            <Sidebar 
               activeTab={activeTab}
               setActiveTab={setActiveTab}
-              addLog={() => {}}
-              onNavigate={setActiveTab}
+              isMobile={isMobile}
+              isOpen={isSidebarOpen}
+              toggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
+              currentUser={currentUser}
+              onLogout={handleLogout}
             />
           </div>
-        </main>
+        )}
+
+        {/* Main Content Area */}
+        <div className={`flex-1 flex flex-col min-h-screen overflow-hidden transition-all duration-300 ${
+          !isMobile && isSidebarOpen ? 'md:ml-64 lg:ml-72' : 'md:ml-20'
+        }`}>
+          <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-100 dark:bg-slate-950">
+            <div className="max-w-[1600px] mx-auto">
+              <AppRouter 
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                addLog={() => {}}
+                onNavigate={setActiveTab}
+              />
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
