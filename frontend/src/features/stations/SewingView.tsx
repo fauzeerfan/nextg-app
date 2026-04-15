@@ -95,7 +95,7 @@ const SewingOpCard = ({ op, onSelect, isSelected }: { op: SewingOp; onSelect: ()
   const startMap = new Map(op.sewingStartProgress?.map(s => [s.startIndex, s.qty]) || []);
 
   const startIndices = [1, 2];
-  const finishIndices = [1, 2];
+  const finishIndices = [1];
 
   return (
     <div

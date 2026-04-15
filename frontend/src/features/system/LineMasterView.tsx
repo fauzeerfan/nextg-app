@@ -3,11 +3,8 @@ import {
   Factory, Layers, Plus, Edit, Trash2, Save, ArrowLeft,
   CheckCircle, XCircle, Search, Users, Package, ChevronRight,
   ImageIcon, RefreshCw, Loader2, Cpu, Server, Network, Hash,
-  Tag, User, FolderTree, Grid, TrendingUp, Eye, MinusCircle,
-  FileImage, X, FolderOpen, Info, AlertCircle, Clock, Calendar,
-  BarChart3, Activity, Zap, Shield, Settings, CheckSquare,
-  Square, Download, Upload, Filter, MoreVertical, Globe,
-  Briefcase, HardDrive, Cpu as CpuIcon, PieChart, Target
+  Tag, User, Grid, TrendingUp, Eye, FileImage, X, Info, 
+  Activity, Zap, Target, Settings, Cpu as CpuIcon
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:3000';
@@ -41,35 +38,37 @@ interface MetricCardProps {
 }
 
 const MetricCard = ({ title, value, icon: Icon, color = 'cyan', subtitle, suffix, trend }: MetricCardProps) => {
+  // Mapping original gradient colors to the solid solid UI theme colors
   const colorStyles = {
-    cyan: { bg: 'from-cyan-500 to-cyan-400', lightBg: 'bg-cyan-50 dark:bg-cyan-900/20', text: 'text-cyan-600 dark:text-cyan-400', border: 'border-cyan-200/50 dark:border-cyan-800/50' },
-    indigo: { bg: 'from-indigo-500 to-indigo-400', lightBg: 'bg-indigo-50 dark:bg-indigo-900/20', text: 'text-indigo-600 dark:text-indigo-400', border: 'border-indigo-200/50 dark:border-indigo-800/50' },
-    emerald: { bg: 'from-emerald-500 to-emerald-400', lightBg: 'bg-emerald-50 dark:bg-emerald-900/20', text: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-200/50 dark:border-emerald-800/50' },
-    purple: { bg: 'from-purple-500 to-purple-400', lightBg: 'bg-purple-50 dark:bg-purple-900/20', text: 'text-purple-600 dark:text-purple-400', border: 'border-purple-200/50 dark:border-purple-800/50' }
+    cyan: { border: 'border-blue-500', bg: 'bg-blue-100', icon: 'text-blue-600', darkBg: 'dark:bg-blue-900/40', darkIcon: 'dark:text-blue-400' },
+    indigo: { border: 'border-purple-500', bg: 'bg-purple-100', icon: 'text-purple-600', darkBg: 'dark:bg-purple-900/40', darkIcon: 'dark:text-purple-400' },
+    emerald: { border: 'border-emerald-500', bg: 'bg-emerald-100', icon: 'text-emerald-600', darkBg: 'dark:bg-emerald-900/40', darkIcon: 'dark:text-emerald-400' },
+    purple: { border: 'border-amber-500', bg: 'bg-amber-100', icon: 'text-amber-600', darkBg: 'dark:bg-amber-900/40', darkIcon: 'dark:text-amber-400' }
   }[color];
 
   return (
-    <div className="group relative bg-white dark:bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-5 shadow-sm hover:shadow-xl hover:shadow-slate-200/40 dark:hover:shadow-slate-900/40 transition-all duration-300 hover:-translate-y-1 overflow-hidden">
-      <div className="flex items-start justify-between relative z-10">
-        <div>
-          <p className="text-[13px] font-semibold text-slate-500 dark:text-slate-400 mb-2">{title}</p>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">{value}</span>
-            {suffix && <span className="text-sm font-medium text-slate-400 dark:text-slate-500">{suffix}</span>}
-          </div>
-          {subtitle && <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-2">{subtitle}</p>}
+    <div className={`bg-white dark:bg-slate-800 rounded-2xl border-l-4 ${colorStyles.border} border-y border-r border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-shadow`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{title}</div>
+        <div className={`w-9 h-9 ${colorStyles.bg} ${colorStyles.darkBg} rounded-xl flex items-center justify-center`}>
+          <Icon size={18} className={`${colorStyles.icon} ${colorStyles.darkIcon}`} />
+        </div>
+      </div>
+      <div className="text-2xl font-black text-slate-900 dark:text-white leading-none flex items-baseline gap-1.5">
+        {value}
+        {suffix && <span className="text-xs font-semibold text-slate-400 dark:text-slate-500">{suffix}</span>}
+      </div>
+      {(subtitle || trend) && (
+        <div className="mt-3 flex flex-col gap-1.5">
+          {subtitle && <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 leading-tight">{subtitle}</div>}
           {trend && (
-            <div className="flex items-center gap-1 mt-2.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 inline-flex px-2 py-0.5 rounded-full">
-              <TrendingUp size={12} />
+            <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40 w-fit px-2 py-0.5 rounded-md">
+              <TrendingUp size={10} />
               <span>{trend}</span>
             </div>
           )}
         </div>
-        <div className={`p-3 rounded-xl ${colorStyles.lightBg} border ${colorStyles.border} shadow-inner`}>
-          <Icon size={20} className={colorStyles.text} />
-        </div>
-      </div>
-      <div className={`absolute inset-x-0 bottom-0 h-1.5 bg-gradient-to-r ${colorStyles.bg} scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left`} />
+      )}
     </div>
   );
 };
@@ -78,15 +77,15 @@ const PatternPreviewCard = ({ pattern, idx }: { pattern: PatternPart; idx: numbe
   const [goodErr, setGoodErr] = useState(false);
   const [ngErr, setNgErr] = useState(false);
   return (
-    <div className="bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-4 shadow-sm hover:shadow-lg transition-all duration-300 hover:border-indigo-300 dark:hover:border-indigo-600 group">
+    <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-all duration-300 hover:border-purple-500 group">
       <div className="flex items-center gap-3 mb-3">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-indigo-200 dark:shadow-none">
+        <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 flex items-center justify-center font-black text-xs">
           {idx + 1}
         </div>
-        <span className="font-semibold text-sm text-slate-800 dark:text-slate-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{pattern.name}</span>
+        <span className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">{pattern.name}</span>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <div className="relative aspect-square rounded-xl overflow-hidden border border-slate-100 dark:border-slate-700 shadow-sm group/img">
+        <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-slate-100 dark:border-slate-700 group/img">
           {!goodErr ? (
             <img
               src={`${API_BASE_URL}/uploads/patterns/${pattern.imgGood}`}
@@ -99,12 +98,11 @@ const PatternPreviewCard = ({ pattern, idx }: { pattern: PatternPart; idx: numbe
               <ImageIcon size={20} className="text-emerald-400 dark:text-emerald-500/50" />
             </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-emerald-900/80 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-2">
-            <span className="text-[10px] font-bold tracking-wider text-emerald-400">GOOD</span>
+          <div className="absolute top-0 right-0 bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-bl-lg shadow-sm z-10">
+            GOOD
           </div>
-          <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
         </div>
-        <div className="relative aspect-square rounded-xl overflow-hidden border border-slate-100 dark:border-slate-700 shadow-sm group/img">
+        <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-slate-100 dark:border-slate-700 group/img">
           {!ngErr ? (
             <img
               src={`${API_BASE_URL}/uploads/patterns/${pattern.imgNg}`}
@@ -117,10 +115,9 @@ const PatternPreviewCard = ({ pattern, idx }: { pattern: PatternPart; idx: numbe
               <ImageIcon size={20} className="text-rose-400 dark:text-rose-500/50" />
             </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-rose-900/80 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-2">
-            <span className="text-[10px] font-bold tracking-wider text-rose-400">NG</span>
+          <div className="absolute top-0 right-0 bg-rose-500 text-white text-[9px] font-black px-2 py-0.5 rounded-bl-lg shadow-sm z-10">
+            NG
           </div>
-          <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
         </div>
       </div>
     </div>
@@ -310,7 +307,6 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
     setPatFd({ ...patFd, patterns: patFd.patterns?.filter((_, i) => i !== idx) });
     setUpFiles(p => ({ ...p, patternGood: p.patternGood.filter((_, i) => i !== idx), patternNg: p.patternNg.filter((_, i) => i !== idx) }));
   };
-  const previewStyle = () => { const r = patFd.styleCode.trim().toUpperCase(); return r.length >= 4 ? r.substring(0, 4) : (r || '...'); };
 
   const savePat = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -453,55 +449,65 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
   const back = () => { if (onNavigate) onNavigate('dashboard'); };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 p-4 space-y-6 font-sans text-slate-900 dark:text-slate-100">
-      {/* HEADER - compact & modern */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden">
-        <div className="p-6 relative overflow-hidden">
-          {/* Subtle Background Decoration */}
-          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-gradient-to-br from-cyan-500/10 to-blue-500/5 blur-3xl pointer-events-none" />
-          
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5 relative z-10">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 space-y-6 font-poppins text-slate-800 dark:text-slate-100">
+      <style>
+        {`
+          @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+          .font-poppins { font-family: 'Poppins', sans-serif; }
+          .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+          .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+          .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+          .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; }
+          .hide-scrollbar::-webkit-scrollbar { display: none; }
+          .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        `}
+      </style>
+
+      {/* HEADER - Solid Theme */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="p-5 border-b border-slate-100 dark:border-slate-700">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5">
             <div className="flex items-center gap-4">
               <div className="relative">
-                <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg shadow-cyan-500/30">
-                  <Factory size={26} className="text-white" />
+                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/30">
+                  <Factory size={24} className="text-white" />
                 </div>
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center border-[3px] border-white dark:border-slate-900 shadow-sm">
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-800 shadow-md">
                   <Server size={10} className="text-white" />
                 </div>
               </div>
               <div>
-                <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
+                <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
                   Line Master
-                  <span className="text-[10px] px-2.5 py-1 bg-gradient-to-r from-cyan-500 to-cyan-600 text-white rounded-md font-bold tracking-widest shadow-sm">
+                  <span className="text-[11px] px-2 py-1 bg-blue-600 text-white rounded-md font-bold tracking-wider uppercase">
                     PRODUCTION CORE
                   </span>
                 </h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">Manage and configure your assembly lines</p>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">Manage and configure your assembly lines</p>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-              <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-700 text-white rounded-xl shadow-lg shadow-slate-900/10">
+              <div className="flex items-center gap-3 px-4 py-2 bg-slate-900 dark:bg-slate-700 text-white rounded-xl shadow-lg shadow-slate-900/10 dark:shadow-none">
                 <div className="flex flex-col">
-                  <div className="text-[11px] font-medium text-slate-300 uppercase tracking-wider">Total Lines</div>
-                  <div className="text-xl font-bold leading-none mt-1">{ls.length}</div>
+                  <div className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider">Total Lines</div>
+                  <div className="text-xl font-black leading-none">{ls.length}</div>
                 </div>
-                <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center backdrop-blur-md">
-                  <Network size={18} className="text-cyan-400" />
+                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                  <Network size={18} className="text-blue-400" />
                 </div>
               </div>
               <button
                 onClick={fetchLs}
                 disabled={load}
-                className="group px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-cyan-300 dark:hover:border-cyan-600 transition-all shadow-sm active:scale-95"
+                className="group px-4 py-2 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 hover:border-blue-600 dark:hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all shadow-sm active:scale-95"
               >
-                {load ? <RefreshCw size={16} className="animate-spin text-cyan-500" /> : <RefreshCw size={16} className="group-hover:rotate-180 transition-transform duration-500 text-cyan-500" />}
+                {load ? <RefreshCw size={16} className="animate-spin text-blue-600" /> : <RefreshCw size={16} className="group-hover:rotate-180 transition-transform duration-500" />}
                 Refresh
               </button>
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 px-6 pb-6 relative z-10">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-5 py-5 bg-slate-50/50 dark:bg-slate-800/50">
           <MetricCard title="Total Lines" value={ls.length} icon={Factory} color="cyan" suffix="lines" subtitle={`${flt.length} active`} />
           <MetricCard title="Total Patterns" value={totalPats} icon={Layers} color="indigo" suffix="patterns" trend="+8.2% from last month" />
           <MetricCard title="Pattern Styles" value={totalStyles} icon={Tag} color="emerald" suffix="styles" subtitle={`Across ${ls.length} lines`} />
@@ -510,19 +516,21 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
       </div>
 
       {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
         {/* Left Column - Line List */}
         <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden sticky top-6">
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden sticky top-6 h-[calc(100vh-140px)] flex flex-col">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-700">
               <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-bold text-base text-slate-900 dark:text-white tracking-tight">Production Lines</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">{load ? 'Loading...' : `${flt.length} configured`}</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-600/30">
+                     <Network size={18} className="text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-slate-900 dark:text-white">Production Lines</h3>
+                    <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">{load ? 'Loading...' : `${flt.length} configured`}</p>
+                  </div>
                 </div>
-                <span className="px-2.5 py-1 bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 text-xs font-bold rounded-lg border border-cyan-100 dark:border-cyan-500/20">
-                  {flt.length}
-                </span>
               </div>
               
               <div className="relative">
@@ -530,72 +538,71 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                 <input
                   type="text"
                   placeholder="Search lines..."
-                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 rounded-xl text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all outline-none shadow-sm"
+                  className="w-full pl-9 pr-4 py-2 text-sm font-semibold border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-xl text-slate-900 dark:text-white focus:border-blue-500 focus:ring-0 transition-all outline-none"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
               </div>
             </div>
 
-            <div className="p-3">
-              <div className="space-y-1.5 max-h-[calc(100vh-440px)] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="p-3 flex-1 overflow-y-auto custom-scrollbar">
+              <div className="space-y-2">
                 {flt.map(l => {
                   const isSel = sel?.id === l.id;
                   return (
                     <div
                       key={l.id}
-                      className={`group p-3.5 rounded-2xl cursor-pointer transition-all duration-300 relative overflow-hidden ${isSel
-                          ? 'bg-gradient-to-r from-cyan-50 to-white dark:from-cyan-900/20 dark:to-slate-800/50 border border-cyan-200/60 dark:border-cyan-800/60 shadow-sm'
-                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
+                      className={`group p-3 rounded-xl border-2 transition-all duration-300 cursor-pointer ${isSel
+                          ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30 shadow-md'
+                          : 'border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:shadow-sm bg-white dark:bg-slate-800'
                         }`}
                       onClick={() => selectLine(l)}
                     >
-                      {isSel && <div className="absolute left-0 top-0 bottom-0 w-1 bg-cyan-500 rounded-l-2xl" />}
-                      <div className="flex items-start justify-between relative z-10">
+                      <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${isSel ? 'bg-cyan-500 shadow-md shadow-cyan-500/20' : 'bg-slate-100 dark:bg-slate-800 group-hover:bg-white dark:group-hover:bg-slate-700'
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${isSel ? 'bg-blue-600 shadow-md shadow-blue-600/30' : 'bg-slate-100 dark:bg-slate-700 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50'
                             }`}>
-                            <Factory size={16} className={isSel ? 'text-white' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'} />
+                            <Factory size={16} className={isSel ? 'text-white' : 'text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400'} />
                           </div>
                           <div>
-                            <div className={`font-bold text-sm transition-colors ${isSel ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-900 dark:text-white'}`}>{l.code}</div>
-                            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">{l.name}</div>
+                            <div className="font-black text-[13px] text-slate-900 dark:text-white">{l.code}</div>
+                            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">{l.name}</div>
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1.5">
-                          <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700 text-[10px] font-bold shadow-sm">
+                          <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-600 text-[10px] font-black">
                             {l.patternMultiplier}x
                           </span>
                         </div>
                       </div>
-                      <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500 font-medium pl-12">
+                      <div className="mt-2.5 flex items-center justify-between text-[10px] font-bold text-slate-500 dark:text-slate-400">
                         <div className="flex items-center gap-2">
-                          <span className="flex items-center gap-1"><Users size={10} className="text-slate-400"/> {l.userCount || 0}</span>
+                          <span className="flex items-center gap-1"><Users size={12} className="text-slate-400"/> {l.userCount || 0}</span>
                           <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>
-                          <span className="flex items-center gap-1"><CpuIcon size={10} className="text-slate-400"/> {l.stations?.filter(s => s.required).length}</span>
+                          <span className="flex items-center gap-1"><CpuIcon size={12} className="text-slate-400"/> {l.stations?.filter(s => s.required).length}</span>
                         </div>
-                        <ChevronRight size={14} className={`text-slate-400 transition-transform duration-300 ${isSel ? 'translate-x-1 text-cyan-500' : 'opacity-0 group-hover:opacity-100 group-hover:translate-x-1'}`} />
+                        <ChevronRight size={14} className={`transition-transform duration-300 ${isSel ? 'translate-x-1 text-blue-600 dark:text-blue-400' : 'opacity-0 group-hover:opacity-100 group-hover:translate-x-1'}`} />
                       </div>
                     </div>
                   );
                 })}
                 {!flt.length && !load && (
-                  <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
-                    <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100 dark:border-slate-700">
+                  <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700">
+                    <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100 dark:border-slate-700">
                       <Search size={20} className="text-slate-400" />
                     </div>
                     <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">No Lines Found</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Try adjusting your search</p>
+                    <p className="text-[11px] font-medium text-slate-500">Try adjusting your search</p>
                   </div>
                 )}
               </div>
             </div>
             
-            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
+            <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={newLine}
-                  className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md shadow-cyan-500/20 active:scale-95"
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md shadow-blue-600/20 active:scale-95"
                 >
                   <Plus size={16} />
                   New Line
@@ -603,7 +610,7 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                 {onNavigate && (
                   <button
                     onClick={back}
-                    className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+                    className="px-4 py-2.5 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:border-blue-600 dark:hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
                   >
                     <ArrowLeft size={16} />
                     Back
@@ -615,12 +622,12 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
         </div>
 
         {/* Right Column - Content */}
-        <div className="lg:col-span-3 space-y-6">
+        <div className="lg:col-span-3">
           {sel && !edit ? (
             <>
-              {/* Tab Navigation - Modern Pill or Sleek Underline */}
-              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col h-full">
-                <div className="flex px-2 pt-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 overflow-x-auto hide-scrollbar">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col min-h-[calc(100vh-140px)]">
+                {/* Solid Tabs */}
+                <div className="flex p-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 overflow-x-auto hide-scrollbar gap-2">
                   {[
                     { id: 'details', label: 'Line Details', icon: Settings },
                     { id: 'patterns', label: 'Pattern Master', icon: Layers },
@@ -630,38 +637,36 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                     <button
                       key={t.id}
                       onClick={() => setTab(t.id as any)}
-                      className={`flex items-center gap-2 px-5 py-3.5 text-sm font-bold transition-all relative whitespace-nowrap ${tab === t.id
-                          ? 'text-cyan-600 dark:text-cyan-400 bg-white dark:bg-slate-900 rounded-t-2xl border-t border-l border-r border-slate-200/60 dark:border-slate-800 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)]'
-                          : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 rounded-t-2xl'
+                      className={`flex items-center gap-2 px-5 py-2.5 text-sm font-bold transition-all rounded-xl whitespace-nowrap ${tab === t.id
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                          : 'bg-white dark:bg-slate-700 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600 hover:border-blue-300 hover:text-blue-600 dark:hover:border-blue-700 dark:hover:text-blue-400 shadow-sm'
                         }`}
                     >
-                      <t.icon size={16} className={tab === t.id ? 'text-cyan-500' : 'text-slate-400'} />
+                      <t.icon size={16} className={tab === t.id ? 'text-white' : 'text-slate-400'} />
                       {t.label}
-                      {tab === t.id && (
-                        <div className="absolute bottom-0 left-0 w-full h-0.5 bg-cyan-500 translate-y-px" />
-                      )}
                     </button>
                   ))}
                 </div>
 
                 {/* Tab Content */}
-                <div className="p-6 flex-1 bg-white dark:bg-slate-900">
+                <div className="p-6 flex-1 bg-white dark:bg-slate-800">
                   {tab === 'details' ? (
                     <div className="space-y-6">
                       {/* Header Actions */}
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
-                          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-                            {sel.code} <span className="text-slate-300 dark:text-slate-600 font-light">|</span> {sel.name}
+                          <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1">Line Identity</div>
+                          <h2 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+                            {sel.code} <span className="text-slate-300 dark:text-slate-600">|</span> {sel.name}
                           </h2>
                           {sel.description && (
-                            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1.5 bg-slate-50 dark:bg-slate-800/50 inline-block px-3 py-1 rounded-lg border border-slate-100 dark:border-slate-700/50">{sel.description}</p>
+                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-2 bg-slate-50 dark:bg-slate-900 inline-block px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">{sel.description}</p>
                           )}
                         </div>
                         <div className="flex gap-3">
                           <button
                             onClick={editLine}
-                            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-md active:scale-95"
+                            className="px-4 py-2.5 bg-slate-900 dark:bg-slate-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-md hover:bg-slate-800 dark:hover:bg-slate-600 active:scale-95"
                           >
                             <Edit size={16} />
                             Edit Line
@@ -669,7 +674,7 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                           <button
                             onClick={delLine}
                             disabled={deleting}
-                            className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 rounded-xl text-sm font-bold flex items-center gap-2 transition-all disabled:opacity-50 active:scale-95"
+                            className="px-4 py-2.5 bg-white dark:bg-slate-800 text-rose-600 border-2 border-rose-200 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-xl text-sm font-bold flex items-center gap-2 transition-all disabled:opacity-50 active:scale-95"
                           >
                             {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                             Delete
@@ -678,102 +683,102 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                       </div>
 
                       {/* Stats Cards */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                        <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700 p-5 shadow-sm hover:shadow-md transition-shadow">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Assigned Users</p>
-                              <p className="text-3xl font-extrabold text-slate-900 dark:text-white mt-2">{sel.userCount || 0}</p>
-                            </div>
-                            <div className="p-2.5 bg-cyan-50 dark:bg-cyan-500/10 rounded-xl border border-cyan-100 dark:border-cyan-500/20">
-                              <Users size={20} className="text-cyan-600 dark:text-cyan-400" />
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl border-l-4 border-blue-500 border-y border-r border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Assigned Users</div>
+                            <div className="w-9 h-9 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex items-center justify-center">
+                              <Users size={18} className="text-blue-600 dark:text-blue-400" />
                             </div>
                           </div>
-                          <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-4 flex items-center gap-1"><CheckCircle size={12} className="text-emerald-500"/> Currently active on line</p>
+                          <div className="text-2xl font-black text-slate-900 dark:text-white leading-none">
+                            {sel.userCount || 0}
+                          </div>
+                          <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1">
+                            <CheckCircle size={12} className="text-emerald-500"/> Active operators
+                          </div>
                         </div>
 
-                        <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700 p-5 shadow-sm hover:shadow-md transition-shadow">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Orders</p>
-                              <p className="text-3xl font-extrabold text-slate-900 dark:text-white mt-2">
-                                {sel?.productionOrders?.filter(po => ['WIP', 'SCHEDULED'].includes(po.status)).length || 0}
-                              </p>
-                            </div>
-                            <div className="p-2.5 bg-blue-50 dark:bg-blue-500/10 rounded-xl border border-blue-100 dark:border-blue-500/20">
-                              <Package size={20} className="text-blue-600 dark:text-blue-400" />
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl border-l-4 border-emerald-500 border-y border-r border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Orders</div>
+                            <div className="w-9 h-9 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl flex items-center justify-center">
+                              <Package size={18} className="text-emerald-600 dark:text-emerald-400" />
                             </div>
                           </div>
-                          <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-4 flex items-center gap-1"><Activity size={12} className="text-blue-500"/> Orders in production</p>
+                          <div className="text-2xl font-black text-slate-900 dark:text-white leading-none">
+                            {sel?.productionOrders?.filter(po => ['WIP', 'SCHEDULED'].includes(po.status)).length || 0}
+                          </div>
+                          <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1">
+                            <Activity size={12} className="text-emerald-500"/> In production
+                          </div>
                         </div>
 
-                        <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700 p-5 shadow-sm hover:shadow-md transition-shadow">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Multiplier</p>
-                              <p className="text-3xl font-extrabold text-slate-900 dark:text-white mt-2">{sel?.patternMultiplier || 1}<span className="text-lg text-slate-400 ml-1">x</span></p>
-                            </div>
-                            <div className="p-2.5 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl border border-emerald-100 dark:border-emerald-500/20">
-                              <Layers size={20} className="text-emerald-600 dark:text-emerald-400" />
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl border-l-4 border-purple-500 border-y border-r border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pattern Multiplier</div>
+                            <div className="w-9 h-9 bg-purple-100 dark:bg-purple-900/40 rounded-xl flex items-center justify-center">
+                              <Layers size={18} className="text-purple-600 dark:text-purple-400" />
                             </div>
                           </div>
-                          <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-4 flex items-center gap-1"><Zap size={12} className="text-emerald-500"/> Patterns per standard set</p>
+                          <div className="text-2xl font-black text-slate-900 dark:text-white leading-none">
+                            {sel?.patternMultiplier || 1}<span className="text-sm text-slate-400 ml-1">x</span>
+                          </div>
+                          <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1">
+                            <Zap size={12} className="text-purple-500"/> Parts per set
+                          </div>
                         </div>
                       </div>
 
                       {/* Station Configuration */}
-                      <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                        <div className="p-5 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-transparent">
-                          <h3 className="font-bold text-base text-slate-900 dark:text-white">Active Station Flow</h3>
-                          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">Configured stations for this production line</p>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
+                        <div className="mb-4">
+                          <h3 className="font-black text-base text-slate-900 dark:text-white">Active Station Flow</h3>
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">Configured stations mapping for this line</p>
                         </div>
-                        <div className="p-5">
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {availStations.map(st => {
-                              const en = sel.stations?.some(s => s.code === st.code && s.required);
-                              return (
-                                <div
-                                  key={st.code}
-                                  className={`relative group p-4 rounded-2xl transition-all duration-300 ${en
-                                      ? 'border border-cyan-400 bg-gradient-to-br from-cyan-50/50 to-white dark:from-cyan-900/10 dark:to-slate-800 shadow-md shadow-cyan-100 dark:shadow-none'
-                                      : 'border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 opacity-70'
-                                    }`}
-                                >
-                                  {en && <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-cyan-400/10 to-transparent rounded-tr-2xl pointer-events-none" />}
-                                  <div className="flex items-start justify-between relative z-10">
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <div className={`p-2 rounded-xl shadow-sm ${en ? 'bg-cyan-100 dark:bg-cyan-900/40 text-cyan-600 dark:text-cyan-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
-                                          }`}>
-                                          {st.deviceType === 'SPARSHA' && <Cpu size={14} />}
-                                          {st.deviceType === 'DRISTI' && <Eye size={14} />}
-                                          {st.deviceType === 'MANUAL' && <User size={14} />}
-                                        </div>
-                                        <span className={`px-2 py-0.5 text-[10px] font-bold tracking-wider rounded-md border ${st.deviceType === 'SPARSHA'
-                                            ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'
-                                            : st.deviceType === 'DRISTI'
-                                              ? 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20'
-                                              : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600'
-                                          }`}>
-                                          {st.deviceType}
-                                        </span>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {availStations.map(st => {
+                            const en = sel.stations?.some(s => s.code === st.code && s.required);
+                            return (
+                              <div
+                                key={st.code}
+                                className={`p-4 rounded-2xl border-2 transition-all duration-300 ${en
+                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm'
+                                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 opacity-60'
+                                  }`}
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${en ? 'bg-blue-100 dark:bg-blue-800/50 text-blue-600 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>
+                                        {st.deviceType === 'SPARSHA' && <Cpu size={14} />}
+                                        {st.deviceType === 'DRISTI' && <Eye size={14} />}
+                                        {st.deviceType === 'MANUAL' && <User size={14} />}
                                       </div>
-                                      <div className="font-extrabold text-sm text-slate-900 dark:text-white mt-1">{st.name}</div>
-                                      <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1">
-                                        Code: <span className="font-mono bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-600 dark:text-slate-300">{st.code}</span>
-                                      </div>
+                                      <span className={`px-2 py-0.5 text-[10px] font-black tracking-wider uppercase rounded-md border ${st.deviceType === 'SPARSHA'
+                                          ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
+                                          : st.deviceType === 'DRISTI'
+                                            ? 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20'
+                                            : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600'
+                                        }`}>
+                                        {st.deviceType}
+                                      </span>
                                     </div>
-                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${en
-                                        ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/30'
-                                        : 'bg-slate-200 dark:bg-slate-700 text-slate-400'
-                                      }`}>
-                                      {en ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                                    <div className="font-black text-sm text-slate-900 dark:text-white mt-1.5">{st.name}</div>
+                                    <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wide">
+                                      Code: {st.code}
                                     </div>
                                   </div>
+                                  <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${en
+                                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                                      : 'bg-slate-200 dark:bg-slate-700 text-slate-400'
+                                    }`}>
+                                    {en ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                                  </div>
                                 </div>
-                              );
-                            })}
-                          </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
@@ -782,12 +787,12 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                     <div className="space-y-6">
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
-                          <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">Pattern Library</h3>
-                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Manage configuration for {sel.code}</p>
+                          <div className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Configuration</div>
+                          <h3 className="text-xl font-black text-slate-900 dark:text-white">Pattern Library</h3>
                         </div>
                         <button
                           onClick={() => openPatModal()}
-                          className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:from-emerald-700 hover:to-emerald-600 transition-all shadow-md shadow-emerald-500/20 active:scale-95"
+                          className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/30 active:scale-95"
                         >
                           <Plus size={16} />
                           New Pattern
@@ -795,70 +800,57 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                       </div>
 
                       {patLoad ? (
-                        <div className="flex flex-col items-center justify-center h-64 bg-slate-50 dark:bg-slate-800/30 rounded-3xl border border-slate-200 dark:border-slate-700 border-dashed">
-                          <div className="relative mb-4">
-                            <div className="w-12 h-12 border-4 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin"></div>
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <Layers className="text-indigo-600 dark:text-indigo-400" size={18} />
-                            </div>
-                          </div>
-                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Loading pattern masters...</p>
+                        <div className="flex flex-col items-center justify-center h-64 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border-2 border-slate-200 dark:border-slate-700 border-dashed">
+                          <Loader2 className="animate-spin text-emerald-500 mb-4" size={32} />
+                          <p className="text-sm font-bold text-slate-500 dark:text-slate-400">Loading pattern masters...</p>
                         </div>
                       ) : selPat ? (
                         <div className="space-y-6">
                           {/* Pattern Summary Cards */}
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="p-5 bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-900/10 dark:to-slate-800/50 rounded-2xl border border-indigo-100 dark:border-indigo-800/30 shadow-sm">
-                              <div className="flex items-center gap-3">
-                                <div className="p-3 bg-indigo-100 dark:bg-indigo-500/20 rounded-xl shadow-inner">
-                                  <Tag size={20} className="text-indigo-600 dark:text-indigo-400" />
-                                </div>
-                                <div>
-                                  <p className="text-[11px] font-bold text-indigo-700/70 dark:text-indigo-400/70 uppercase tracking-wider">Style Code</p>
-                                  <p className="font-extrabold text-2xl text-slate-900 dark:text-white mt-0.5">{selPat.styleCode}</p>
-                                </div>
+                            <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
+                              <div className="p-3 bg-blue-100 dark:bg-blue-900/40 rounded-xl">
+                                <Tag size={24} className="text-blue-600 dark:text-blue-400" />
+                              </div>
+                              <div>
+                                <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Style Code</p>
+                                <p className="font-black text-xl text-slate-900 dark:text-white leading-none mt-1">{selPat.styleCode}</p>
                               </div>
                             </div>
-                            <div className="p-5 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/10 dark:to-slate-800/50 rounded-2xl border border-emerald-100 dark:border-emerald-800/30 shadow-sm">
-                              <div className="flex items-center gap-3">
-                                <div className="p-3 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl shadow-inner">
-                                  <Grid size={20} className="text-emerald-600 dark:text-emerald-400" />
-                                </div>
-                                <div>
-                                  <p className="text-[11px] font-bold text-emerald-700/70 dark:text-emerald-400/70 uppercase tracking-wider">Total Parts</p>
-                                  <p className="font-extrabold text-2xl text-slate-900 dark:text-white mt-0.5">
-                                    {selPat?.patterns?.length || 0}
-                                    <span className="text-sm font-medium text-slate-500 ml-1.5">parts</span>
-                                  </p>
-                                </div>
+                            <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
+                              <div className="p-3 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl">
+                                <Grid size={24} className="text-emerald-600 dark:text-emerald-400" />
+                              </div>
+                              <div>
+                                <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Parts</p>
+                                <p className="font-black text-xl text-slate-900 dark:text-white leading-none mt-1">
+                                  {selPat?.patterns?.length || 0} <span className="text-sm font-semibold text-slate-400">parts</span>
+                                </p>
                               </div>
                             </div>
-                            <div className="p-5 bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/10 dark:to-slate-800/50 rounded-2xl border border-blue-100 dark:border-blue-800/30 shadow-sm">
-                              <div className="flex items-center gap-3">
-                                <div className="p-3 bg-blue-100 dark:bg-blue-500/20 rounded-xl shadow-inner">
-                                  <FileImage size={20} className="text-blue-600 dark:text-blue-400" />
-                                </div>
-                                <div>
-                                  <p className="text-[11px] font-bold text-blue-700/70 dark:text-blue-400/70 uppercase tracking-wider">Set Images</p>
-                                  <p className="font-extrabold text-2xl text-slate-900 dark:text-white mt-0.5">
-                                    2
-                                    <span className="text-sm font-medium text-slate-500 ml-1.5">images</span>
-                                  </p>
-                                </div>
+                            <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
+                              <div className="p-3 bg-purple-100 dark:bg-purple-900/40 rounded-xl">
+                                <FileImage size={24} className="text-purple-600 dark:text-purple-400" />
+                              </div>
+                              <div>
+                                <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Set Images</p>
+                                <p className="font-black text-xl text-slate-900 dark:text-white leading-none mt-1">
+                                  2 <span className="text-sm font-semibold text-slate-400">images</span>
+                                </p>
                               </div>
                             </div>
                           </div>
 
                           {/* Pattern Parts */}
-                          <div className="bg-slate-50/50 dark:bg-slate-800/20 rounded-3xl p-6 border border-slate-200 dark:border-slate-700/50">
+                          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 border border-slate-200 dark:border-slate-700">
                             <div className="flex items-center justify-between mb-5">
                               <div>
-                                <h4 className="text-lg font-extrabold text-slate-900 dark:text-white">Pattern Components</h4>
-                                <p className="text-xs font-medium text-slate-500 mt-1">Detailed visual reference for quality checking</p>
+                                <h4 className="text-lg font-black text-slate-900 dark:text-white">Pattern Components</h4>
+                                <p className="text-xs font-semibold text-slate-500 mt-1">Detailed visual reference for quality checking</p>
                               </div>
                               <button
                                 onClick={() => openPatModal(selPat)}
-                                className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 rounded-xl text-sm font-bold flex items-center gap-2 transition-all active:scale-95 shadow-sm"
+                                className="px-4 py-2 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 hover:border-emerald-600 text-slate-700 dark:text-slate-300 hover:text-emerald-600 rounded-xl text-sm font-bold flex items-center gap-2 transition-all active:scale-95 shadow-sm"
                               >
                                 <Edit size={14} />
                                 Edit Configuration
@@ -872,15 +864,15 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                           </div>
                         </div>
                       ) : (
-                        <div className="p-12 text-center bg-slate-50 dark:bg-slate-800/30 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700">
-                          <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-slate-100 dark:border-slate-700">
-                            <Layers size={28} className="text-slate-400" />
+                        <div className="p-12 text-center bg-slate-50 dark:bg-slate-800/50 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700">
+                          <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Layers size={28} className="text-emerald-600 dark:text-emerald-400" />
                           </div>
-                          <h4 className="text-lg font-extrabold text-slate-700 dark:text-slate-300 mb-2">No Pattern Configured</h4>
-                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">This line doesn't have a pattern configuration yet. Create one to enable CP and QC stations.</p>
+                          <h4 className="text-lg font-black text-slate-900 dark:text-white mb-2">No Pattern Configured</h4>
+                          <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">This line doesn't have a pattern configuration yet. Create one to enable CP and QC stations.</p>
                           <button
                             onClick={() => openPatModal()}
-                            className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl font-bold flex items-center gap-2 mx-auto hover:from-indigo-700 hover:to-indigo-600 transition-all shadow-md shadow-indigo-500/20 active:scale-95"
+                            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-2 mx-auto transition-all shadow-lg shadow-emerald-600/30 active:scale-95"
                           >
                             <Plus size={18} />
                             Create Pattern Master
@@ -891,15 +883,15 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                   ) : tab === 'sewing' ? (
                     // Sewing Master Tab
                     <div className="space-y-6">
-                      <div className="flex justify-between items-center">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
-                          <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">Sewing Flow Configuration</h3>
-                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Define routing logic for the sewing station</p>
+                          <div className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1">Routing Configuration</div>
+                          <h3 className="text-xl font-black text-slate-900 dark:text-white">Sewing Flow Logic</h3>
                         </div>
                         <button
                           onClick={saveSewingConfig}
                           disabled={savingSewing}
-                          className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
+                          className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-purple-600/30 active:scale-95 transition-all"
                         >
                           {savingSewing ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save Changes
                         </button>
@@ -907,30 +899,30 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
 
                       {loadingSewing ? (
                         <div className="flex justify-center py-12">
-                          <Loader2 className="animate-spin text-cyan-500" size={32} />
+                          <Loader2 className="animate-spin text-purple-500" size={32} />
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                           {/* Sewing Starts */}
-                          <div className="bg-white dark:bg-slate-800/50 rounded-3xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
-                            <div className="p-5 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-center bg-slate-50/50 dark:bg-transparent">
-                              <div className="flex items-center gap-2">
-                                <div className="p-2 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg">
+                          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center font-bold">
                                   <CpuIcon size={16} />
                                 </div>
-                                <h4 className="font-extrabold text-base text-slate-900 dark:text-white">Input Terminals (Starts)</h4>
+                                <h4 className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-wide">Input Terminals</h4>
                               </div>
                               <button
                                 onClick={addStart}
-                                className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-bold border border-blue-200 dark:border-blue-500/20 flex items-center gap-1 transition-colors"
+                                className="px-3 py-1.5 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 hover:border-blue-500 text-slate-700 dark:text-slate-300 hover:text-blue-600 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors"
                               >
-                                <Plus size={14} /> Add Terminal
+                                <Plus size={14} /> Add
                               </button>
                             </div>
-                            <div className="p-5 space-y-4 bg-slate-50/30 dark:bg-slate-900/20 flex-1">
+                            <div className="p-4 space-y-4">
                               {sewingConfig.starts.map((start, idx) => (
-                                <div key={idx} className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm relative group/item">
-                                  <button onClick={() => removeStart(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-opacity border border-rose-200 hover:bg-rose-500 hover:text-white shadow-sm z-10">
+                                <div key={idx} className="p-4 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl shadow-sm relative group/item">
+                                  <button onClick={() => removeStart(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-opacity border-2 border-rose-200 hover:bg-rose-500 hover:text-white shadow-sm z-10">
                                     <X size={12} />
                                   </button>
                                   <div className="space-y-4">
@@ -938,7 +930,7 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                                       <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Terminal Name</label>
                                       <input
                                         type="text"
-                                        className="w-full px-3 py-2 text-sm font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 transition-all outline-none"
+                                        className="w-full px-3 py-2 text-sm font-bold border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-blue-500 focus:ring-0 transition-all outline-none"
                                         value={start.name}
                                         onChange={(e) => updateStart(idx, 'name', e.target.value)}
                                         placeholder={`Start ${idx+1}`}
@@ -948,7 +940,7 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                                       <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Assigned Patterns (IDs)</label>
                                       <input
                                         type="text"
-                                        className="w-full px-3 py-2 text-sm font-mono border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-blue-600 dark:text-blue-400 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 transition-all outline-none"
+                                        className="w-full px-3 py-2 text-sm font-mono border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-blue-600 dark:text-blue-400 focus:border-blue-500 focus:ring-0 transition-all outline-none"
                                         value={start.patterns?.join(', ') || ''}
                                         onChange={(e) => updateStart(idx, 'patterns', e.target.value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n)))}
                                         placeholder="e.g. 0, 1, 2"
@@ -958,33 +950,33 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                                 </div>
                               ))}
                               {sewingConfig.starts.length === 0 && (
-                                <div className="py-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl">
-                                  <p className="text-sm font-medium text-slate-500">No start terminals configured.</p>
+                                <div className="py-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
+                                  <p className="text-xs font-bold text-slate-500">No start terminals configured.</p>
                                 </div>
                               )}
                             </div>
                           </div>
 
                           {/* Sewing Finishes */}
-                          <div className="bg-white dark:bg-slate-800/50 rounded-3xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
-                            <div className="p-5 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-center bg-slate-50/50 dark:bg-transparent">
-                              <div className="flex items-center gap-2">
-                                <div className="p-2 bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 rounded-lg">
+                          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-lg flex items-center justify-center font-bold">
                                   <Target size={16} />
                                 </div>
-                                <h4 className="font-extrabold text-base text-slate-900 dark:text-white">Output Terminals (Finishes)</h4>
+                                <h4 className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-wide">Output Terminals</h4>
                               </div>
                               <button
                                 onClick={addFinish}
-                                className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-500/10 dark:hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 rounded-lg text-xs font-bold border border-purple-200 dark:border-purple-500/20 flex items-center gap-1 transition-colors"
+                                className="px-3 py-1.5 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 hover:border-purple-500 text-slate-700 dark:text-slate-300 hover:text-purple-600 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors"
                               >
-                                <Plus size={14} /> Add Terminal
+                                <Plus size={14} /> Add
                               </button>
                             </div>
-                            <div className="p-5 space-y-4 bg-slate-50/30 dark:bg-slate-900/20 flex-1">
+                            <div className="p-4 space-y-4">
                               {sewingConfig.finishes.map((finish, idx) => (
-                                <div key={idx} className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm relative group/item">
-                                  <button onClick={() => removeFinish(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-opacity border border-rose-200 hover:bg-rose-500 hover:text-white shadow-sm z-10">
+                                <div key={idx} className="p-4 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl shadow-sm relative group/item">
+                                  <button onClick={() => removeFinish(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-opacity border-2 border-rose-200 hover:bg-rose-500 hover:text-white shadow-sm z-10">
                                     <X size={12} />
                                   </button>
                                   <div className="space-y-4">
@@ -992,7 +984,7 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                                       <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Terminal Name</label>
                                       <input
                                         type="text"
-                                        className="w-full px-3 py-2 text-sm font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all outline-none"
+                                        className="w-full px-3 py-2 text-sm font-bold border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-purple-500 focus:ring-0 transition-all outline-none"
                                         value={finish.name}
                                         onChange={(e) => updateFinish(idx, 'name', e.target.value)}
                                         placeholder={`Finish ${idx+1}`}
@@ -1002,7 +994,7 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                                       <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Source Inputs (Starts IDs)</label>
                                       <input
                                         type="text"
-                                        className="w-full px-3 py-2 text-sm font-mono border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-purple-600 dark:text-purple-400 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all outline-none"
+                                        className="w-full px-3 py-2 text-sm font-mono border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-purple-600 dark:text-purple-400 focus:border-purple-500 focus:ring-0 transition-all outline-none"
                                         value={finish.inputStarts?.join(', ') || ''}
                                         onChange={(e) => updateFinish(idx, 'inputStarts', e.target.value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n)))}
                                         placeholder="e.g. 1, 2"
@@ -1012,8 +1004,8 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                                 </div>
                               ))}
                               {sewingConfig.finishes.length === 0 && (
-                                <div className="py-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl">
-                                  <p className="text-sm font-medium text-slate-500">No finish terminals configured.</p>
+                                <div className="py-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
+                                  <p className="text-xs font-bold text-slate-500">No finish terminals configured.</p>
                                 </div>
                               )}
                             </div>
@@ -1024,15 +1016,15 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                   ) : (
                     // ========== PACKING MASTER TAB ==========
                     <div className="space-y-6">
-                      <div className="flex justify-between items-center">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
-                          <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">Packing Configuration</h3>
-                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Define standard quantities for final boxing</p>
+                          <div className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-1">Box Details</div>
+                          <h3 className="text-xl font-black text-slate-900 dark:text-white">Packing Configuration</h3>
                         </div>
                         <button
                           onClick={savePackingConfig}
                           disabled={savingPacking}
-                          className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
+                          className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-amber-600/30 active:scale-95 transition-all"
                         >
                           {savingPacking ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save Settings
                         </button>
@@ -1040,12 +1032,12 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
 
                       {loadingPacking ? (
                         <div className="flex justify-center py-12">
-                          <Loader2 className="animate-spin text-cyan-500" size={32} />
+                          <Loader2 className="animate-spin text-amber-500" size={32} />
                         </div>
                       ) : (
-                        <div className="bg-white dark:bg-slate-800/50 rounded-3xl border border-slate-200 dark:border-slate-700 p-8 max-w-xl">
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-8 max-w-xl shadow-sm">
                           <div className="flex items-start gap-5">
-                            <div className="w-14 h-14 bg-amber-50 dark:bg-amber-500/10 text-amber-600 rounded-2xl flex items-center justify-center flex-shrink-0 border border-amber-200 dark:border-amber-500/20 shadow-sm">
+                            <div className="w-14 h-14 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center flex-shrink-0 font-black">
                               <Package size={28} />
                             </div>
                             <div className="flex-1 space-y-4">
@@ -1057,15 +1049,15 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                                   <input
                                     type="number"
                                     min="1"
-                                    className="w-full px-4 py-3 text-lg font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all outline-none shadow-sm"
+                                    className="w-full px-4 py-3 text-lg font-black border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-amber-500 focus:ring-0 transition-all outline-none"
                                     value={packSize}
                                     onChange={(e) => setPackSize(parseInt(e.target.value) || 50)}
                                   />
-                                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">sets</div>
+                                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">sets</div>
                                 </div>
-                                <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-3 mt-4 border border-slate-100 dark:border-slate-800">
-                                  <p className="text-sm text-slate-600 dark:text-slate-400 flex items-start gap-2">
-                                    <Info size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                                <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-3 mt-4 border border-amber-200 dark:border-amber-800/50">
+                                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-start gap-2 leading-relaxed">
+                                    <Info size={16} className="mt-0.5 flex-shrink-0" />
                                     <span>When packing station registers <strong>{packSize}</strong> valid sets, a complete box is marked ready for Finished Goods.</span>
                                   </p>
                                 </div>
@@ -1082,18 +1074,18 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
             </>
           ) : edit || create ? (
             // Edit / Create Form
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden h-full flex flex-col">
-              <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden h-[calc(100vh-140px)] flex flex-col">
+              <div className="p-6 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
                 <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-slate-900 dark:bg-white rounded-2xl flex items-center justify-center shadow-md">
-                      {create ? <Plus size={24} className="text-white dark:text-slate-900" /> : <Edit size={24} className="text-white dark:text-slate-900" />}
+                    <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-600/30">
+                      {create ? <Plus size={24} className="text-white" /> : <Edit size={24} className="text-white" />}
                     </div>
                     <div>
-                      <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                        {create ? 'Create New Production Line' : `Edit Configuration: ${sel?.code}`}
+                      <h2 className="text-2xl font-black text-slate-900 dark:text-white">
+                        {create ? 'New Production Line' : `Edit Configuration: ${sel?.code}`}
                       </h2>
-                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
+                      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
                         {create ? 'Set up terminal properties and workflow' : 'Modify core line properties and stations'}
                       </p>
                     </div>
@@ -1101,14 +1093,14 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={cancelEdit}
-                      className="px-5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-sm shadow-sm active:scale-95"
+                      className="px-5 py-2.5 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:border-slate-400 transition-all text-sm shadow-sm active:scale-95"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={saveLine}
                       disabled={saving}
-                      className="group px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-cyan-500 text-white rounded-xl font-bold flex items-center gap-2 hover:from-cyan-700 hover:to-cyan-600 transition-all disabled:opacity-50 text-sm shadow-md shadow-cyan-500/20 active:scale-95"
+                      className="group px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-2 disabled:opacity-50 text-sm shadow-lg shadow-blue-600/30 active:scale-95 transition-all"
                     >
                       {saving ? (
                         <Loader2 size={18} className="animate-spin" />
@@ -1123,11 +1115,11 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                 </div>
               </div>
 
-              <div className="p-8 space-y-8 flex-1 overflow-y-auto">
+              <div className="p-6 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
                 {/* Basic Information */}
-                <div className="space-y-5">
-                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+                <div className="space-y-5 bg-white dark:bg-slate-800">
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2 uppercase tracking-wider">
+                    <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                       <Tag size={16} />
                     </div>
                     Identity Information
@@ -1139,13 +1131,13 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                       </label>
                       <input
                         type="text"
-                        className="w-full px-4 py-2.5 text-sm font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-sm outline-none"
+                        className="w-full px-4 py-3 text-sm font-black border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-blue-500 focus:ring-0 transition-all outline-none"
                         value={fd.code || ''}
                         onChange={e => setFd({ ...fd, code: e.target.value.toUpperCase() })}
                         placeholder="e.g., K1YH"
                         disabled={!create}
                       />
-                      <p className="text-xs font-medium text-slate-400 mt-2">Unique identifier (locked after creation)</p>
+                      <p className="text-[10px] font-semibold text-slate-400 mt-2">Unique identifier (locked after creation)</p>
                     </div>
                     <div>
                       <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
@@ -1153,7 +1145,7 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                       </label>
                       <input
                         type="text"
-                        className="w-full px-4 py-2.5 text-sm font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-sm outline-none"
+                        className="w-full px-4 py-3 text-sm font-bold border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-blue-500 focus:ring-0 transition-all outline-none"
                         value={fd.name || ''}
                         onChange={e => setFd({ ...fd, name: e.target.value })}
                         placeholder="e.g., Line K1YH - Cover Sewing"
@@ -1164,16 +1156,16 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                       <input
                         type="number"
                         min="1"
-                        className="w-full px-4 py-2.5 text-sm font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-sm outline-none"
+                        className="w-full px-4 py-3 text-sm font-bold border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-blue-500 focus:ring-0 transition-all outline-none"
                         value={fd.patternMultiplier || 1}
                         onChange={e => setFd({ ...fd, patternMultiplier: parseInt(e.target.value) || 1 })}
                       />
-                      <p className="text-xs font-medium text-slate-400 mt-2">Number of patterns per complete set</p>
+                      <p className="text-[10px] font-semibold text-slate-400 mt-2">Number of patterns per complete set</p>
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Description / Notes</label>
                       <textarea
-                        className="w-full px-4 py-3 text-sm font-medium border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-sm outline-none resize-none"
+                        className="w-full px-4 py-3 text-sm font-semibold border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-blue-500 focus:ring-0 transition-all outline-none resize-none"
                         value={fd.description || ''}
                         onChange={e => setFd({ ...fd, description: e.target.value })}
                         rows={3}
@@ -1183,17 +1175,19 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                   </div>
                 </div>
 
-                <hr className="border-slate-100 dark:border-slate-800" />
+                <hr className="border-slate-200 dark:border-slate-700" />
 
                 {/* Station Configuration */}
                 <div className="space-y-5">
-                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                      <Network size={16} />
-                    </div>
-                    Station Flow Enablement
-                  </h3>
-                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400 pl-10 mb-2">Click to toggle the active stations that belong to this workflow.</p>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2 uppercase tracking-wider">
+                      <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                        <Network size={16} />
+                      </div>
+                      Station Flow Enablement
+                    </h3>
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 pl-10 mt-1">Click to toggle the active stations that belong to this workflow.</p>
+                  </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pl-10">
                     {availStations.map(st => {
@@ -1201,24 +1195,23 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                       return (
                         <div
                           key={st.code}
-                          className={`group p-4 rounded-2xl border transition-all cursor-pointer select-none overflow-hidden relative ${en
-                              ? 'border-cyan-400 bg-cyan-50/50 dark:bg-cyan-900/10 shadow-md shadow-cyan-100/50 dark:shadow-none hover:bg-cyan-50 dark:hover:bg-cyan-900/20'
-                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600 shadow-sm'
+                          className={`group p-4 rounded-2xl border-2 transition-all cursor-pointer select-none relative ${en
+                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm'
+                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-blue-400 hover:shadow-sm'
                             }`}
                           onClick={() => toggleStation(st.code)}
                         >
-                          {en && <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/5 to-transparent pointer-events-none" />}
-                          <div className="flex items-start justify-between relative z-10">
+                          <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-2">
-                                <div className={`p-2 rounded-xl transition-colors ${en ? 'bg-cyan-100 dark:bg-cyan-800/50 text-cyan-600 dark:text-cyan-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                                <div className={`p-2 rounded-xl transition-colors font-bold ${en ? 'bg-blue-200 dark:bg-blue-800/50 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'
                                   }`}>
                                   {st.deviceType === 'SPARSHA' && <Cpu size={14} />}
                                   {st.deviceType === 'DRISTI' && <Eye size={14} />}
                                   {st.deviceType === 'MANUAL' && <User size={14} />}
                                 </div>
-                                <span className={`px-2 py-0.5 text-[10px] font-bold tracking-wider rounded-md border ${st.deviceType === 'SPARSHA'
-                                    ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'
+                                <span className={`px-2 py-0.5 text-[10px] font-black tracking-wider uppercase rounded-md border ${st.deviceType === 'SPARSHA'
+                                    ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
                                     : st.deviceType === 'DRISTI'
                                       ? 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20'
                                       : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600'
@@ -1226,16 +1219,16 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                                   {st.deviceType}
                                 </span>
                               </div>
-                              <div className="font-extrabold text-sm text-slate-900 dark:text-white mt-2">{st.name}</div>
-                              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1">
+                              <div className="font-black text-sm text-slate-900 dark:text-white mt-2">{st.name}</div>
+                              <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-1">
                                 {st.code}
                               </div>
                             </div>
                             <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${en
-                                ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/30 scale-110'
-                                : 'bg-slate-100 dark:bg-slate-700 text-slate-300 dark:text-slate-500'
+                                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                                : 'bg-slate-200 dark:bg-slate-700 text-slate-400'
                               }`}>
-                              {en ? <CheckCircle size={14} /> : <div className="w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600" />}
+                              {en ? <CheckCircle size={14} /> : <div className="w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-500" />}
                             </div>
                           </div>
                         </div>
@@ -1247,18 +1240,18 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
             </div>
           ) : (
             // No Line Selected Empty State
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden h-full flex items-center justify-center min-h-[500px]">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden h-[calc(100vh-140px)] flex items-center justify-center">
               <div className="p-12 text-center max-w-md">
-                <div className="w-20 h-20 bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-slate-800 dark:to-slate-800 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-cyan-100 dark:border-slate-700">
-                  <Factory size={36} className="text-cyan-500" />
+                <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/40 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+                  <Factory size={36} className="text-blue-600 dark:text-blue-400" />
                 </div>
-                <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mb-3 tracking-tight">No Line Selected</h3>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
+                <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-3">No Line Selected</h3>
+                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
                   Select a production line from the sidebar to view its details, patterns, and configuration flow, or create a brand new one to get started.
                 </p>
                 <button
                   onClick={newLine}
-                  className="group px-6 py-3.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-xl font-bold flex items-center gap-2 mx-auto transition-all shadow-lg shadow-slate-900/20 dark:shadow-white/10 active:scale-95"
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-2 mx-auto transition-all shadow-lg shadow-blue-600/30 active:scale-95"
                 >
                   <Plus size={18} />
                   Setup New Line
@@ -1271,39 +1264,41 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
 
       {/* Pattern Modal */}
       {patModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 dark:bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-2xl shadow-slate-900/20 w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="p-5 px-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border-2 border-slate-200 dark:border-slate-700">
+            <div className="p-5 px-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-500/10 rounded-2xl flex items-center justify-center border border-indigo-100 dark:border-indigo-500/20">
-                  {patEdit ? <Edit size={20} className="text-indigo-600 dark:text-indigo-400" /> : <Layers size={20} className="text-indigo-600 dark:text-indigo-400" />}
+                <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-600/30">
+                  {patEdit ? <Edit size={20} className="text-white" /> : <Layers size={20} className="text-white" />}
                 </div>
                 <div>
-                  <h3 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white">
                     {patEdit ? 'Edit Pattern Configuration' : 'New Pattern Configuration'}
                   </h3>
-                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
                     {patEdit ? 'Update parts and images' : 'Define AI vision logic models'}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setPatModal(false)}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors"
+                className="w-10 h-10 flex items-center justify-center rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-500 hover:border-slate-400 transition-colors shadow-sm"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={savePat} className="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-slate-900">
+            <form onSubmit={savePat} className="flex-1 overflow-y-auto custom-scrollbar">
               <div className="p-6 space-y-8">
                 {/* Style Code Setup */}
                 <div className="space-y-4">
-                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Hash size={16} className="text-indigo-500" />
+                  <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2 uppercase tracking-wider">
+                    <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                      <Hash size={16} />
+                    </div>
                     Identity
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pl-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pl-10">
                     <div>
                       <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                         Style Code <span className="text-rose-500">*</span>
@@ -1311,7 +1306,7 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                       <input
                         required
                         type="text"
-                        className="w-full px-4 py-3 text-lg font-bold uppercase tracking-widest border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-indigo-700 dark:text-indigo-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
+                        className="w-full px-4 py-3 text-lg font-black uppercase tracking-widest border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-purple-700 dark:text-purple-400 focus:border-purple-500 focus:ring-0 transition-all outline-none"
                         placeholder="e.g. K1YH"
                         value={patFd.styleCode}
                         onChange={e => setPatFd({ ...patFd, styleCode: e.target.value.toUpperCase() })}
@@ -1319,9 +1314,9 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                       />
                     </div>
                     <div className="flex items-center">
-                      <div className="w-full bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700/50 flex flex-col justify-center">
-                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Target Line Association</span>
-                        <span className="font-extrabold text-base text-slate-900 dark:text-white">
+                      <div className="w-full bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 flex flex-col justify-center">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Target Line Association</span>
+                        <span className="font-black text-base text-slate-900 dark:text-white">
                           {sel?.code} <span className="text-slate-400 font-normal">|</span> {sel?.name}
                         </span>
                       </div>
@@ -1329,76 +1324,79 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                   </div>
                 </div>
                 
-                <hr className="border-slate-100 dark:border-slate-800" />
+                <hr className="border-slate-200 dark:border-slate-700" />
 
                 {/* Set Images */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                      <ImageIcon size={16} className="text-amber-500" />
+                    <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2 uppercase tracking-wider">
+                      <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                        <ImageIcon size={16} />
+                      </div>
                       QC Set Images
                     </h4>
-                    <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">Optional</span>
+                    <span className="text-[10px] font-black tracking-wider uppercase text-slate-500 bg-slate-200 dark:bg-slate-700 px-2 py-1 rounded">Optional</span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pl-6">
-                    <div className="bg-slate-50 dark:bg-slate-800/30 p-4 rounded-xl border border-slate-200/60 dark:border-slate-700/50">
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-emerald-600 dark:text-emerald-400">Set Good Image</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pl-10">
+                    <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700">
+                      <label className="block text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-2">Set Good Image</label>
                       <input
                         type="file"
                         accept="image/*"
-                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 dark:file:bg-emerald-500/10 dark:file:text-emerald-400 transition-colors"
+                        className="w-full text-sm font-semibold text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 dark:file:bg-emerald-500/20 dark:file:text-emerald-400 transition-colors"
                         onChange={e => setUpFiles(p => ({ ...p, setGood: e.target.files?.[0] }))}
                       />
                       {patFd.imgSetGood && !upFiles.setGood && (
-                        <p className="mt-3 text-[11px] font-medium text-slate-500 flex items-center gap-1"><CheckCircle size={10} className="text-emerald-500"/> Saved: {patFd.imgSetGood}</p>
+                        <p className="mt-3 text-[11px] font-bold text-slate-500 flex items-center gap-1"><CheckCircle size={12} className="text-emerald-500"/> Saved: {patFd.imgSetGood}</p>
                       )}
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-800/30 p-4 rounded-xl border border-slate-200/60 dark:border-slate-700/50">
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-rose-600 dark:text-rose-400">Set NG Image</label>
+                    <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700">
+                      <label className="block text-[11px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-2">Set NG Image</label>
                       <input
                         type="file"
                         accept="image/*"
-                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100 dark:file:bg-rose-500/10 dark:file:text-rose-400 transition-colors"
+                        className="w-full text-sm font-semibold text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-rose-100 file:text-rose-700 hover:file:bg-rose-200 dark:file:bg-rose-500/20 dark:file:text-rose-400 transition-colors"
                         onChange={e => setUpFiles(p => ({ ...p, setNg: e.target.files?.[0] }))}
                       />
                       {patFd.imgSetNg && !upFiles.setNg && (
-                        <p className="mt-3 text-[11px] font-medium text-slate-500 flex items-center gap-1"><CheckCircle size={10} className="text-emerald-500"/> Saved: {patFd.imgSetNg}</p>
+                        <p className="mt-3 text-[11px] font-bold text-slate-500 flex items-center gap-1"><CheckCircle size={12} className="text-emerald-500"/> Saved: {patFd.imgSetNg}</p>
                       )}
                     </div>
                   </div>
                 </div>
 
-                <hr className="border-slate-100 dark:border-slate-800" />
+                <hr className="border-slate-200 dark:border-slate-700" />
 
                 {/* Pattern Parts */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                        <Grid size={16} className="text-emerald-500" />
+                      <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2 uppercase tracking-wider">
+                        <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                          <Grid size={16} />
+                        </div>
                         Pattern Components (Parts)
                       </h4>
-                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1 pl-6">Parts config used for Check Panel vision inspection</p>
+                      <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-1 pl-10">Parts config used for Check Panel vision inspection</p>
                     </div>
                     <button
                       type="button"
                       onClick={addPat}
-                      className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                      className="px-4 py-2.5 bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-900/40 dark:hover:bg-blue-800/60 dark:text-blue-400 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
                     >
                       <Plus size={14} /> Add Part Component
                     </button>
                   </div>
 
-                  <div className="pl-6 space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                  <div className="pl-10 space-y-4">
                     {(patFd.patterns || []).map((p, i) => (
                       <div
                         key={i}
-                        className="group p-5 bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-600/50 transition-all shadow-sm relative overflow-hidden"
+                        className="group p-5 bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden"
                       >
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-400/50 rounded-l-2xl group-hover:bg-emerald-500 transition-colors" />
                         <div className="flex items-start gap-4">
-                          <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-50 dark:group-hover:bg-emerald-500/10 transition-colors">
-                            <span className="text-slate-500 group-hover:text-emerald-600 dark:text-slate-400 dark:group-hover:text-emerald-400 font-extrabold text-sm">{i + 1}</span>
+                          <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center flex-shrink-0 font-black text-sm shadow-md shadow-blue-600/30">
+                            {i + 1}
                           </div>
                           
                           <div className="flex-1 space-y-4">
@@ -1408,7 +1406,7 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                               </label>
                               <input
                                 type="text"
-                                className="w-full px-4 py-2.5 text-sm font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none"
+                                className="w-full px-4 py-2.5 text-sm font-black border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-blue-500 focus:ring-0 transition-all outline-none"
                                 placeholder={`e.g. Front Panel ${i + 1}`}
                                 value={p.name}
                                 onChange={e => handlePatName(i, e.target.value)}
@@ -1416,12 +1414,12 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                               />
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                              <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
-                                <label className="block text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-2">Good State Image</label>
+                              <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border-2 border-slate-200 dark:border-slate-700">
+                                <label className="block text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-2">Good State Image</label>
                                 <input
                                   type="file"
                                   accept="image/*"
-                                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 dark:file:bg-emerald-500/20 dark:file:text-emerald-400 transition-colors cursor-pointer"
+                                  className="w-full text-xs font-semibold text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 dark:file:bg-emerald-500/20 dark:file:text-emerald-400 transition-colors cursor-pointer"
                                   onChange={e => {
                                     const f = e.target.files?.[0];
                                     setUpFiles(pv => {
@@ -1432,15 +1430,15 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                                   }}
                                 />
                                 {p.imgGood && !upFiles.patternGood[i] && (
-                                  <p className="mt-2 text-[10px] font-medium text-slate-500 truncate" title={p.imgGood}>File: {p.imgGood}</p>
+                                  <p className="mt-2 text-[10px] font-bold text-slate-500 truncate" title={p.imgGood}>File: {p.imgGood}</p>
                                 )}
                               </div>
-                              <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
-                                <label className="block text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-2">NG State Image</label>
+                              <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border-2 border-slate-200 dark:border-slate-700">
+                                <label className="block text-[11px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-2">NG State Image</label>
                                 <input
                                   type="file"
                                   accept="image/*"
-                                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-rose-100 file:text-rose-700 hover:file:bg-rose-200 dark:file:bg-rose-500/20 dark:file:text-rose-400 transition-colors cursor-pointer"
+                                  className="w-full text-xs font-semibold text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-rose-100 file:text-rose-700 hover:file:bg-rose-200 dark:file:bg-rose-500/20 dark:file:text-rose-400 transition-colors cursor-pointer"
                                   onChange={e => {
                                     const f = e.target.files?.[0];
                                     setUpFiles(pv => {
@@ -1451,7 +1449,7 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                                   }}
                                 />
                                 {p.imgNg && !upFiles.patternNg[i] && (
-                                  <p className="mt-2 text-[10px] font-medium text-slate-500 truncate" title={p.imgNg}>File: {p.imgNg}</p>
+                                  <p className="mt-2 text-[10px] font-bold text-slate-500 truncate" title={p.imgNg}>File: {p.imgNg}</p>
                                 )}
                               </div>
                             </div>
@@ -1461,7 +1459,7 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                             <button
                               type="button"
                               onClick={() => removePat(i)}
-                              className="mt-4 sm:mt-0 sm:absolute sm:top-5 sm:right-5 p-2 text-rose-400 hover:text-white hover:bg-rose-500 rounded-xl transition-colors flex-shrink-0"
+                              className="mt-4 sm:mt-0 sm:absolute sm:top-5 sm:right-5 p-2 bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 hover:text-white hover:bg-rose-600 rounded-xl transition-colors flex-shrink-0"
                               title="Remove Component"
                             >
                               <Trash2 size={16} />
@@ -1475,23 +1473,23 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
               </div>
 
               {/* Form Actions footer */}
-              <div className="p-5 px-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-md flex gap-3">
+              <div className="p-5 px-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex gap-3">
                 <button
                   type="button"
                   onClick={() => setPatModal(false)}
-                  className="flex-1 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-sm shadow-sm active:scale-95"
+                  className="flex-1 py-3.5 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:border-slate-400 transition-all text-sm shadow-sm active:scale-95"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={patSaving}
-                  className="group flex-[2] py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-md shadow-indigo-500/20 active:scale-95 text-sm"
+                  className="group flex-[2] py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black flex items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-lg shadow-emerald-600/30 active:scale-95 text-sm uppercase tracking-wider"
                 >
                   {patSaving ? (
                     <>
                       <Loader2 size={18} className="animate-spin" />
-                      <span>Saving Architecture...</span>
+                      <span>Saving Pattern...</span>
                     </>
                   ) : (
                     <>

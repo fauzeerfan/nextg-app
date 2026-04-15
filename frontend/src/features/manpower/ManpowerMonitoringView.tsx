@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Calendar, RefreshCw, Loader2, Search, Activity, TrendingUp, FilterX, AlertCircle } from 'lucide-react';
+import { Calendar, RefreshCw, Loader2, Search, Activity, TrendingUp, FilterX, AlertCircle, Users, Clock, CheckCircle2 } from 'lucide-react';
 import SankeyChart from '../../components/ui/SankeyChart';
 
 const API_BASE_URL = 'http://localhost:3000';
@@ -354,49 +354,81 @@ export const ManpowerMonitoringView = () => {
   }, [heatmapData]);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6" style={{ fontFamily: "'Poppins', sans-serif" }}>
+      {/* Import Poppins Font Dynamically */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+        
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 8px;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-track {
+          background: #1e293b;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #94a3b8;
+          border-radius: 8px;
+          border: 2px solid #f1f5f9;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #64748b;
+          border: 2px solid #1e293b;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: #6366f1;
+        }
+      `}} />
+
       {/* Header Panel */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] overflow-hidden relative">
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-purple-500/10 blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-64 h-64 rounded-full bg-indigo-500/10 blur-3xl"></div>
+      <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-xl overflow-hidden relative backdrop-blur-xl">
+        {/* Modern Colorful Background Blobs */}
+        <div className="absolute top-0 right-0 -mr-24 -mt-24 w-72 h-72 rounded-full bg-gradient-to-br from-indigo-500/30 to-purple-500/30 blur-3xl mix-blend-multiply dark:mix-blend-screen opacity-70"></div>
+        <div className="absolute bottom-0 left-0 -ml-24 -mb-24 w-72 h-72 rounded-full bg-gradient-to-tr from-blue-500/30 to-emerald-500/30 blur-3xl mix-blend-multiply dark:mix-blend-screen opacity-70"></div>
         
         <div className="p-6 relative z-10">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/20 transform transition-transform hover:scale-105">
-                <Activity size={24} className="text-white" />
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div className="flex items-center gap-5">
+              <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30 transform transition-transform hover:scale-105">
+                <Activity size={28} className="text-white" strokeWidth={2.5} />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Manpower Monitoring</h1>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Analisis perpindahan dan alokasi manpower</p>
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Manpower Monitoring</h1>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1.5 flex items-center gap-2">
+                  <Clock size={14} /> Analisis perpindahan dan alokasi karyawan secara real-time
+                </p>
               </div>
             </div>
             
-            <div className="flex flex-wrap items-center gap-3 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <Calendar size={16} className="text-slate-400 ml-2 hidden sm:block" />
+            <div className="flex flex-wrap items-center gap-3 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md p-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="flex items-center gap-2 px-2">
+                <Calendar size={18} className="text-indigo-500 dark:text-indigo-400" />
                 <input 
                   type="date" 
-                  className="bg-transparent border-none text-sm font-medium text-slate-700 dark:text-slate-300 focus:ring-0 cursor-pointer p-2" 
+                  className="bg-transparent border-none text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-0 cursor-pointer outline-none" 
                   value={startDate} 
                   onChange={e => setStartDate(e.target.value)} 
                 />
               </div>
-              <span className="text-slate-300 dark:text-slate-600 font-medium">/</span>
-              <div className="flex items-center gap-2">
+              <div className="w-px h-6 bg-slate-300 dark:bg-slate-600 rounded-full"></div>
+              <div className="flex items-center gap-2 px-2">
                 <input 
                   type="date" 
-                  className="bg-transparent border-none text-sm font-medium text-slate-700 dark:text-slate-300 focus:ring-0 cursor-pointer p-2" 
+                  className="bg-transparent border-none text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-0 cursor-pointer outline-none" 
                   value={endDate} 
                   onChange={e => setEndDate(e.target.value)} 
                 />
               </div>
               <button 
                 onClick={fetchFlowData} 
-                className="ml-2 p-2.5 bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 hover:bg-purple-50 dark:hover:bg-slate-700 transition-all hover:scale-105 group"
+                className="ml-1 p-2.5 bg-indigo-600 text-white rounded-xl shadow-md hover:bg-indigo-700 transition-all hover:-translate-y-0.5 active:translate-y-0 group"
                 title="Refresh Data"
               >
-                <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-500" />
+                <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-700 ease-in-out" />
               </button>
             </div>
           </div>
@@ -404,43 +436,44 @@ export const ManpowerMonitoringView = () => {
       </div>
 
       {/* Filters Card */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-5">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-6 shadow-lg relative overflow-hidden">
+        <div className="absolute left-0 top-0 w-1 h-full bg-gradient-to-b from-indigo-500 to-purple-500"></div>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
           <div className="col-span-1 md:col-span-2">
-            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Filter Line</label>
+            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2.5">Filter Line Area</label>
             <div className="relative">
               <select 
-                className="w-full appearance-none bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 py-2.5 pl-4 pr-10 transition-all cursor-pointer" 
+                className="w-full appearance-none bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-medium text-sm rounded-xl focus:ring-0 focus:border-indigo-500 py-3 pl-4 pr-10 transition-colors cursor-pointer" 
                 value={filterLine} 
                 onChange={e => setFilterLine(e.target.value)}
               >
-                <option value="">Semua Line</option>
+                <option value="" className="font-medium">Semua Line / Area</option>
                 {uniqueLines.map(line => <option key={line} value={line}>{line}</option>)}
               </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-indigo-500">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
               </div>
             </div>
           </div>
           
           <div className="col-span-1 md:col-span-2">
-            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Filter Karyawan</label>
+            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2.5">Cari Karyawan</label>
             <div className="relative">
-              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-500" />
               <select
-                className="w-full appearance-none bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 py-2.5 pl-10 pr-10 transition-all cursor-pointer"
+                className="w-full appearance-none bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-medium text-sm rounded-xl focus:ring-0 focus:border-indigo-500 py-3 pl-11 pr-10 transition-colors cursor-pointer"
                 value={searchNik}
                 onChange={(e) => setSearchNik(e.target.value)}
               >
-                <option value="">Cari & Pilih Karyawan</option>
+                <option value="">Pilih / Ketik Karyawan</option>
                 {uniqueEmployees.map(emp => {
                   const nikMatch = emp.match(/\(([^)]+)\)/);
                   const nik = nikMatch ? nikMatch[1] : emp;
                   return <option key={nik} value={nik}>{emp}</option>;
                 })}
               </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-indigo-500">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
               </div>
             </div>
           </div>
@@ -448,9 +481,9 @@ export const ManpowerMonitoringView = () => {
           <div className="flex items-end">
             <button 
               onClick={resetFilters} 
-              className="w-full px-4 py-2.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl flex items-center justify-center gap-2 hover:bg-white dark:hover:bg-slate-700 hover:text-red-500 hover:border-red-200 dark:hover:border-red-900/50 transition-all shadow-sm font-medium text-sm group"
+              className="w-full px-5 py-3 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-500/20 rounded-xl flex items-center justify-center gap-2 hover:bg-rose-500 hover:text-white dark:hover:bg-rose-500 transition-all font-bold text-sm shadow-sm group"
             >
-              <FilterX size={16} className="group-hover:scale-110 transition-transform" /> Reset
+              <FilterX size={18} className="group-hover:scale-110 transition-transform" /> Reset Filter
             </button>
           </div>
         </div>
@@ -458,49 +491,56 @@ export const ManpowerMonitoringView = () => {
 
       {/* Error Message */}
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-          <AlertCircle size={20} className="text-red-500" />
-          <span className="text-sm font-medium text-red-800 dark:text-red-300">{error}</span>
+        <div className="p-4 bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 rounded-r-xl flex items-center gap-3 animate-pulse shadow-sm">
+          <AlertCircle size={22} className="text-red-600 dark:text-red-400" />
+          <span className="text-sm font-semibold text-red-800 dark:text-red-200">{error}</span>
         </div>
       )}
 
       {/* Sankey Diagram: Flow Karyawan → Line per Tanggal */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-[0_4px_20px_rgb(0,0,0,0.1)]">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-6 shadow-lg">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-          <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
-            <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
-              <TrendingUp size={20} /> 
+          <h3 className="text-xl font-extrabold text-slate-800 dark:text-white flex items-center gap-3">
+            <div className="p-2 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl">
+              <TrendingUp size={22} strokeWidth={2.5} /> 
             </div>
-            Flow Manpower
+            Alur Pergerakan Manpower
           </h3>
-          <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-full border border-indigo-100 dark:border-indigo-800/50 flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></div>
-            Scroll area grafik untuk melihat detail
+          <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/40 px-4 py-2 rounded-full border border-indigo-200 dark:border-indigo-700 flex items-center gap-2 shadow-sm">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
+            </span>
+            Geser (Scroll) untuk melihat detail timeline
           </span>
         </div>
         
         {flowLoading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <Loader2 className="animate-spin text-purple-600" size={32} />
-            <span className="text-sm text-slate-500 font-medium">Memproses data diagram...</span>
+          <div className="flex flex-col items-center justify-center py-28 gap-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl">
+            <Loader2 className="animate-spin text-indigo-600" size={40} />
+            <span className="text-sm text-slate-500 font-semibold tracking-wide">Menganalisis Alur Data...</span>
           </div>
         ) : processedFlow.nodes.length === 0 ? (
-          <div className="text-center py-20 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-500 text-sm font-medium">
-            Tidak ada data untuk periode dan filter yang dipilih.
+          <div className="text-center py-24 bg-slate-50 dark:bg-slate-900/30 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
+              <Users size={28} className="text-slate-400" />
+            </div>
+            <p className="text-slate-500 font-semibold text-base">Data pergerakan belum tersedia</p>
+            <p className="text-slate-400 text-xs mt-1">Coba sesuaikan rentang tanggal atau filter line.</p>
           </div>
         ) : (
           <div 
-            className="w-full overflow-auto rounded-xl border border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-900/30 custom-scrollbar"
-            style={{ maxHeight: '600px' }}
+            className="w-full overflow-auto rounded-2xl border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 custom-scrollbar shadow-inner"
+            style={{ maxHeight: '650px' }}
           >
-            <div style={{ padding: '16px' }}>
+            <div style={{ padding: '24px' }}>
               <SankeyChart
                 nodes={processedFlow.nodes}
                 links={processedFlow.links}
-                width={Math.max(900, processedFlow.nodes.filter(n => n.type === 'employee').length * 150)}
-                height={Math.max(500, processedFlow.nodes.length * 25)}
-                nodeWidth={20}
-                nodePadding={30}
+                width={Math.max(1000, processedFlow.nodes.filter(n => n.type === 'employee').length * 160)}
+                height={Math.max(500, processedFlow.nodes.length * 28)}
+                nodeWidth={24}
+                nodePadding={35}
               />
             </div>
           </div>
@@ -508,56 +548,56 @@ export const ManpowerMonitoringView = () => {
       </div>
 
       {/* ========== HEATMAP: Employee Daily Activity ========== */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-[0_4px_20px_rgb(0,0,0,0.1)]">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-6 shadow-lg">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
-            <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-              🔥 Heatmap: Employee Daily Activity
+            <h3 className="text-xl font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
+              <span className="text-2xl">🔥</span> Heatmap Kehadiran Harian
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">Visualisasi kehadiran per karyawan per hari</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">Pemetaan stasiun kerja berdasarkan absensi harian</p>
           </div>
-          <div className="flex flex-wrap gap-2 items-center bg-slate-50 dark:bg-slate-900/50 p-1.5 rounded-xl border border-slate-100 dark:border-slate-800">
+          <div className="flex flex-wrap gap-2 items-center bg-slate-50 dark:bg-slate-900/80 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
             <input
               type="date"
-              className="bg-transparent border-none text-sm font-medium text-slate-700 dark:text-slate-300 focus:ring-0 cursor-pointer p-2"
+              className="bg-transparent border-none text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-0 cursor-pointer px-3 py-2 outline-none"
               value={heatmapStartDate}
               onChange={(e) => setHeatmapStartDate(e.target.value)}
             />
-            <span className="text-slate-300 dark:text-slate-600 font-medium">/</span>
+            <span className="text-slate-300 dark:text-slate-600 font-bold">-</span>
             <input
               type="date"
-              className="bg-transparent border-none text-sm font-medium text-slate-700 dark:text-slate-300 focus:ring-0 cursor-pointer p-2"
+              className="bg-transparent border-none text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-0 cursor-pointer px-3 py-2 outline-none"
               value={heatmapEndDate}
               onChange={(e) => setHeatmapEndDate(e.target.value)}
             />
             <button
               onClick={fetchHeatmapData}
-              className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-sm hover:shadow-md active:scale-95 ml-1"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-md active:scale-95 ml-1"
             >
-              <RefreshCw size={14} /> Refresh
+              <RefreshCw size={16} strokeWidth={2.5} /> Update
             </button>
           </div>
         </div>
 
         {loadingHeatmap ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-             <Loader2 className="animate-spin text-indigo-600" size={28} />
-             <span className="text-sm text-slate-500 font-medium">Memuat data heatmap...</span>
+          <div className="flex flex-col items-center justify-center py-20 gap-4 bg-slate-50 dark:bg-slate-900/30 rounded-2xl">
+             <Loader2 className="animate-spin text-indigo-600" size={36} />
+             <span className="text-sm text-slate-500 font-semibold">Menyusun Matriks Kehadiran...</span>
           </div>
         ) : heatmapData.length === 0 ? (
-          <div className="text-center py-16 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-500 text-sm font-medium">
-            Tidak ada data untuk periode terpilih
+          <div className="text-center py-20 bg-slate-50 dark:bg-slate-900/30 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-slate-500 text-sm font-semibold">
+            Data heatmap kosong pada periode ini
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm">
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm custom-scrollbar">
             <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-              <thead className="bg-slate-50 dark:bg-slate-900/80">
+              <thead className="bg-indigo-50 dark:bg-slate-900">
                 <tr>
-                  <th className="sticky left-0 bg-slate-50 dark:bg-slate-900/80 z-20 px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider shadow-[4px_0_12px_rgba(0,0,0,0.03)] dark:shadow-[4px_0_12px_rgba(0,0,0,0.2)] border-r border-slate-200 dark:border-slate-700">
-                    Employee
+                  <th className="sticky left-0 bg-indigo-50 dark:bg-slate-900 z-20 px-5 py-4 text-left text-xs font-extrabold text-indigo-800 dark:text-indigo-300 uppercase tracking-widest shadow-[4px_0_12px_rgba(0,0,0,0.02)] dark:shadow-[4px_0_12px_rgba(0,0,0,0.2)] border-r border-indigo-100 dark:border-slate-700">
+                    Karyawan
                   </th>
                   {heatmapDates.map(date => (
-                    <th key={date} className="px-3 py-3 text-center text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider min-w-[80px]">
+                    <th key={date} className="px-4 py-4 text-center text-xs font-extrabold text-indigo-800 dark:text-indigo-300 uppercase tracking-widest min-w-[90px] border-b border-indigo-100 dark:border-slate-700">
                       {new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}
                     </th>
                   ))}
@@ -565,10 +605,10 @@ export const ManpowerMonitoringView = () => {
               </thead>
               <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-100 dark:divide-slate-700/50">
                 {heatmapData.map(emp => (
-                  <tr key={emp.nik} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors group">
-                    <td className="sticky left-0 bg-white dark:bg-slate-800 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 z-10 px-4 py-3 shadow-[4px_0_12px_rgba(0,0,0,0.03)] dark:shadow-[4px_0_12px_rgba(0,0,0,0.2)] border-r border-slate-200 dark:border-slate-700 transition-colors">
-                      <div className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-[180px]">{emp.fullName}</div>
-                      <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">{emp.nik}</div>
+                  <tr key={emp.nik} className="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors group">
+                    <td className="sticky left-0 bg-white dark:bg-slate-800 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 z-10 px-5 py-3 shadow-[4px_0_12px_rgba(0,0,0,0.02)] dark:shadow-[4px_0_12px_rgba(0,0,0,0.2)] border-r border-slate-100 dark:border-slate-700 transition-colors">
+                      <div className="text-sm font-bold text-slate-800 dark:text-white truncate max-w-[200px]">{emp.fullName}</div>
+                      <div className="inline-block mt-1 px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-[10px] font-bold uppercase tracking-wider">{emp.nik}</div>
                     </td>
                     {heatmapDates.map(date => {
                       const activity = emp.daily[date];
@@ -577,18 +617,18 @@ export const ManpowerMonitoringView = () => {
                       return (
                         <td
                           key={date}
-                          className="px-3 py-2 text-center"
+                          className="px-4 py-2 text-center"
                         >
                           <div
-                            className={`w-8 h-8 mx-auto rounded-lg flex items-center justify-center cursor-help transition-all duration-300 ${
+                            className={`w-9 h-9 mx-auto rounded-xl flex items-center justify-center cursor-help transition-all duration-300 ${
                               isPresent
-                                ? 'bg-gradient-to-br from-emerald-400 to-emerald-500 shadow-md shadow-emerald-500/30 hover:scale-110 hover:shadow-lg hover:shadow-emerald-500/40'
-                                : 'bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                ? 'bg-gradient-to-br from-emerald-400 to-teal-500 shadow-md shadow-emerald-500/40 hover:scale-110 hover:shadow-lg hover:shadow-emerald-500/50'
+                                : 'bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-700/60 hover:bg-slate-100 dark:hover:bg-slate-800'
                             }`}
                             title={tooltipText}
                           >
                             {isPresent && (
-                              <span className="text-white text-sm font-bold drop-shadow-sm">✓</span>
+                              <CheckCircle2 size={20} className="text-white drop-shadow-sm" strokeWidth={3} />
                             )}
                           </div>
                         </td>
@@ -600,77 +640,89 @@ export const ManpowerMonitoringView = () => {
             </table>
           </div>
         )}
-        <div className="mt-4 flex flex-col sm:flex-row justify-between items-center bg-slate-50 dark:bg-slate-900/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 font-medium">
-          <span>Total manpower terpantau: <strong className="text-indigo-600 dark:text-indigo-400 text-sm ml-1">{heatmapData.length}</strong> orang</span>
-          <div className="flex items-center gap-4 mt-2 sm:mt-0">
-            <span className="flex items-center gap-2">
-              <div className="w-3.5 h-3.5 bg-gradient-to-br from-emerald-400 to-emerald-500 rounded shadow-sm shadow-emerald-500/30"></div> Hadir
+        <div className="mt-5 flex flex-col sm:flex-row justify-between items-center bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400 font-semibold">
+          <span className="flex items-center gap-2">Total tenaga kerja aktif: <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300 px-3 py-1 rounded-lg text-sm font-extrabold">{heatmapData.length}</span></span>
+          <div className="flex items-center gap-5 mt-3 sm:mt-0">
+            <span className="flex items-center gap-2.5">
+              <div className="w-4 h-4 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-md shadow-sm shadow-emerald-500/40"></div> Hadir (Tercatat)
             </span>
-            <span className="flex items-center gap-2">
-              <div className="w-3.5 h-3.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded"></div> Tidak hadir
+            <span className="flex items-center gap-2.5">
+              <div className="w-4 h-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md"></div> Tidak Terdata
             </span>
           </div>
         </div>
       </div>
 
       {/* Tabel Data Attendance */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-[0_4px_20px_rgb(0,0,0,0.1)]">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-6 shadow-lg">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-          <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
-            <div className="p-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
-              <Activity size={20} />
+          <h3 className="text-xl font-extrabold text-slate-800 dark:text-white flex items-center gap-3">
+            <div className="p-2 bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 rounded-xl">
+              <Activity size={22} strokeWidth={2.5} />
             </div>
-            Detail Attendance
+            Daftar Detail Absensi
           </h3>
-          <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 p-1.5 rounded-xl border border-slate-100 dark:border-slate-800">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-2 hidden sm:inline">Total: {totalRecords} records</span>
+          <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest pl-3 hidden sm:inline">Total <span className="text-slate-800 dark:text-white">{totalRecords}</span> Baris</span>
+            <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1 hidden sm:block"></div>
             <select
               value={tableLimit}
               onChange={(e) => { setTableLimit(Number(e.target.value)); setTablePage(1); }}
-              className="text-xs font-medium border-none bg-white dark:bg-slate-800 rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-purple-500/20 cursor-pointer text-slate-700 dark:text-slate-300"
+              className="text-xs font-bold border-none bg-white dark:bg-slate-800 rounded-lg px-4 py-2 shadow-sm focus:ring-0 cursor-pointer text-slate-700 dark:text-slate-300 outline-none"
             >
-              <option value={10}>10 per page</option>
-              <option value={25}>25 per page</option>
-              <option value={50}>50 per page</option>
+              <option value={10}>10 Baris / Hal</option>
+              <option value={25}>25 Baris / Hal</option>
+              <option value={50}>50 Baris / Hal</option>
             </select>
           </div>
         </div>
 
         {loadingTable ? (
-          <div className="flex justify-center py-16"><Loader2 className="animate-spin text-purple-600" size={32} /></div>
+          <div className="flex justify-center py-20 bg-slate-50 dark:bg-slate-900/30 rounded-2xl">
+            <Loader2 className="animate-spin text-purple-600" size={36} />
+          </div>
         ) : attendanceList.length === 0 ? (
-          <div className="text-center py-16 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-500 text-sm font-medium">
-            Tidak ada data untuk filter yang dipilih.
+          <div className="text-center py-20 bg-slate-50 dark:bg-slate-900/30 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-slate-500 text-sm font-semibold">
+            Tidak ada riwayat absensi untuk kriteria tersebut.
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm">
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm custom-scrollbar">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-900/80">
+                <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
                   <tr>
-                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">No</th>
-                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Tanggal</th>
-                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">NIK</th>
-                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Nama Karyawan</th>
-                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Line</th>
-                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Station</th>
-                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Scan Time</th>
+                    <th className="py-4 px-5 text-left text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">No</th>
+                    <th className="py-4 px-5 text-left text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Tanggal</th>
+                    <th className="py-4 px-5 text-left text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">NIK</th>
+                    <th className="py-4 px-5 text-left text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Nama Lengkap</th>
+                    <th className="py-4 px-5 text-left text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Area / Line</th>
+                    <th className="py-4 px-5 text-left text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Stasiun</th>
+                    <th className="py-4 px-5 text-left text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Waktu Scan</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50 bg-white dark:bg-slate-800">
                   {attendanceList.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-purple-50/50 dark:hover:bg-purple-900/20 transition-colors">
-                      <td className="py-3 px-4 font-medium text-slate-500">{(tablePage - 1) * tableLimit + idx + 1}</td>
-                      <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-300">{new Date(item.tanggal).toLocaleDateString('id-ID')}</td>
-                      <td className="py-3 px-4 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20 rounded px-2 py-1 w-max my-2">{item.nik}</td>
-                      <td className="py-3 px-4 font-medium text-slate-900 dark:text-white">{item.fullName}</td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
+                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
+                      <td className="py-4 px-5 font-bold text-slate-400">{(tablePage - 1) * tableLimit + idx + 1}</td>
+                      <td className="py-4 px-5 font-semibold text-slate-700 dark:text-slate-200">{new Date(item.tanggal).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year:'numeric'})}</td>
+                      <td className="py-4 px-5">
+                        <span className="inline-block bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200 text-xs font-bold px-2.5 py-1 rounded-md tracking-wider">
+                          {item.nik}
+                        </span>
+                      </td>
+                      <td className="py-4 px-5 font-bold text-slate-900 dark:text-white">{item.fullName}</td>
+                      <td className="py-4 px-5">
+                        <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-extrabold bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
                           {item.lineCode}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{item.station}</td>
-                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{new Date(item.scanTime).toLocaleTimeString('id-ID')}</td>
+                      <td className="py-4 px-5 font-medium text-slate-600 dark:text-slate-300">{item.station}</td>
+                      <td className="py-4 px-5 text-slate-500 dark:text-slate-400 font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <Clock size={14} className="text-slate-400" />
+                          {new Date(item.scanTime).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -680,26 +732,26 @@ export const ManpowerMonitoringView = () => {
             {/* Pagination */}
             {totalRecords > tableLimit && (
               <div className="flex flex-col sm:flex-row justify-between items-center mt-6 gap-4">
-                <span className="text-sm font-medium text-slate-500">
-                  Showing <span className="font-bold text-slate-700 dark:text-slate-300">{((tablePage - 1) * tableLimit) + 1}</span> to <span className="font-bold text-slate-700 dark:text-slate-300">{Math.min(tablePage * tableLimit, totalRecords)}</span> of <span className="font-bold text-slate-700 dark:text-slate-300">{totalRecords}</span> entries
+                <span className="text-sm font-semibold text-slate-500">
+                  Menampilkan <span className="font-extrabold text-slate-800 dark:text-slate-200">{((tablePage - 1) * tableLimit) + 1}</span> - <span className="font-extrabold text-slate-800 dark:text-slate-200">{Math.min(tablePage * tableLimit, totalRecords)}</span> dari <span className="font-extrabold text-slate-800 dark:text-slate-200">{totalRecords}</span> entri
                 </span>
-                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 p-1 rounded-lg border border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
                   <button
                     onClick={() => setTablePage(p => Math.max(1, p - 1))}
                     disabled={tablePage === 1}
-                    className="px-4 py-2 text-sm font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                    className="px-4 py-2 text-sm font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
                   >
-                    Previous
+                    Sebelumnya
                   </button>
-                  <span className="px-4 text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <span className="px-4 text-sm font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/40 py-2 rounded-lg">
                     {tablePage} / {Math.ceil(totalRecords / tableLimit)}
                   </span>
                   <button
                     onClick={() => setTablePage(p => Math.min(Math.ceil(totalRecords / tableLimit), p + 1))}
                     disabled={tablePage === Math.ceil(totalRecords / tableLimit)}
-                    className="px-4 py-2 text-sm font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                    className="px-4 py-2 text-sm font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
                   >
-                    Next
+                    Selanjutnya
                   </button>
                 </div>
               </div>
@@ -710,52 +762,62 @@ export const ManpowerMonitoringView = () => {
 
       {/* Employee Timeline Modal */}
       {showTimeline && selectedEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setShowTimeline(false)}></div>
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md transition-opacity" onClick={() => setShowTimeline(false)}></div>
           
           {/* Modal Content */}
-          <div className="relative bg-white dark:bg-slate-800 rounded-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden shadow-2xl ring-1 ring-slate-900/5 dark:ring-white/10 flex flex-col animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700/60 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+          <div className="relative bg-white dark:bg-slate-800 rounded-3xl max-w-3xl w-full max-h-[85vh] overflow-hidden shadow-2xl ring-1 ring-slate-900/5 dark:ring-white/10 flex flex-col transform transition-all duration-300 scale-100">
+            {/* Modal Header */}
+            <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-indigo-500 to-purple-500"></div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Riwayat Kehadiran</h3>
-                <p className="text-sm font-medium text-slate-500 mt-0.5">{selectedEmployee.fullName} <span className="text-indigo-500">({selectedEmployee.nik})</span></p>
+                <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white">Riwayat Perjalanan</h3>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="text-sm font-bold text-slate-600 dark:text-slate-300">{selectedEmployee.fullName}</span>
+                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-xs font-bold text-slate-500 dark:text-slate-400">{selectedEmployee.nik}</span>
+                </div>
               </div>
               <button 
                 onClick={() => setShowTimeline(false)} 
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 transition-colors"
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 dark:bg-slate-700 text-slate-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/20 transition-colors shadow-sm"
               >
-                ✕
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
               </button>
             </div>
             
-            <div className="p-6 overflow-auto custom-scrollbar">
+            <div className="p-8 overflow-auto custom-scrollbar bg-slate-50 dark:bg-slate-900/50">
               {employeeTimeline.length === 0 ? (
-                <div className="text-center py-12 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-                  <p className="text-slate-500 font-medium text-sm">Tidak ada catatan kehadiran pada periode ini.</p>
+                <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 shadow-sm">
+                  <p className="text-slate-500 font-semibold text-base">Tidak ada catatan kehadiran yang ditemukan.</p>
                 </div>
               ) : (
-                <div className="rounded-xl border border-slate-200 dark:border-slate-700/60 overflow-hidden shadow-sm">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden shadow-sm">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-700/60">
+                    <thead className="bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-700">
                       <tr>
-                        <th className="p-3 px-4 text-left font-bold text-slate-500 uppercase tracking-wider text-xs">Tanggal</th>
-                        <th className="p-3 px-4 text-left font-bold text-slate-500 uppercase tracking-wider text-xs">Line</th>
-                        <th className="p-3 px-4 text-left font-bold text-slate-500 uppercase tracking-wider text-xs">Station</th>
-                        <th className="p-3 px-4 text-left font-bold text-slate-500 uppercase tracking-wider text-xs">Scan Time</th>
+                        <th className="py-4 px-6 text-left font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-xs">Tanggal</th>
+                        <th className="py-4 px-6 text-left font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-xs">Area Kerja</th>
+                        <th className="py-4 px-6 text-left font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-xs">Stasiun</th>
+                        <th className="py-4 px-6 text-left font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-xs">Waktu Scan</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                      {employeeTimeline.map(att => (
+                      {employeeTimeline.map((att, idx) => (
                         <tr key={att.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
-                          <td className="p-3 px-4 font-medium text-slate-700 dark:text-slate-300">{new Date(att.tanggal).toLocaleDateString('id-ID', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                          <td className="p-3 px-4">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                          <td className="py-4 px-6 font-semibold text-slate-700 dark:text-slate-200">
+                            {new Date(att.tanggal).toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })}
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-extrabold bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-500/30">
                               {att.lineCode}
                             </span>
                           </td>
-                          <td className="p-3 px-4 font-medium text-slate-600 dark:text-slate-300">{att.station}</td>
-                          <td className="p-3 px-4 text-slate-500 font-mono text-xs">{new Date(att.scanTime).toLocaleTimeString('id-ID')}</td>
+                          <td className="py-4 px-6 font-medium text-slate-600 dark:text-slate-300">{att.station}</td>
+                          <td className="py-4 px-6 text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-2">
+                            <Clock size={14} className="text-slate-400" />
+                            {new Date(att.scanTime).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit', second:'2-digit'})}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -766,24 +828,6 @@ export const ManpowerMonitoringView = () => {
           </div>
         </div>
       )}
-      
-      {/* Add Custom Scrollbar Styles Globally or Scope it */}
-      <style dangerouslySetInnerHTML={{__html: `
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-          height: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background-color: #cbd5e1;
-          border-radius: 20px;
-        }
-        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-          background-color: #475569;
-        }
-      `}} />
     </div>
   );
 };

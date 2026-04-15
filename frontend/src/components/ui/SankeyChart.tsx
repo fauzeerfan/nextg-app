@@ -27,8 +27,8 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
   nodes,
   links,
   height = 600,
-  nodeWidth = 24, // Sedikit diperlebar agar lebih elegan
-  nodePadding = 35, // Jarak antar node diperbesar agar tidak sesak
+  nodeWidth = 32,
+  nodePadding = 45,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -84,20 +84,20 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
 
     // 4. Kalkulasi Lebar Dinamis & Margin
     const maxLayer = Math.max(0, ...Array.from(nodeLayerMap.values()));
-    const columnSpacing = 160; 
-    
-    // Margin top dikembalikan normal karena header hanya berisi tanggal
-    const margin = { top: 50, right: 120, bottom: 20, left: 180 };
-    
-    const dynamicWidth = margin.left + margin.right + (maxLayer * columnSpacing);
-    const finalWidth = Math.max(800, dynamicWidth); 
+    const columnSpacing = 200;
+
+    const margin = { top: 70, right: 140, bottom: 20, left: 220 };
+
+    const dynamicWidth = margin.left + margin.right + maxLayer * columnSpacing;
+    const finalWidth = Math.max(800, dynamicWidth);
 
     // Bersihkan SVG sebelumnya
     d3.select(svgRef.current).selectAll('*').remove();
 
     const svg = d3.select(svgRef.current)
       .attr('width', finalWidth)
-      .style('background', 'transparent');
+      .style('background', 'transparent')
+      .style('font-family', "'Poppins', sans-serif");
 
     const sankeyGenerator = d3Sankey<any, any>()
       .nodeWidth(nodeWidth)
@@ -112,41 +112,88 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
 
     const { nodes: sankeyNodes, links: sankeyLinks } = sankeyGenerator(sankeyData);
 
-    // Palet warna yang lebih modern & bervariasi
-    const colorEmployee = d3.scaleOrdinal(d3.schemeCategory10);
+    // --- PALET WARNA MODERN, SOLID, & EYE-CATCHING ---
+    const vibrantColors = [
+      "#EF4444", // Solid Red
+      "#10B981", // Solid Emerald
+      "#3B82F6", // Solid Blue
+      "#F59E0B", // Solid Amber
+      "#8B5CF6", // Solid Violet
+      "#EC4899", // Solid Pink
+      "#14B8A6", // Solid Teal
+      "#F97316", // Solid Orange
+      "#06B6D4", // Solid Cyan
+      "#6366F1", // Solid Indigo
+      "#EAB308"  // Solid Yellow
+    ];
+    const colorEmployee = d3.scaleOrdinal(vibrantColors);
+
+    // Fungsi untuk mendapatkan warna node (karyawan = warna unik, line-date = default)
     const getNodeColor = (d: any) => {
       if (d.type === 'employee') return colorEmployee(d.id);
-      return '#10b981'; // Hijau emerald untuk line
+      return '#4338CA'; // Indigo Gelap & Solid untuk Area/Line
     };
 
-    // --- DEFS UNTUK GRADIENT ---
+    // --- MENENTUKAN WARNA KHAS UNTUK SETIAP KARYAWAN & ALIRANNYA ---
+    // Map: node id → warna khas karyawan sumber (jika berasal dari karyawan)
+    const employeeColorMap = new Map<string, string>();
+
+    // 1. Assign warna untuk setiap node employee
+    sankeyNodes.forEach((n: any) => {
+      if (n.type === 'employee') {
+        const color = colorEmployee(n.id);
+        employeeColorMap.set(n.id, color);
+      }
+    });
+
+    // 2. Propagasi warna ke node line-date melalui link (iteratif)
+    let changed = true;
+    while (changed) {
+      changed = false;
+      sankeyLinks.forEach((link: any) => {
+        const sourceId = link.source.id;
+        const targetId = link.target.id;
+        const sourceColor = employeeColorMap.get(sourceId);
+        if (sourceColor && !employeeColorMap.has(targetId)) {
+          employeeColorMap.set(targetId, sourceColor);
+          changed = true;
+        }
+      });
+    }
+
+    // Fungsi untuk mendapatkan warna alur berdasarkan node sumber
+    const getLinkColor = (link: any): string => {
+      // Gunakan warna khas karyawan dari node sumber (jika ada)
+      const sourceColor = employeeColorMap.get(link.source.id);
+      if (sourceColor) return sourceColor;
+      // Fallback: jika sumber tidak memiliki warna khas (misal line-date tanpa karyawan asal)
+      return '#94A3B8'; // Slate-400 netral
+    };
+
+    // --- DEFS (SHADOW NATIVE SVG) ---
     const defs = svg.append('defs');
-    const gradients = defs.selectAll('linearGradient')
-      .data(sankeyLinks)
-      .join('linearGradient')
-      .attr('id', (d, i) => `gradient-${i}`)
-      .attr('gradientUnits', 'userSpaceOnUse')
-      .attr('x1', d => d.source.x1)
-      .attr('x2', d => d.target.x0);
 
-    gradients.append('stop')
-      .attr('offset', '0%')
-      .attr('stop-color', d => getNodeColor(d.source));
+    // Shadow Native untuk Node SVG
+    const dropShadow = defs.append('filter')
+      .attr('id', 'node-shadow')
+      .attr('x', '-20%').attr('y', '-20%').attr('width', '140%').attr('height', '140%');
 
-    gradients.append('stop')
-      .attr('offset', '100%')
-      .attr('stop-color', d => getNodeColor(d.target));
+    dropShadow.append('feDropShadow')
+      .attr('dx', '0')
+      .attr('dy', '4')
+      .attr('stdDeviation', '4')
+      .attr('flood-color', '#0F172A')
+      .attr('flood-opacity', '0.12');
 
     // --- POSISI KOLOM TANGGAL ---
     const layerDates = new Map<string, number>();
-    
+
     sankeyNodes.forEach((n: any) => {
       if (n.type === 'line-date') {
         const dateMatch = n.name.match(/\((.*?)\)/);
         const date = dateMatch ? dateMatch[1] : null;
-        
+
         if (date) {
-          // Simpan posisi X dari node untuk dijadikan patokan Grid & Header
           if (!layerDates.has(date)) {
             layerDates.set(date, n.x0);
           }
@@ -154,84 +201,86 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
       }
     });
 
-    // --- GAMBAR GARIS PEMISAH WAKTU (TIMELINE GRID) ---
-    // Digambar sebelum flow links agar berada di belakang (background)
+    // --- GAMBAR GARIS PEMISAH WAKTU (TIMELINE GRID MODERN) ---
     const gridGroup = svg.append('g').attr('class', 'grid-lines');
     Array.from(layerDates.entries()).forEach(([date, xPos]) => {
-       const centerX = xPos + nodeWidth / 2;
-       
-       gridGroup.append('line')
-         .attr('x1', centerX)
-         .attr('x2', centerX)
-         .attr('y1', margin.top - 15) // Mulai tepat di bawah tanggal
-         .attr('y2', height - margin.bottom + 10) // Memanjang sampai bawah area node
-         .attr('stroke', '#cbd5e1') // Warna abu-abu soft elegan
-         .attr('stroke-width', 1.5)
-         .attr('stroke-dasharray', '6,4') // Efek putus-putus
-         .style('opacity', 0.6); // Sedikit transparan
+      const centerX = xPos + nodeWidth / 2;
+
+      gridGroup.append('line')
+        .attr('x1', centerX)
+        .attr('x2', centerX)
+        .attr('y1', margin.top - 30)
+        .attr('y2', height - margin.bottom + 10)
+        .attr('stroke', '#CBD5E1')
+        .attr('stroke-width', 2)
+        .attr('stroke-dasharray', '6,6')
+        .style('opacity', 0.6);
     });
 
-    // --- TOOLTIP MODERN ---
+    // --- TOOLTIP MODERN (GLASSMORPHISM/CLEAN UI) ---
     const tooltip = d3.select('body').append('div')
       .attr('class', 'sankey-tooltip')
       .style('position', 'absolute')
       .style('visibility', 'hidden')
-      .style('background', 'rgba(255, 255, 255, 0.95)')
-      .style('color', '#0f172a')
-      .style('padding', '10px 14px')
-      .style('border-radius', '8px')
+      .style('background', 'rgba(255, 255, 255, 0.98)')
+      .style('color', '#0F172A')
+      .style('padding', '14px 18px')
+      .style('border-radius', '12px')
+      .style('font-family', "'Poppins', sans-serif")
       .style('font-size', '13px')
-      .style('font-weight', '500')
-      .style('box-shadow', '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)')
-      .style('border', '1px solid #e2e8f0')
+      .style('box-shadow', '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)')
+      .style('border', '1px solid #E2E8F0')
       .style('pointer-events', 'none')
-      .style('z-index', '100')
-      .style('backdrop-filter', 'blur(4px)');
+      .style('z-index', '1000')
+      .style('transform', 'translateY(-50%)')
+      .style('backdrop-filter', 'blur(8px)');
 
-    // --- MENGGAMBAR LINKS (ALIRAN) ---
+    // --- MENGGAMBAR LINKS (ALIRAN) DENGAN WARNA KHAS KARYAWAN ---
     const linkGroup = svg.append('g')
       .attr('fill', 'none')
       .selectAll('path')
       .data(sankeyLinks)
       .join('path')
       .attr('d', sankeyLinkHorizontal())
-      .attr('stroke', (d, i) => `url(#gradient-${i})`)
-      .attr('stroke-width', d => Math.max(2, d.width))
-      .attr('stroke-opacity', 0.4) // Opacity default
-      .style('transition', 'stroke-opacity 0.2s ease'); // Animasi halus
+      .attr('stroke', d => getLinkColor(d))          // Warna solid khas karyawan
+      .attr('stroke-width', d => Math.max(3, d.width))
+      .attr('stroke-opacity', 0.55)                  // Opacity cukup untuk visibilitas
+      .style('transition', 'stroke-opacity 0.25s ease-in-out');
 
     // Efek Interaktif pada Link
     linkGroup
       .on('mouseover', function(event, d) {
-        // Redupkan semua link
-        linkGroup.attr('stroke-opacity', 0.1);
-        // Highlight link yang di-hover
-        d3.select(this).attr('stroke-opacity', 0.9);
-        
-        // Buat nama source dan target bersih dari NIK/Tanggal
+        linkGroup.attr('stroke-opacity', 0.08);
+        d3.select(this)
+          .attr('stroke-opacity', 0.95)
+          .style('cursor', 'pointer');
+
         const sourceName = d.source.name.replace(/\s*\(.*?\)/, '');
         const targetName = d.target.name.split(' ')[0];
 
         tooltip.style('visibility', 'visible')
           .html(`
-            <div style="color: #64748b; font-size: 11px; margin-bottom: 4px;">Detail Perpindahan</div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${getNodeColor(d.source)}"></span>
-              ${sourceName} 
-              <span style="color:#94a3b8;">→</span>
-              <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${getNodeColor(d.target)}"></span>
-              ${targetName}
+            <div style="color: #64748B; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Alur Perpindahan</div>
+            <div style="display: flex; align-items: center; gap: 12px; font-weight: 600;">
+              <span style="display:flex; align-items:center; gap:8px;">
+                <span style="display:inline-block; width:12px; height:12px; border-radius:4px; background:${getNodeColor(d.source)}"></span>
+                ${sourceName}
+              </span>
+              <span style="color:#94A3B8;">→</span>
+              <span style="display:flex; align-items:center; gap:8px;">
+                <span style="display:inline-block; width:12px; height:12px; border-radius:4px; background:${getNodeColor(d.target)}"></span>
+                ${targetName}
+              </span>
             </div>
           `);
       })
       .on('mousemove', function(event) {
-        tooltip.style('top', (event.pageY - 15) + 'px')
-               .style('left', (event.pageX + 15) + 'px');
+        tooltip.style('top', (event.pageY) + 'px')
+               .style('left', (event.pageX + 20) + 'px');
       })
-      .on('mouseout', function() {
+      .on('mouseout', function(event, d) {
         tooltip.style('visibility', 'hidden');
-        // Kembalikan semua link ke opacity semula
-        linkGroup.attr('stroke-opacity', 0.4);
+        linkGroup.attr('stroke-opacity', 0.55);
       });
 
     // --- MENGGAMBAR NODES (KOTAK) ---
@@ -246,46 +295,48 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
       .attr('height', d => d.y1 - d.y0)
       .attr('width', d => d.x1 - d.x0)
       .attr('fill', d => getNodeColor(d))
-      .attr('stroke', '#ffffff') // Stroke putih agar terlihat clean
-      .attr('stroke-width', 2)
-      .attr('rx', 6) // Sudut membulat (Rounded)
-      .style('box-shadow', '0 4px 6px rgba(0,0,0,0.1)')
+      .attr('stroke', '#FFFFFF')
+      .attr('stroke-width', 2.5)
+      .attr('rx', 6)
+      .attr('filter', 'url(#node-shadow)')
+      .style('cursor', 'pointer')
+      .style('transition', 'fill 0.2s ease')
       .on('mouseover', function(event, d) {
-        // Highlight link yang terhubung dengan node ini
-        linkGroup.attr('stroke-opacity', l => (l.source.id === d.id || l.target.id === d.id) ? 0.9 : 0.1);
-        
-        const cleanName = d.type === 'employee' 
-          ? d.name.replace(/\s*\(.*?\)/, '') 
+        linkGroup.attr('stroke-opacity', l => (l.source.id === d.id || l.target.id === d.id) ? 0.85 : 0.08);
+
+        const cleanName = d.type === 'employee'
+          ? d.name.replace(/\s*\(.*?\)/, '')
           : d.name.split(' ')[0];
 
         tooltip.style('visibility', 'visible')
           .html(`
-            <div style="font-weight: bold; margin-bottom: 2px;">${cleanName}</div>
-            <div style="font-size: 11px; color: #64748b;">${d.type === 'employee' ? 'Karyawan' : 'Area Kerja'}</div>
+            <div style="font-weight: 700; font-size: 16px; margin-bottom: 4px; color: ${getNodeColor(d)};">${cleanName}</div>
+            <div style="font-size: 12px; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">
+              ${d.type === 'employee' ? '• Karyawan Aktif' : '• Area / Line Kerja'}
+            </div>
           `);
       })
       .on('mousemove', function(event) {
-        tooltip.style('top', (event.pageY - 15) + 'px')
-               .style('left', (event.pageX + 15) + 'px');
+        tooltip.style('top', (event.pageY) + 'px')
+               .style('left', (event.pageX + 20) + 'px');
       })
       .on('mouseout', function() {
         tooltip.style('visibility', 'hidden');
-        linkGroup.attr('stroke-opacity', 0.4); // Kembalikan opacity
+        linkGroup.attr('stroke-opacity', 0.55);
       });
 
-    // --- LABEL KARYAWAN (Kiri) Hapus NIK ---
+    // --- LABEL KARYAWAN (Kiri) ---
     nodeGroup.append('text')
-      .attr('x', d => d.x0 - 12)
+      .attr('x', d => d.x0 - 18)
       .attr('y', d => (d.y0 + d.y1) / 2)
       .attr('dy', '0.35em')
       .attr('text-anchor', 'end')
-      .style('font-size', '12px')
-      .style('fill', '#334155')
+      .style('font-size', '13px')
+      .style('fill', '#0F172A')
       .style('font-weight', '600')
       .text(d => {
         if (d.type === 'employee') {
-           // Menghilangkan spasi dan string di dalam tanda kurung (NIK)
-           return d.name.replace(/\s*\(.*?\)/, '');
+          return d.name.replace(/\s*\(.*?\)/, '');
         }
         return '';
       })
@@ -295,52 +346,52 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
 
     // --- LABEL LINE SAJA (Kanan) Dengan MP ---
     const lineLabels = nodeGroup.append('text')
-      .attr('x', d => d.x1 + 10)
+      .attr('x', d => d.x1 + 18)
       .attr('y', d => (d.y0 + d.y1) / 2)
       .attr('text-anchor', 'start')
       .each(function(d) {
         if (d.type === 'employee') d3.select(this).remove();
       });
 
-    // Baris 1: Nama Line (Contoh: K0WL)
+    // Baris 1: Nama Line
     lineLabels.append('tspan')
-      .attr('x', d => d.x1 + 10)
-      .attr('dy', '-0.2em') // Geser sedikit ke atas
-      .style('font-size', '11px')
-      .style('fill', '#475569')
-      .style('font-weight', '600')
+      .attr('x', d => d.x1 + 18)
+      .attr('dy', '-0.4em')
+      .style('font-size', '14px')
+      .style('fill', '#0F172A')
+      .style('font-weight', '700')
       .text(d => d.type !== 'employee' ? d.name.split(' ')[0] : '');
 
-    // Baris 2: Jumlah MP (Contoh: (10 MP))
+    // Baris 2: Jumlah MP
     lineLabels.append('tspan')
-      .attr('x', d => d.x1 + 10)
-      .attr('dy', '1.3em') // Geser ke bawah sebagai baris baru
-      .style('font-size', '10px')
-      .style('fill', '#94a3b8')
-      .style('font-weight', '500')
-      // d.value di d3-sankey menyimpan total aliran/scan yang melewati node ini
-      .text(d => d.type !== 'employee' ? `(${Math.round(d.value)} MP)` : '');
+      .attr('x', d => d.x1 + 18)
+      .attr('dy', '1.6em')
+      .style('font-size', '12px')
+      .style('fill', '#6366F1')
+      .style('font-weight', '700')
+      .text(d => d.type !== 'employee' ? `${Math.round(d.value)} MP Tersedia` : '');
 
     // --- HEADER TANGGAL (Hanya Tanggal) ---
     const headerTexts = svg.append('g')
       .selectAll('text')
       .data(Array.from(layerDates.entries()))
       .join('text')
-      .attr('x', d => d[1] + nodeWidth / 2) 
-      .attr('y', 20) // Posisikan tanggal selalu konsisten di bagian atas
-      .attr('text-anchor', 'middle') 
-      .style('fill', '#64748b');
+      .attr('x', d => d[1] + nodeWidth / 2)
+      .attr('y', 30)
+      .attr('text-anchor', 'middle')
+      .style('fill', '#1E293B');
 
-    // Tanggal (DD/MM/YYYY)
+    // Tanggal Badge Look (Text styling)
     headerTexts.append('tspan')
-      .style('font-size', '13px')
+      .style('font-size', '15px')
       .style('font-weight', '700')
+      .style('letter-spacing', '0.5px')
       .text(d => {
-         const dateObj = new Date(d[0]);
-         if (!isNaN(dateObj.getTime())) {
-            return dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
-         }
-         return d[0];
+        const dateObj = new Date(d[0]);
+        if (!isNaN(dateObj.getTime())) {
+          return dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+        return d[0];
       });
 
     return () => {
@@ -349,11 +400,24 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
   }, [nodes, links, height, nodeWidth, nodePadding]);
 
   return (
-    <svg 
-      ref={svgRef} 
-      height={height} 
-      style={{ overflow: 'visible', minWidth: '100%' }} 
-    />
+    <div style={{ position: 'relative' }}>
+      {/* Memastikan font Poppins di-load jika belum terpasang secara global */}
+      <style>
+        {`
+          @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+          .sankey-tooltip * {
+             margin: 0;
+             padding: 0;
+             box-sizing: border-box;
+          }
+        `}
+      </style>
+      <svg
+        ref={svgRef}
+        height={height}
+        style={{ overflow: 'visible', minWidth: '100%', display: 'block' }}
+      />
+    </div>
   );
 };
 
