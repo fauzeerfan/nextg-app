@@ -42,34 +42,34 @@ interface MetricCardProps {
 
 const MetricCard = ({ title, value, icon: Icon, color = 'cyan', subtitle, suffix, trend }: MetricCardProps) => {
   const colorStyles = {
-    cyan: { bg: 'from-cyan-500 to-cyan-400', lightBg: 'bg-cyan-50 dark:bg-cyan-900/20', text: 'text-cyan-600 dark:text-cyan-400', border: 'border-cyan-200 dark:border-cyan-800' },
-    indigo: { bg: 'from-indigo-500 to-indigo-400', lightBg: 'bg-indigo-50 dark:bg-indigo-900/20', text: 'text-indigo-600 dark:text-indigo-400', border: 'border-indigo-200 dark:border-indigo-800' },
-    emerald: { bg: 'from-emerald-500 to-emerald-400', lightBg: 'bg-emerald-50 dark:bg-emerald-900/20', text: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-800' },
-    purple: { bg: 'from-purple-500 to-purple-400', lightBg: 'bg-purple-50 dark:bg-purple-900/20', text: 'text-purple-600 dark:text-purple-400', border: 'border-purple-200 dark:border-purple-800' }
+    cyan: { bg: 'from-cyan-500 to-cyan-400', lightBg: 'bg-cyan-50 dark:bg-cyan-900/20', text: 'text-cyan-600 dark:text-cyan-400', border: 'border-cyan-200/50 dark:border-cyan-800/50' },
+    indigo: { bg: 'from-indigo-500 to-indigo-400', lightBg: 'bg-indigo-50 dark:bg-indigo-900/20', text: 'text-indigo-600 dark:text-indigo-400', border: 'border-indigo-200/50 dark:border-indigo-800/50' },
+    emerald: { bg: 'from-emerald-500 to-emerald-400', lightBg: 'bg-emerald-50 dark:bg-emerald-900/20', text: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-200/50 dark:border-emerald-800/50' },
+    purple: { bg: 'from-purple-500 to-purple-400', lightBg: 'bg-purple-50 dark:bg-purple-900/20', text: 'text-purple-600 dark:text-purple-400', border: 'border-purple-200/50 dark:border-purple-800/50' }
   }[color];
 
   return (
-    <div className="group relative bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
-      <div className="flex items-start justify-between">
+    <div className="group relative bg-white dark:bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-5 shadow-sm hover:shadow-xl hover:shadow-slate-200/40 dark:hover:shadow-slate-900/40 transition-all duration-300 hover:-translate-y-1 overflow-hidden">
+      <div className="flex items-start justify-between relative z-10">
         <div>
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{title}</p>
-          <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-bold text-slate-900 dark:text-white">{value}</span>
-            {suffix && <span className="text-xs text-slate-500 dark:text-slate-400">{suffix}</span>}
+          <p className="text-[13px] font-semibold text-slate-500 dark:text-slate-400 mb-2">{title}</p>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">{value}</span>
+            {suffix && <span className="text-sm font-medium text-slate-400 dark:text-slate-500">{suffix}</span>}
           </div>
-          {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">{subtitle}</p>}
+          {subtitle && <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-2">{subtitle}</p>}
           {trend && (
-            <div className="flex items-center gap-1 mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            <div className="flex items-center gap-1 mt-2.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 inline-flex px-2 py-0.5 rounded-full">
               <TrendingUp size={12} />
               <span>{trend}</span>
             </div>
           )}
         </div>
-        <div className={`p-2 rounded-lg ${colorStyles.lightBg} border ${colorStyles.border}`}>
-          <Icon size={16} className={colorStyles.text} />
+        <div className={`p-3 rounded-xl ${colorStyles.lightBg} border ${colorStyles.border} shadow-inner`}>
+          <Icon size={20} className={colorStyles.text} />
         </div>
       </div>
-      <div className={`absolute inset-x-0 bottom-0 h-1 rounded-b-xl bg-gradient-to-r ${colorStyles.bg} scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left`} />
+      <div className={`absolute inset-x-0 bottom-0 h-1.5 bg-gradient-to-r ${colorStyles.bg} scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left`} />
     </div>
   );
 };
@@ -78,47 +78,49 @@ const PatternPreviewCard = ({ pattern, idx }: { pattern: PatternPart; idx: numbe
   const [goodErr, setGoodErr] = useState(false);
   const [ngErr, setNgErr] = useState(false);
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3 hover:shadow-md transition-all hover:border-indigo-300 dark:hover:border-indigo-700">
-      <div className="flex items-center gap-2 mb-2">
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-400 flex items-center justify-center text-white font-bold text-xs">
+    <div className="bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-4 shadow-sm hover:shadow-lg transition-all duration-300 hover:border-indigo-300 dark:hover:border-indigo-600 group">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-indigo-200 dark:shadow-none">
           {idx + 1}
         </div>
-        <span className="font-medium text-sm text-slate-900 dark:text-white truncate">{pattern.name}</span>
+        <span className="font-semibold text-sm text-slate-800 dark:text-slate-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{pattern.name}</span>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="relative aspect-square rounded-lg overflow-hidden border-2 border-emerald-200 dark:border-emerald-800 group">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="relative aspect-square rounded-xl overflow-hidden border border-slate-100 dark:border-slate-700 shadow-sm group/img">
           {!goodErr ? (
             <img
               src={`${API_BASE_URL}/uploads/patterns/${pattern.imgGood}`}
               alt="Good"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110"
               onError={() => setGoodErr(true)}
             />
           ) : (
-            <div className="w-full h-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center">
-              <ImageIcon size={16} className="text-emerald-500 dark:text-emerald-400" />
+            <div className="w-full h-full bg-emerald-50 dark:bg-emerald-900/20 flex flex-col gap-1 items-center justify-center">
+              <ImageIcon size={20} className="text-emerald-400 dark:text-emerald-500/50" />
             </div>
           )}
-          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            <span className="text-[10px] font-bold text-white">GOOD</span>
+          <div className="absolute inset-0 bg-gradient-to-t from-emerald-900/80 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-2">
+            <span className="text-[10px] font-bold tracking-wider text-emerald-400">GOOD</span>
           </div>
+          <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
         </div>
-        <div className="relative aspect-square rounded-lg overflow-hidden border-2 border-rose-200 dark:border-rose-800 group">
+        <div className="relative aspect-square rounded-xl overflow-hidden border border-slate-100 dark:border-slate-700 shadow-sm group/img">
           {!ngErr ? (
             <img
               src={`${API_BASE_URL}/uploads/patterns/${pattern.imgNg}`}
               alt="NG"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110"
               onError={() => setNgErr(true)}
             />
           ) : (
-            <div className="w-full h-full bg-rose-50 dark:bg-rose-900/30 flex items-center justify-center">
-              <ImageIcon size={16} className="text-rose-500 dark:text-rose-400" />
+            <div className="w-full h-full bg-rose-50 dark:bg-rose-900/20 flex flex-col gap-1 items-center justify-center">
+              <ImageIcon size={20} className="text-rose-400 dark:text-rose-500/50" />
             </div>
           )}
-          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            <span className="text-[10px] font-bold text-white">NG</span>
+          <div className="absolute inset-0 bg-gradient-to-t from-rose-900/80 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-2">
+            <span className="text-[10px] font-bold tracking-wider text-rose-400">NG</span>
           </div>
+          <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
         </div>
       </div>
     </div>
@@ -451,51 +453,55 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
   const back = () => { if (onNavigate) onNavigate('dashboard'); };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 space-y-5">
-      {/* HEADER - compact */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden">
-        <div className="p-5">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-            <div className="flex items-center gap-3">
+    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 p-4 space-y-6 font-sans text-slate-900 dark:text-slate-100">
+      {/* HEADER - compact & modern */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div className="p-6 relative overflow-hidden">
+          {/* Subtle Background Decoration */}
+          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-gradient-to-br from-cyan-500/10 to-blue-500/5 blur-3xl pointer-events-none" />
+          
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5 relative z-10">
+            <div className="flex items-center gap-4">
               <div className="relative">
-                <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl flex items-center justify-center shadow-md">
-                  <Factory size={22} className="text-white" />
+                <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg shadow-cyan-500/30">
+                  <Factory size={26} className="text-white" />
                 </div>
-                <div className="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-gradient-to-br from-blue-500 to-blue-400 rounded-full flex items-center justify-center border-3 border-white dark:border-slate-900 shadow-md">
-                  <Server size={12} className="text-white" />
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center border-[3px] border-white dark:border-slate-900 shadow-sm">
+                  <Server size={10} className="text-white" />
                 </div>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
                   Line Master
-                  <span className="text-[10px] px-2 py-1 bg-gradient-to-r from-cyan-500 to-cyan-600 text-white rounded-full font-bold">
+                  <span className="text-[10px] px-2.5 py-1 bg-gradient-to-r from-cyan-500 to-cyan-600 text-white rounded-md font-bold tracking-widest shadow-sm">
                     PRODUCTION CORE
                   </span>
                 </h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">Manage and configure your assembly lines</p>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-              <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-cyan-600 to-cyan-500 text-white rounded-lg shadow-md">
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-700 text-white rounded-xl shadow-lg shadow-slate-900/10">
                 <div className="flex flex-col">
-                  <div className="text-[10px] font-medium opacity-90">Total Lines</div>
-                  <div className="text-xl font-bold">{ls.length}</div>
+                  <div className="text-[11px] font-medium text-slate-300 uppercase tracking-wider">Total Lines</div>
+                  <div className="text-xl font-bold leading-none mt-1">{ls.length}</div>
                 </div>
-                <div className="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
-                  <Network size={16} className="text-white" />
+                <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center backdrop-blur-md">
+                  <Network size={18} className="text-cyan-400" />
                 </div>
               </div>
               <button
                 onClick={fetchLs}
                 disabled={load}
-                className="group px-3 py-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2 hover:border-cyan-300 dark:hover:border-cyan-700 transition-all"
+                className="group px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-cyan-300 dark:hover:border-cyan-600 transition-all shadow-sm active:scale-95"
               >
-                {load ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} className="group-hover:rotate-180 transition-transform duration-500" />}
+                {load ? <RefreshCw size={16} className="animate-spin text-cyan-500" /> : <RefreshCw size={16} className="group-hover:rotate-180 transition-transform duration-500 text-cyan-500" />}
                 Refresh
               </button>
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-5 pb-5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 px-6 pb-6 relative z-10">
           <MetricCard title="Total Lines" value={ls.length} icon={Factory} color="cyan" suffix="lines" subtitle={`${flt.length} active`} />
           <MetricCard title="Total Patterns" value={totalPats} icon={Layers} color="indigo" suffix="patterns" trend="+8.2% from last month" />
           <MetricCard title="Pattern Styles" value={totalStyles} icon={Tag} color="emerald" suffix="styles" subtitle={`Across ${ls.length} lines`} />
@@ -504,282 +510,264 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
       </div>
 
       {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Left Column - Line List */}
         <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden sticky top-4">
-            <div className="p-4 border-b border-slate-100 dark:border-slate-700/50">
-              <div className="flex items-center justify-between">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden sticky top-6">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">Production Lines</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{load ? 'Loading...' : `${flt.length} lines configured`}</p>
+                  <h3 className="font-bold text-base text-slate-900 dark:text-white tracking-tight">Production Lines</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">{load ? 'Loading...' : `${flt.length} configured`}</p>
                 </div>
-                <span className="px-2 py-1 bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 text-[10px] font-bold rounded-full">
+                <span className="px-2.5 py-1 bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 text-xs font-bold rounded-lg border border-cyan-100 dark:border-cyan-500/20">
                   {flt.length}
                 </span>
               </div>
+              
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search lines..."
+                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 rounded-xl text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all outline-none shadow-sm"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+              </div>
             </div>
+
             <div className="p-3">
-              <div className="space-y-2 max-h-[calc(100vh-400px)] overflow-y-auto pr-1 custom-scrollbar">
+              <div className="space-y-1.5 max-h-[calc(100vh-440px)] overflow-y-auto pr-2 custom-scrollbar">
                 {flt.map(l => {
                   const isSel = sel?.id === l.id;
                   return (
                     <div
                       key={l.id}
-                      className={`group p-3 rounded-xl cursor-pointer transition-all ${isSel
-                          ? 'bg-gradient-to-r from-cyan-50 to-white dark:from-cyan-900/20 dark:to-slate-800 border-l-4 border-cyan-500 shadow-sm'
-                          : 'hover:bg-slate-50 dark:hover:bg-slate-900/30 border border-slate-200 dark:border-slate-700'
+                      className={`group p-3.5 rounded-2xl cursor-pointer transition-all duration-300 relative overflow-hidden ${isSel
+                          ? 'bg-gradient-to-r from-cyan-50 to-white dark:from-cyan-900/20 dark:to-slate-800/50 border border-cyan-200/60 dark:border-cyan-800/60 shadow-sm'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
                         }`}
                       onClick={() => selectLine(l)}
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isSel ? 'bg-gradient-to-br from-cyan-500 to-cyan-400' : 'bg-slate-100 dark:bg-slate-800'
+                      {isSel && <div className="absolute left-0 top-0 bottom-0 w-1 bg-cyan-500 rounded-l-2xl" />}
+                      <div className="flex items-start justify-between relative z-10">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${isSel ? 'bg-cyan-500 shadow-md shadow-cyan-500/20' : 'bg-slate-100 dark:bg-slate-800 group-hover:bg-white dark:group-hover:bg-slate-700'
                             }`}>
-                            <Factory size={14} className={isSel ? 'text-white' : 'text-slate-400'} />
+                            <Factory size={16} className={isSel ? 'text-white' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'} />
                           </div>
                           <div>
-                            <div className="font-bold text-sm text-slate-900 dark:text-white">{l.code}</div>
-                            <div className="text-xs text-slate-600 dark:text-slate-400">{l.name}</div>
+                            <div className={`font-bold text-sm transition-colors ${isSel ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-900 dark:text-white'}`}>{l.code}</div>
+                            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">{l.name}</div>
                           </div>
                         </div>
-                        <div className="flex flex-col items-end gap-0.5">
-                          <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded text-[10px] font-medium">
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700 text-[10px] font-bold shadow-sm">
                             {l.patternMultiplier}x
                           </span>
-                          <div className="text-[10px] text-slate-500 flex items-center gap-1">
-                            <Users size={8} />
-                            {l.userCount || 0}
-                          </div>
                         </div>
                       </div>
-                      <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500">
+                      <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500 font-medium pl-12">
                         <div className="flex items-center gap-2">
-                          <span>{l.stations?.filter(s => s.required).length} stations</span>
-                          <span>•</span>
-                          <span>{new Date(l.updatedAt).toLocaleDateString()}</span>
+                          <span className="flex items-center gap-1"><Users size={10} className="text-slate-400"/> {l.userCount || 0}</span>
+                          <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                          <span className="flex items-center gap-1"><CpuIcon size={10} className="text-slate-400"/> {l.stations?.filter(s => s.required).length}</span>
                         </div>
-                        <ChevronRight size={12} className={`opacity-0 group-hover:opacity-100 transition-opacity ${isSel ? 'opacity-100' : ''}`} />
+                        <ChevronRight size={14} className={`text-slate-400 transition-transform duration-300 ${isSel ? 'translate-x-1 text-cyan-500' : 'opacity-0 group-hover:opacity-100 group-hover:translate-x-1'}`} />
                       </div>
                     </div>
                   );
                 })}
                 {!flt.length && !load && (
-                  <div className="p-5 text-center">
-                    <div className="w-12 h-12 bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl flex items-center justify-center mx-auto mb-3">
-                      <Factory size={20} className="text-slate-400" />
+                  <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+                    <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100 dark:border-slate-700">
+                      <Search size={20} className="text-slate-400" />
                     </div>
-                    <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">No Lines Found</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Create your first production line</p>
+                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">No Lines Found</h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Try adjusting your search</p>
                   </div>
                 )}
               </div>
             </div>
-            <div className="p-3 border-t border-slate-100 dark:border-slate-700/50">
-              <div className="space-y-2">
-                <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                  <input
-                    type="text"
-                    placeholder="Search lines..."
-                    className="w-full pl-7 pr-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 dark:focus:ring-cyan-900/30 transition-all"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
+            
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={newLine}
+                  className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md shadow-cyan-500/20 active:scale-95"
+                >
+                  <Plus size={16} />
+                  New Line
+                </button>
+                {onNavigate && (
                   <button
-                    onClick={newLine}
-                    className="group px-3 py-2 bg-gradient-to-r from-cyan-600 to-cyan-500 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1 hover:from-cyan-700 hover:to-cyan-600 transition-all"
+                    onClick={back}
+                    className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
                   >
-                    <Plus size={14} />
-                    New Line
+                    <ArrowLeft size={16} />
+                    Back
                   </button>
-                  {onNavigate && (
-                    <button
-                      onClick={back}
-                      className="px-3 py-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-medium hover:border-cyan-300 dark:hover:border-cyan-700 transition-all flex items-center justify-center gap-1"
-                    >
-                      <ArrowLeft size={14} />
-                      Back
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
             </div>
           </div>
         </div>
 
         {/* Right Column - Content */}
-        <div className="lg:col-span-3 space-y-5">
+        <div className="lg:col-span-3 space-y-6">
           {sel && !edit ? (
             <>
-              {/* Tab Navigation */}
-              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden">
-                <div className="flex border-b border-slate-200 dark:border-slate-700">
-                  <button
-                    onClick={() => setTab('details')}
-                    className={`px-4 py-2 text-xs font-medium transition-colors relative ${tab === 'details'
-                        ? 'text-cyan-600 dark:text-cyan-400 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-cyan-500'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                  >
-                    Line Details
-                  </button>
-                  <button
-                    onClick={() => setTab('patterns')}
-                    className={`px-4 py-2 text-xs font-medium transition-colors relative ${tab === 'patterns'
-                        ? 'text-cyan-600 dark:text-cyan-400 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-cyan-500'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                  >
-                    Pattern Master
-                  </button>
-                  <button
-                    onClick={() => setTab('sewing')}
-                    className={`px-4 py-2 text-xs font-medium transition-colors relative ${tab === 'sewing'
-                        ? 'text-cyan-600 dark:text-cyan-400 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-cyan-500'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                  >
-                    Sewing Master
-                  </button>
-                  {/* ========== NEW TAB BUTTON ========== */}
-                  <button
-                    onClick={() => setTab('packing')}
-                    className={`px-4 py-2 text-xs font-medium transition-colors relative ${tab === 'packing'
-                        ? 'text-cyan-600 dark:text-cyan-400 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-cyan-500'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                  >
-                    Packing Master
-                  </button>
-                  {/* ==================================== */}
+              {/* Tab Navigation - Modern Pill or Sleek Underline */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col h-full">
+                <div className="flex px-2 pt-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 overflow-x-auto hide-scrollbar">
+                  {[
+                    { id: 'details', label: 'Line Details', icon: Settings },
+                    { id: 'patterns', label: 'Pattern Master', icon: Layers },
+                    { id: 'sewing', label: 'Sewing Master', icon: CpuIcon },
+                    { id: 'packing', label: 'Packing Master', icon: Package }
+                  ].map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => setTab(t.id as any)}
+                      className={`flex items-center gap-2 px-5 py-3.5 text-sm font-bold transition-all relative whitespace-nowrap ${tab === t.id
+                          ? 'text-cyan-600 dark:text-cyan-400 bg-white dark:bg-slate-900 rounded-t-2xl border-t border-l border-r border-slate-200/60 dark:border-slate-800 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)]'
+                          : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 rounded-t-2xl'
+                        }`}
+                    >
+                      <t.icon size={16} className={tab === t.id ? 'text-cyan-500' : 'text-slate-400'} />
+                      {t.label}
+                      {tab === t.id && (
+                        <div className="absolute bottom-0 left-0 w-full h-0.5 bg-cyan-500 translate-y-px" />
+                      )}
+                    </button>
+                  ))}
                 </div>
 
                 {/* Tab Content */}
-                <div className="p-4">
+                <div className="p-6 flex-1 bg-white dark:bg-slate-900">
                   {tab === 'details' ? (
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                       {/* Header Actions */}
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
-                          <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                            {sel.code} - {sel.name}
+                          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+                            {sel.code} <span className="text-slate-300 dark:text-slate-600 font-light">|</span> {sel.name}
                           </h2>
                           {sel.description && (
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{sel.description}</p>
+                            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1.5 bg-slate-50 dark:bg-slate-800/50 inline-block px-3 py-1 rounded-lg border border-slate-100 dark:border-slate-700/50">{sel.description}</p>
                           )}
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-3">
                           <button
                             onClick={editLine}
-                            className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg text-xs font-medium flex items-center gap-1 hover:from-blue-700 hover:to-blue-600 transition-all"
+                            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-md active:scale-95"
                           >
-                            <Edit size={14} />
+                            <Edit size={16} />
                             Edit Line
                           </button>
                           <button
                             onClick={delLine}
                             disabled={deleting}
-                            className="px-3 py-1.5 bg-gradient-to-r from-rose-600 to-rose-500 text-white rounded-lg text-xs font-medium flex items-center gap-1 hover:from-rose-700 hover:to-rose-600 transition-all disabled:opacity-50"
+                            className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 rounded-xl text-sm font-bold flex items-center gap-2 transition-all disabled:opacity-50 active:scale-95"
                           >
-                            {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                            {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                             Delete
                           </button>
                         </div>
                       </div>
 
                       {/* Stats Cards */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-all">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700 p-5 shadow-sm hover:shadow-md transition-shadow">
                           <div className="flex items-start justify-between">
                             <div>
-                              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Assigned Users</p>
-                              <p className="text-xl font-bold text-cyan-600 dark:text-cyan-400 mt-1">{sel.userCount || 0}</p>
+                              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Assigned Users</p>
+                              <p className="text-3xl font-extrabold text-slate-900 dark:text-white mt-2">{sel.userCount || 0}</p>
                             </div>
-                            <div className="p-2 bg-cyan-50 dark:bg-cyan-900/20 rounded-lg border border-cyan-200 dark:border-cyan-800">
-                              <Users size={18} className="text-cyan-600 dark:text-cyan-400" />
+                            <div className="p-2.5 bg-cyan-50 dark:bg-cyan-500/10 rounded-xl border border-cyan-100 dark:border-cyan-500/20">
+                              <Users size={20} className="text-cyan-600 dark:text-cyan-400" />
                             </div>
                           </div>
-                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-3">Currently assigned</p>
+                          <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-4 flex items-center gap-1"><CheckCircle size={12} className="text-emerald-500"/> Currently active on line</p>
                         </div>
 
-                        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-all">
+                        <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700 p-5 shadow-sm hover:shadow-md transition-shadow">
                           <div className="flex items-start justify-between">
                             <div>
-                              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Active Orders</p>
-                              <p className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">
+                              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Orders</p>
+                              <p className="text-3xl font-extrabold text-slate-900 dark:text-white mt-2">
                                 {sel?.productionOrders?.filter(po => ['WIP', 'SCHEDULED'].includes(po.status)).length || 0}
                               </p>
                             </div>
-                            <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                              <Package size={18} className="text-blue-600 dark:text-blue-400" />
+                            <div className="p-2.5 bg-blue-50 dark:bg-blue-500/10 rounded-xl border border-blue-100 dark:border-blue-500/20">
+                              <Package size={20} className="text-blue-600 dark:text-blue-400" />
                             </div>
                           </div>
-                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-3">In production</p>
+                          <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-4 flex items-center gap-1"><Activity size={12} className="text-blue-500"/> Orders in production</p>
                         </div>
 
-                        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-all">
+                        <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700 p-5 shadow-sm hover:shadow-md transition-shadow">
                           <div className="flex items-start justify-between">
                             <div>
-                              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Pattern Multiplier</p>
-                              <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{sel?.patternMultiplier || 1}</p>
+                              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Multiplier</p>
+                              <p className="text-3xl font-extrabold text-slate-900 dark:text-white mt-2">{sel?.patternMultiplier || 1}<span className="text-lg text-slate-400 ml-1">x</span></p>
                             </div>
-                            <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                              <Layers size={18} className="text-emerald-600 dark:text-emerald-400" />
+                            <div className="p-2.5 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl border border-emerald-100 dark:border-emerald-500/20">
+                              <Layers size={20} className="text-emerald-600 dark:text-emerald-400" />
                             </div>
                           </div>
-                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-3">Patterns per set</p>
+                          <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-4 flex items-center gap-1"><Zap size={12} className="text-emerald-500"/> Patterns per standard set</p>
                         </div>
                       </div>
 
                       {/* Station Configuration */}
-                      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden">
-                        <div className="p-4 border-b border-slate-100 dark:border-slate-700/50">
-                          <h3 className="font-bold text-sm text-slate-900 dark:text-white">Station Configuration</h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Active stations for this line</p>
+                      <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <div className="p-5 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-transparent">
+                          <h3 className="font-bold text-base text-slate-900 dark:text-white">Active Station Flow</h3>
+                          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">Configured stations for this production line</p>
                         </div>
-                        <div className="p-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div className="p-5">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {availStations.map(st => {
                               const en = sel.stations?.some(s => s.code === st.code && s.required);
                               return (
                                 <div
                                   key={st.code}
-                                  className={`group p-3 rounded-xl border-2 transition-all ${en
-                                      ? 'border-cyan-500 bg-gradient-to-r from-cyan-50 to-white dark:from-cyan-900/20 dark:to-slate-800 shadow-sm'
-                                      : 'border-slate-200 dark:border-slate-700'
+                                  className={`relative group p-4 rounded-2xl transition-all duration-300 ${en
+                                      ? 'border border-cyan-400 bg-gradient-to-br from-cyan-50/50 to-white dark:from-cyan-900/10 dark:to-slate-800 shadow-md shadow-cyan-100 dark:shadow-none'
+                                      : 'border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 opacity-70'
                                     }`}
                                 >
-                                  <div className="flex items-start justify-between">
+                                  {en && <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-cyan-400/10 to-transparent rounded-tr-2xl pointer-events-none" />}
+                                  <div className="flex items-start justify-between relative z-10">
                                     <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <div className={`p-1.5 rounded-lg ${en ? 'bg-cyan-100 dark:bg-cyan-900/40' : 'bg-slate-100 dark:bg-slate-800'
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <div className={`p-2 rounded-xl shadow-sm ${en ? 'bg-cyan-100 dark:bg-cyan-900/40 text-cyan-600 dark:text-cyan-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
                                           }`}>
-                                          {st.deviceType === 'SPARSHA' && <Cpu size={12} className={en ? 'text-cyan-600' : 'text-slate-400'} />}
-                                          {st.deviceType === 'DRISTI' && <Eye size={12} className={en ? 'text-cyan-600' : 'text-slate-400'} />}
-                                          {st.deviceType === 'MANUAL' && <User size={12} className={en ? 'text-cyan-600' : 'text-slate-400'} />}
+                                          {st.deviceType === 'SPARSHA' && <Cpu size={14} />}
+                                          {st.deviceType === 'DRISTI' && <Eye size={14} />}
+                                          {st.deviceType === 'MANUAL' && <User size={14} />}
                                         </div>
-                                        <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${st.deviceType === 'SPARSHA'
-                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400'
+                                        <span className={`px-2 py-0.5 text-[10px] font-bold tracking-wider rounded-md border ${st.deviceType === 'SPARSHA'
+                                            ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'
                                             : st.deviceType === 'DRISTI'
-                                              ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400'
-                                              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'
+                                              ? 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20'
+                                              : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600'
                                           }`}>
                                           {st.deviceType}
                                         </span>
                                       </div>
-                                      <div className="font-bold text-xs text-slate-900 dark:text-white">{st.name}</div>
-                                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                                        Code: <span className="font-mono">{st.code}</span>
+                                      <div className="font-extrabold text-sm text-slate-900 dark:text-white mt-1">{st.name}</div>
+                                      <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1">
+                                        Code: <span className="font-mono bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-600 dark:text-slate-300">{st.code}</span>
                                       </div>
                                     </div>
-                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${en
-                                        ? 'bg-gradient-to-r from-cyan-500 to-cyan-400 text-white shadow-sm'
-                                        : 'bg-slate-200 dark:bg-slate-700'
+                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${en
+                                        ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/30'
+                                        : 'bg-slate-200 dark:bg-slate-700 text-slate-400'
                                       }`}>
-                                      {en ? <CheckCircle size={12} /> : <XCircle size={12} className="text-slate-400" />}
+                                      {en ? <CheckCircle size={14} /> : <XCircle size={14} />}
                                     </div>
                                   </div>
                                 </div>
@@ -791,70 +779,70 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                     </div>
                   ) : tab === 'patterns' ? (
                     // Pattern Master Tab
-                    <div className="space-y-4">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="space-y-6">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
-                          <h3 className="text-base font-bold text-slate-900 dark:text-white">Pattern Master</h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Manage patterns for {sel.code}</p>
+                          <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">Pattern Library</h3>
+                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Manage configuration for {sel.code}</p>
                         </div>
                         <button
                           onClick={() => openPatModal()}
-                          className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-lg text-xs font-medium flex items-center gap-1 hover:from-emerald-700 hover:to-emerald-600 transition-all"
+                          className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:from-emerald-700 hover:to-emerald-600 transition-all shadow-md shadow-emerald-500/20 active:scale-95"
                         >
-                          <Plus size={14} />
+                          <Plus size={16} />
                           New Pattern
                         </button>
                       </div>
 
                       {patLoad ? (
-                        <div className="flex flex-col items-center justify-center h-40">
-                          <div className="relative mb-3">
-                            <div className="w-10 h-10 border-4 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin"></div>
+                        <div className="flex flex-col items-center justify-center h-64 bg-slate-50 dark:bg-slate-800/30 rounded-3xl border border-slate-200 dark:border-slate-700 border-dashed">
+                          <div className="relative mb-4">
+                            <div className="w-12 h-12 border-4 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin"></div>
                             <div className="absolute inset-0 flex items-center justify-center">
-                              <Layers className="text-indigo-600 dark:text-indigo-400" size={16} />
+                              <Layers className="text-indigo-600 dark:text-indigo-400" size={18} />
                             </div>
                           </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Loading pattern masters...</p>
+                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Loading pattern masters...</p>
                         </div>
                       ) : selPat ? (
-                        <div className="space-y-4">
+                        <div className="space-y-6">
                           {/* Pattern Summary Cards */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <div className="p-3 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-800/30">
-                              <div className="flex items-center gap-2">
-                                <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/40 rounded-lg">
-                                  <Tag size={14} className="text-indigo-600 dark:text-indigo-400" />
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="p-5 bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-900/10 dark:to-slate-800/50 rounded-2xl border border-indigo-100 dark:border-indigo-800/30 shadow-sm">
+                              <div className="flex items-center gap-3">
+                                <div className="p-3 bg-indigo-100 dark:bg-indigo-500/20 rounded-xl shadow-inner">
+                                  <Tag size={20} className="text-indigo-600 dark:text-indigo-400" />
                                 </div>
                                 <div>
-                                  <p className="text-[10px] font-medium text-indigo-700 dark:text-indigo-400">Style Code</p>
-                                  <p className="font-bold text-base text-slate-900 dark:text-white">{selPat.styleCode}</p>
+                                  <p className="text-[11px] font-bold text-indigo-700/70 dark:text-indigo-400/70 uppercase tracking-wider">Style Code</p>
+                                  <p className="font-extrabold text-2xl text-slate-900 dark:text-white mt-0.5">{selPat.styleCode}</p>
                                 </div>
                               </div>
                             </div>
-                            <div className="p-3 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl border border-emerald-100 dark:border-emerald-800/30">
-                              <div className="flex items-center gap-2">
-                                <div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/40 rounded-lg">
-                                  <Grid size={14} className="text-emerald-600 dark:text-emerald-400" />
+                            <div className="p-5 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/10 dark:to-slate-800/50 rounded-2xl border border-emerald-100 dark:border-emerald-800/30 shadow-sm">
+                              <div className="flex items-center gap-3">
+                                <div className="p-3 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl shadow-inner">
+                                  <Grid size={20} className="text-emerald-600 dark:text-emerald-400" />
                                 </div>
                                 <div>
-                                  <p className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400">Patterns Count</p>
-                                  <p className="font-bold text-base text-slate-900 dark:text-white">
+                                  <p className="text-[11px] font-bold text-emerald-700/70 dark:text-emerald-400/70 uppercase tracking-wider">Total Parts</p>
+                                  <p className="font-extrabold text-2xl text-slate-900 dark:text-white mt-0.5">
                                     {selPat?.patterns?.length || 0}
-                                    <span className="text-sm text-slate-500 ml-1">patterns</span>
+                                    <span className="text-sm font-medium text-slate-500 ml-1.5">parts</span>
                                   </p>
                                 </div>
                               </div>
                             </div>
-                            <div className="p-3 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-800/30">
-                              <div className="flex items-center gap-2">
-                                <div className="p-1.5 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                                  <FileImage size={14} className="text-blue-600 dark:text-blue-400" />
+                            <div className="p-5 bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/10 dark:to-slate-800/50 rounded-2xl border border-blue-100 dark:border-blue-800/30 shadow-sm">
+                              <div className="flex items-center gap-3">
+                                <div className="p-3 bg-blue-100 dark:bg-blue-500/20 rounded-xl shadow-inner">
+                                  <FileImage size={20} className="text-blue-600 dark:text-blue-400" />
                                 </div>
                                 <div>
-                                  <p className="text-[10px] font-medium text-blue-700 dark:text-blue-400">Set Images</p>
-                                  <p className="font-bold text-base text-slate-900 dark:text-white">
+                                  <p className="text-[11px] font-bold text-blue-700/70 dark:text-blue-400/70 uppercase tracking-wider">Set Images</p>
+                                  <p className="font-extrabold text-2xl text-slate-900 dark:text-white mt-0.5">
                                     2
-                                    <span className="text-sm text-slate-500 ml-1">images</span>
+                                    <span className="text-sm font-medium text-slate-500 ml-1.5">images</span>
                                   </p>
                                 </div>
                               </div>
@@ -862,18 +850,21 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                           </div>
 
                           {/* Pattern Parts */}
-                          <div>
-                            <div className="flex items-center justify-between mb-3">
-                              <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Pattern Parts</h4>
+                          <div className="bg-slate-50/50 dark:bg-slate-800/20 rounded-3xl p-6 border border-slate-200 dark:border-slate-700/50">
+                            <div className="flex items-center justify-between mb-5">
+                              <div>
+                                <h4 className="text-lg font-extrabold text-slate-900 dark:text-white">Pattern Components</h4>
+                                <p className="text-xs font-medium text-slate-500 mt-1">Detailed visual reference for quality checking</p>
+                              </div>
                               <button
                                 onClick={() => openPatModal(selPat)}
-                                className="px-2 py-1 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-lg text-xs font-medium flex items-center gap-1 hover:from-indigo-700 hover:to-indigo-600 transition-all"
+                                className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 rounded-xl text-sm font-bold flex items-center gap-2 transition-all active:scale-95 shadow-sm"
                               >
-                                <Edit size={12} />
-                                Edit
+                                <Edit size={14} />
+                                Edit Configuration
                               </button>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                               {(selPat?.patterns || []).map((p, i) => (
                                 <PatternPreviewCard key={i} pattern={p} idx={i} />
                               ))}
@@ -881,17 +872,17 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                           </div>
                         </div>
                       ) : (
-                        <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/50 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700">
-                          <div className="w-12 h-12 bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl flex items-center justify-center mx-auto mb-3">
-                            <Layers size={20} className="text-slate-400" />
+                        <div className="p-12 text-center bg-slate-50 dark:bg-slate-800/30 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700">
+                          <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-slate-100 dark:border-slate-700">
+                            <Layers size={28} className="text-slate-400" />
                           </div>
-                          <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">No Pattern Master</h4>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Create a pattern master for this line</p>
+                          <h4 className="text-lg font-extrabold text-slate-700 dark:text-slate-300 mb-2">No Pattern Configured</h4>
+                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">This line doesn't have a pattern configuration yet. Create one to enable CP and QC stations.</p>
                           <button
                             onClick={() => openPatModal()}
-                            className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-lg text-xs font-medium flex items-center gap-2 mx-auto hover:from-indigo-700 hover:to-indigo-600 transition-all"
+                            className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl font-bold flex items-center gap-2 mx-auto hover:from-indigo-700 hover:to-indigo-600 transition-all shadow-md shadow-indigo-500/20 active:scale-95"
                           >
-                            <Plus size={14} />
+                            <Plus size={18} />
                             Create Pattern Master
                           </button>
                         </div>
@@ -899,108 +890,131 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                     </div>
                   ) : tab === 'sewing' ? (
                     // Sewing Master Tab
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                       <div className="flex justify-between items-center">
-                        <h3 className="text-base font-bold">Sewing Configuration</h3>
+                        <div>
+                          <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">Sewing Flow Configuration</h3>
+                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Define routing logic for the sewing station</p>
+                        </div>
                         <button
                           onClick={saveSewingConfig}
                           disabled={savingSewing}
-                          className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-lg text-xs font-medium flex items-center gap-1 hover:from-emerald-700 hover:to-emerald-600"
+                          className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
                         >
-                          {savingSewing ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
+                          {savingSewing ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save Changes
                         </button>
                       </div>
 
                       {loadingSewing ? (
-                        <div className="flex justify-center py-6">
-                          <Loader2 className="animate-spin text-cyan-600" size={24} />
+                        <div className="flex justify-center py-12">
+                          <Loader2 className="animate-spin text-cyan-500" size={32} />
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                           {/* Sewing Starts */}
-                          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
-                            <div className="flex justify-between items-center mb-3">
-                              <h4 className="font-bold text-sm">Sewing Starts</h4>
+                          <div className="bg-white dark:bg-slate-800/50 rounded-3xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+                            <div className="p-5 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-center bg-slate-50/50 dark:bg-transparent">
+                              <div className="flex items-center gap-2">
+                                <div className="p-2 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg">
+                                  <CpuIcon size={16} />
+                                </div>
+                                <h4 className="font-extrabold text-base text-slate-900 dark:text-white">Input Terminals (Starts)</h4>
+                              </div>
                               <button
                                 onClick={addStart}
-                                className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-200"
+                                className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-bold border border-blue-200 dark:border-blue-500/20 flex items-center gap-1 transition-colors"
                               >
-                                <Plus size={14} />
+                                <Plus size={14} /> Add Terminal
                               </button>
                             </div>
-                            <div className="space-y-3">
+                            <div className="p-5 space-y-4 bg-slate-50/30 dark:bg-slate-900/20 flex-1">
                               {sewingConfig.starts.map((start, idx) => (
-                                <div key={idx} className="p-3 border border-slate-200 dark:border-slate-700 rounded-lg">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <input
-                                      type="text"
-                                      className="flex-1 px-2 py-1 text-sm border rounded-lg dark:bg-slate-700"
-                                      value={start.name}
-                                      onChange={(e) => updateStart(idx, 'name', e.target.value)}
-                                      placeholder={`Start ${idx+1}`}
-                                    />
-                                    <button onClick={() => removeStart(idx)} className="text-rose-500 hover:text-rose-600">
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-medium mb-1">Pattern Indices (comma separated)</label>
-                                    <input
-                                      type="text"
-                                      className="w-full px-2 py-1 text-sm border rounded-lg dark:bg-slate-700"
-                                      value={start.patterns?.join(',') || ''}
-                                      onChange={(e) => updateStart(idx, 'patterns', e.target.value.split(',').map(Number).filter(n => !isNaN(n)))}
-                                      placeholder="e.g. 0,1"
-                                    />
+                                <div key={idx} className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm relative group/item">
+                                  <button onClick={() => removeStart(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-opacity border border-rose-200 hover:bg-rose-500 hover:text-white shadow-sm z-10">
+                                    <X size={12} />
+                                  </button>
+                                  <div className="space-y-4">
+                                    <div>
+                                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Terminal Name</label>
+                                      <input
+                                        type="text"
+                                        className="w-full px-3 py-2 text-sm font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 transition-all outline-none"
+                                        value={start.name}
+                                        onChange={(e) => updateStart(idx, 'name', e.target.value)}
+                                        placeholder={`Start ${idx+1}`}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Assigned Patterns (IDs)</label>
+                                      <input
+                                        type="text"
+                                        className="w-full px-3 py-2 text-sm font-mono border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-blue-600 dark:text-blue-400 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 transition-all outline-none"
+                                        value={start.patterns?.join(', ') || ''}
+                                        onChange={(e) => updateStart(idx, 'patterns', e.target.value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n)))}
+                                        placeholder="e.g. 0, 1, 2"
+                                      />
+                                    </div>
                                   </div>
                                 </div>
                               ))}
                               {sewingConfig.starts.length === 0 && (
-                                <p className="text-center text-xs text-slate-500 py-3">No sewing starts configured.</p>
+                                <div className="py-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl">
+                                  <p className="text-sm font-medium text-slate-500">No start terminals configured.</p>
+                                </div>
                               )}
                             </div>
                           </div>
 
                           {/* Sewing Finishes */}
-                          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
-                            <div className="flex justify-between items-center mb-3">
-                              <h4 className="font-bold text-sm">Sewing Finishes</h4>
+                          <div className="bg-white dark:bg-slate-800/50 rounded-3xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+                            <div className="p-5 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-center bg-slate-50/50 dark:bg-transparent">
+                              <div className="flex items-center gap-2">
+                                <div className="p-2 bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 rounded-lg">
+                                  <Target size={16} />
+                                </div>
+                                <h4 className="font-extrabold text-base text-slate-900 dark:text-white">Output Terminals (Finishes)</h4>
+                              </div>
                               <button
                                 onClick={addFinish}
-                                className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-lg text-purple-600 dark:text-purple-400 hover:bg-purple-200"
+                                className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-500/10 dark:hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 rounded-lg text-xs font-bold border border-purple-200 dark:border-purple-500/20 flex items-center gap-1 transition-colors"
                               >
-                                <Plus size={14} />
+                                <Plus size={14} /> Add Terminal
                               </button>
                             </div>
-                            <div className="space-y-3">
+                            <div className="p-5 space-y-4 bg-slate-50/30 dark:bg-slate-900/20 flex-1">
                               {sewingConfig.finishes.map((finish, idx) => (
-                                <div key={idx} className="p-3 border border-slate-200 dark:border-slate-700 rounded-lg">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <input
-                                      type="text"
-                                      className="flex-1 px-2 py-1 text-sm border rounded-lg dark:bg-slate-700"
-                                      value={finish.name}
-                                      onChange={(e) => updateFinish(idx, 'name', e.target.value)}
-                                      placeholder={`Finish ${idx+1}`}
-                                    />
-                                    <button onClick={() => removeFinish(idx)} className="text-rose-500 hover:text-rose-600">
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-medium mb-1">Input Start Indices (comma separated)</label>
-                                    <input
-                                      type="text"
-                                      className="w-full px-2 py-1 text-sm border rounded-lg dark:bg-slate-700"
-                                      value={finish.inputStarts?.join(',') || ''}
-                                      onChange={(e) => updateFinish(idx, 'inputStarts', e.target.value.split(',').map(Number).filter(n => !isNaN(n)))}
-                                      placeholder="e.g. 1,2"
-                                    />
+                                <div key={idx} className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm relative group/item">
+                                  <button onClick={() => removeFinish(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-opacity border border-rose-200 hover:bg-rose-500 hover:text-white shadow-sm z-10">
+                                    <X size={12} />
+                                  </button>
+                                  <div className="space-y-4">
+                                    <div>
+                                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Terminal Name</label>
+                                      <input
+                                        type="text"
+                                        className="w-full px-3 py-2 text-sm font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all outline-none"
+                                        value={finish.name}
+                                        onChange={(e) => updateFinish(idx, 'name', e.target.value)}
+                                        placeholder={`Finish ${idx+1}`}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Source Inputs (Starts IDs)</label>
+                                      <input
+                                        type="text"
+                                        className="w-full px-3 py-2 text-sm font-mono border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-purple-600 dark:text-purple-400 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all outline-none"
+                                        value={finish.inputStarts?.join(', ') || ''}
+                                        onChange={(e) => updateFinish(idx, 'inputStarts', e.target.value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n)))}
+                                        placeholder="e.g. 1, 2"
+                                      />
+                                    </div>
                                   </div>
                                 </div>
                               ))}
                               {sewingConfig.finishes.length === 0 && (
-                                <p className="text-center text-xs text-slate-500 py-3">No sewing finishes configured.</p>
+                                <div className="py-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl">
+                                  <p className="text-sm font-medium text-slate-500">No finish terminals configured.</p>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -1009,36 +1023,54 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                     </div>
                   ) : (
                     // ========== PACKING MASTER TAB ==========
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                       <div className="flex justify-between items-center">
-                        <h3 className="text-base font-bold">Packing Configuration</h3>
+                        <div>
+                          <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">Packing Configuration</h3>
+                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Define standard quantities for final boxing</p>
+                        </div>
                         <button
                           onClick={savePackingConfig}
                           disabled={savingPacking}
-                          className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-lg text-xs font-medium flex items-center gap-1 hover:from-emerald-700 hover:to-emerald-600"
+                          className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
                         >
-                          {savingPacking ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
+                          {savingPacking ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save Settings
                         </button>
                       </div>
 
                       {loadingPacking ? (
-                        <div className="flex justify-center py-6">
-                          <Loader2 className="animate-spin text-cyan-600" size={24} />
+                        <div className="flex justify-center py-12">
+                          <Loader2 className="animate-spin text-cyan-500" size={32} />
                         </div>
                       ) : (
-                        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
-                          <div>
-                            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                              Pack Size (sets per box)
-                            </label>
-                            <input
-                              type="number"
-                              min="1"
-                              className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 dark:focus:ring-cyan-900/30 transition-all"
-                              value={packSize}
-                              onChange={(e) => setPackSize(parseInt(e.target.value) || 50)}
-                            />
-                            <p className="text-xs text-slate-500 mt-2">Number of sets per box for this line.</p>
+                        <div className="bg-white dark:bg-slate-800/50 rounded-3xl border border-slate-200 dark:border-slate-700 p-8 max-w-xl">
+                          <div className="flex items-start gap-5">
+                            <div className="w-14 h-14 bg-amber-50 dark:bg-amber-500/10 text-amber-600 rounded-2xl flex items-center justify-center flex-shrink-0 border border-amber-200 dark:border-amber-500/20 shadow-sm">
+                              <Package size={28} />
+                            </div>
+                            <div className="flex-1 space-y-4">
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                                  Standard Pack Size (Sets / Box)
+                                </label>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    className="w-full px-4 py-3 text-lg font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all outline-none shadow-sm"
+                                    value={packSize}
+                                    onChange={(e) => setPackSize(parseInt(e.target.value) || 50)}
+                                  />
+                                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">sets</div>
+                                </div>
+                                <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-3 mt-4 border border-slate-100 dark:border-slate-800">
+                                  <p className="text-sm text-slate-600 dark:text-slate-400 flex items-start gap-2">
+                                    <Info size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                                    <span>When packing station registers <strong>{packSize}</strong> valid sets, a complete box is marked ready for Finished Goods.</span>
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -1050,40 +1082,40 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
             </>
           ) : edit || create ? (
             // Edit / Create Form
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden">
-              <div className="p-5 border-b border-slate-100 dark:border-slate-700/50">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden h-full flex flex-col">
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
                 <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
-                      {create ? <Plus size={22} className="text-white" /> : <Edit size={22} className="text-white" />}
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-slate-900 dark:bg-white rounded-2xl flex items-center justify-center shadow-md">
+                      {create ? <Plus size={24} className="text-white dark:text-slate-900" /> : <Edit size={24} className="text-white dark:text-slate-900" />}
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                        {create ? 'Create New Production Line' : `Edit Line: ${sel?.code}`}
+                      <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                        {create ? 'Create New Production Line' : `Edit Configuration: ${sel?.code}`}
                       </h2>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                        {create ? 'Configure a new line' : 'Modify line configuration'}
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
+                        {create ? 'Set up terminal properties and workflow' : 'Modify core line properties and stations'}
                       </p>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-3">
                     <button
                       onClick={cancelEdit}
-                      className="px-4 py-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium hover:border-cyan-300 dark:hover:border-cyan-700 transition-all text-sm"
+                      className="px-5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-sm shadow-sm active:scale-95"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={saveLine}
                       disabled={saving}
-                      className="group px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-lg font-medium flex items-center gap-2 hover:from-emerald-700 hover:to-emerald-600 transition-all disabled:opacity-50 text-sm"
+                      className="group px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-cyan-500 text-white rounded-xl font-bold flex items-center gap-2 hover:from-cyan-700 hover:to-cyan-600 transition-all disabled:opacity-50 text-sm shadow-md shadow-cyan-500/20 active:scale-95"
                     >
                       {saving ? (
-                        <Loader2 size={16} className="animate-spin" />
+                        <Loader2 size={18} className="animate-spin" />
                       ) : (
                         <>
-                          <Save size={16} />
-                          {create ? 'Create Line' : 'Save Changes'}
+                          <Save size={18} />
+                          {create ? 'Save New Line' : 'Update Line'}
                         </>
                       )}
                     </button>
@@ -1091,143 +1123,145 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                 </div>
               </div>
 
-              <div className="p-5 space-y-5">
+              <div className="p-8 space-y-8 flex-1 overflow-y-auto">
                 {/* Basic Information */}
-                <div className="bg-gradient-to-r from-cyan-50 to-white dark:from-cyan-900/10 dark:to-slate-800/30 rounded-xl border border-cyan-100 dark:border-cyan-800/30 p-4">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                    <Tag className="text-cyan-600" size={16} />
-                    Basic Information
+                <div className="space-y-5">
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+                      <Tag size={16} />
+                    </div>
+                    Identity Information
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pl-10">
                     <div>
-                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                         Line Code <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="text"
-                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 dark:focus:ring-cyan-900/30 transition-all"
+                        className="w-full px-4 py-2.5 text-sm font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-sm outline-none"
                         value={fd.code || ''}
                         onChange={e => setFd({ ...fd, code: e.target.value.toUpperCase() })}
                         placeholder="e.g., K1YH"
                         disabled={!create}
                       />
-                      <p className="text-xs text-slate-500 mt-1">Unique identifier</p>
+                      <p className="text-xs font-medium text-slate-400 mt-2">Unique identifier (locked after creation)</p>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                         Line Name <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="text"
-                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 dark:focus:ring-cyan-900/30 transition-all"
+                        className="w-full px-4 py-2.5 text-sm font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-sm outline-none"
                         value={fd.name || ''}
                         onChange={e => setFd({ ...fd, name: e.target.value })}
                         placeholder="e.g., Line K1YH - Cover Sewing"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Pattern Multiplier</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Pattern Multiplier</label>
                       <input
                         type="number"
                         min="1"
-                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 dark:focus:ring-cyan-900/30 transition-all"
+                        className="w-full px-4 py-2.5 text-sm font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-sm outline-none"
                         value={fd.patternMultiplier || 1}
                         onChange={e => setFd({ ...fd, patternMultiplier: parseInt(e.target.value) || 1 })}
                       />
-                      <p className="text-xs text-slate-500 mt-1">Number of patterns per set</p>
+                      <p className="text-xs font-medium text-slate-400 mt-2">Number of patterns per complete set</p>
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Description / Notes</label>
                       <textarea
-                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 dark:focus:ring-cyan-900/30 transition-all"
+                        className="w-full px-4 py-3 text-sm font-medium border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-sm outline-none resize-none"
                         value={fd.description || ''}
                         onChange={e => setFd({ ...fd, description: e.target.value })}
-                        rows={2}
-                        placeholder="Describe this line..."
+                        rows={3}
+                        placeholder="Add optional context about this line..."
                       />
                     </div>
                   </div>
                 </div>
 
+                <hr className="border-slate-100 dark:border-slate-800" />
+
                 {/* Station Configuration */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden">
-                  <div className="p-4 border-b border-slate-100 dark:border-slate-700/50">
-                    <h3 className="font-bold text-sm text-slate-900 dark:text-white">Station Configuration</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Enable or disable stations</p>
-                  </div>
-                  <div className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {availStations.map(st => {
-                        const en = fd.stations?.some(s => s.code === st.code && s.required);
-                        return (
-                          <div
-                            key={st.code}
-                            className={`group p-3 rounded-xl border-2 transition-all cursor-pointer ${en
-                                ? 'border-cyan-500 bg-gradient-to-r from-cyan-50 to-white dark:from-cyan-900/20 dark:to-slate-800 shadow-sm'
-                                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                              }`}
-                            onClick={() => toggleStation(st.code)}
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <div className={`p-1.5 rounded-lg ${en ? 'bg-cyan-100 dark:bg-cyan-900/40' : 'bg-slate-100 dark:bg-slate-800'
-                                    }`}>
-                                    {st.deviceType === 'SPARSHA' && <Cpu size={12} className={en ? 'text-cyan-600' : 'text-slate-400'} />}
-                                    {st.deviceType === 'DRISTI' && <Eye size={12} className={en ? 'text-cyan-600' : 'text-slate-400'} />}
-                                    {st.deviceType === 'MANUAL' && <User size={12} className={en ? 'text-cyan-600' : 'text-slate-400'} />}
-                                  </div>
-                                  <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${st.deviceType === 'SPARSHA'
-                                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400'
-                                      : st.deviceType === 'DRISTI'
-                                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400'
-                                        : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'
-                                    }`}>
-                                    {st.deviceType}
-                                  </span>
+                <div className="space-y-5">
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                      <Network size={16} />
+                    </div>
+                    Station Flow Enablement
+                  </h3>
+                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400 pl-10 mb-2">Click to toggle the active stations that belong to this workflow.</p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pl-10">
+                    {availStations.map(st => {
+                      const en = fd.stations?.some(s => s.code === st.code && s.required);
+                      return (
+                        <div
+                          key={st.code}
+                          className={`group p-4 rounded-2xl border transition-all cursor-pointer select-none overflow-hidden relative ${en
+                              ? 'border-cyan-400 bg-cyan-50/50 dark:bg-cyan-900/10 shadow-md shadow-cyan-100/50 dark:shadow-none hover:bg-cyan-50 dark:hover:bg-cyan-900/20'
+                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600 shadow-sm'
+                            }`}
+                          onClick={() => toggleStation(st.code)}
+                        >
+                          {en && <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/5 to-transparent pointer-events-none" />}
+                          <div className="flex items-start justify-between relative z-10">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className={`p-2 rounded-xl transition-colors ${en ? 'bg-cyan-100 dark:bg-cyan-800/50 text-cyan-600 dark:text-cyan-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                                  }`}>
+                                  {st.deviceType === 'SPARSHA' && <Cpu size={14} />}
+                                  {st.deviceType === 'DRISTI' && <Eye size={14} />}
+                                  {st.deviceType === 'MANUAL' && <User size={14} />}
                                 </div>
-                                <div className="font-bold text-xs text-slate-900 dark:text-white">{st.name}</div>
-                                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                                  Code: <span className="font-mono">{st.code}</span>
-                                </div>
+                                <span className={`px-2 py-0.5 text-[10px] font-bold tracking-wider rounded-md border ${st.deviceType === 'SPARSHA'
+                                    ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'
+                                    : st.deviceType === 'DRISTI'
+                                      ? 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20'
+                                      : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600'
+                                  }`}>
+                                  {st.deviceType}
+                                </span>
                               </div>
-                              <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${en
-                                  ? 'bg-gradient-to-r from-cyan-500 to-cyan-400 text-white shadow-sm'
-                                  : 'bg-slate-200 dark:bg-slate-700'
-                                }`}>
-                                {en ? <CheckCircle size={12} /> : <XCircle size={12} className="text-slate-400" />}
+                              <div className="font-extrabold text-sm text-slate-900 dark:text-white mt-2">{st.name}</div>
+                              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1">
+                                {st.code}
                               </div>
                             </div>
-                            {edit && (
-                              <div className="text-center pt-2 border-t border-slate-100 dark:border-slate-700 mt-2">
-                                <span className="text-[10px] text-slate-500">{en ? 'Click to disable' : 'Click to enable'}</span>
-                              </div>
-                            )}
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${en
+                                ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/30 scale-110'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-300 dark:text-slate-500'
+                              }`}>
+                              {en ? <CheckCircle size={14} /> : <div className="w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600" />}
+                            </div>
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
             </div>
           ) : (
-            // No Line Selected
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden">
-              <div className="p-12 text-center">
-                <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center mx-auto mb-5 shadow-md">
-                  <Factory size={28} className="text-white" />
+            // No Line Selected Empty State
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden h-full flex items-center justify-center min-h-[500px]">
+              <div className="p-12 text-center max-w-md">
+                <div className="w-20 h-20 bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-slate-800 dark:to-slate-800 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-cyan-100 dark:border-slate-700">
+                  <Factory size={36} className="text-cyan-500" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">No Line Selected</h3>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mb-5 max-w-sm mx-auto">
-                  Select a line from the list, or create a new one to get started.
+                <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mb-3 tracking-tight">No Line Selected</h3>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
+                  Select a production line from the sidebar to view its details, patterns, and configuration flow, or create a brand new one to get started.
                 </p>
                 <button
                   onClick={newLine}
-                  className="group px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg font-bold flex items-center gap-2 mx-auto hover:from-blue-700 hover:to-blue-600 transition-all text-sm"
+                  className="group px-6 py-3.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-xl font-bold flex items-center gap-2 mx-auto transition-all shadow-lg shadow-slate-900/20 dark:shadow-white/10 active:scale-95"
                 >
-                  <Plus size={16} />
-                  Create New Line
+                  <Plus size={18} />
+                  Setup New Line
                 </button>
               </div>
             </div>
@@ -1237,277 +1271,232 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
 
       {/* Pattern Modal */}
       {patModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md p-3 animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-10 duration-300">
-            <div className="p-4 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
-                  {patEdit ? <Edit size={20} className="text-white" /> : <Plus size={20} className="text-white" />}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 dark:bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-2xl shadow-slate-900/20 w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-5 px-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-500/10 rounded-2xl flex items-center justify-center border border-indigo-100 dark:border-indigo-500/20">
+                  {patEdit ? <Edit size={20} className="text-indigo-600 dark:text-indigo-400" /> : <Layers size={20} className="text-indigo-600 dark:text-indigo-400" />}
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                    {patEdit ? 'Edit Pattern' : 'New Pattern'}
+                  <h3 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                    {patEdit ? 'Edit Pattern Configuration' : 'New Pattern Configuration'}
                   </h3>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                    {patEdit ? 'Update pattern details' : 'Create new pattern configuration'}
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">
+                    {patEdit ? 'Update parts and images' : 'Define AI vision logic models'}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setPatModal(false)}
-                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={savePat} className="p-4 space-y-4 overflow-y-auto custom-scrollbar">
-              {/* Style Code */}
-              <div className="bg-gradient-to-r from-indigo-50 to-white dark:from-indigo-900/10 dark:to-slate-800/30 rounded-xl border border-indigo-100 dark:border-indigo-800/30 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/40 rounded-lg">
-                    <Hash size={16} className="text-indigo-600 dark:text-indigo-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">Style Code</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Style code for pattern configuration</p>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Style Code <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/30 transition-all font-mono text-base tracking-wider"
-                    placeholder="e.g. K1YH"
-                    value={patFd.styleCode}
-                    onChange={e => setPatFd({ ...patFd, styleCode: e.target.value.toUpperCase() })}
-                    disabled={patEdit}
-                  />
-                  <div className="mt-2 p-2 bg-slate-100 dark:bg-slate-800/50 rounded-lg">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-600 dark:text-slate-400">Line Association:</span>
-                      <span className="font-medium text-indigo-600 dark:text-indigo-400">
-                        {sel?.code} - {sel?.name}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Set Images */}
-              <div className="bg-gradient-to-r from-amber-50 to-white dark:from-amber-900/10 dark:to-slate-800/30 rounded-xl border border-amber-100 dark:border-amber-800/30 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="p-1.5 bg-amber-100 dark:bg-amber-900/40 rounded-lg">
-                    <ImageIcon size={16} className="text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">Set Images (Optional)</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Upload custom images for QC station (leave empty for auto-generated)
-                    </p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Set Good Image</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-900/30 transition-all"
-                      onChange={e => setUpFiles(p => ({ ...p, setGood: e.target.files?.[0] }))}
-                    />
-                    {patFd.imgSetGood && !upFiles.setGood && (
-                      <p className="mt-1 text-xs text-slate-500">Current: {patFd.imgSetGood}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Set NG Image</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-900/30 transition-all"
-                      onChange={e => setUpFiles(p => ({ ...p, setNg: e.target.files?.[0] }))}
-                    />
-                    {patFd.imgSetNg && !upFiles.setNg && (
-                      <p className="mt-1 text-xs text-slate-500">Current: {patFd.imgSetNg}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* File Naming Convention */}
-              <div className="bg-gradient-to-r from-blue-50 to-white dark:from-blue-900/10 dark:to-slate-800/30 rounded-xl border border-blue-100 dark:border-blue-800/30 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="p-1.5 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                    <Info size={16} className="text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">File Naming Convention</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Auto-generated if no file uploaded</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="p-3 bg-white dark:bg-slate-800 rounded-lg border border-emerald-200 dark:border-emerald-800/30">
-                    <div className="flex items-center gap-1 mb-1">
-                      <FolderOpen size={12} className="text-emerald-600" />
-                      <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">QC Station</span>
-                    </div>
-                    <div className="space-y-0.5 font-mono text-xs">
-                      <div className="text-emerald-600">{previewStyle().toLowerCase()}_good.png</div>
-                      <div className="text-rose-600">{previewStyle().toLowerCase()}_ng.png</div>
-                    </div>
-                  </div>
-                  <div className="p-3 bg-white dark:bg-slate-800 rounded-lg border border-blue-200 dark:border-blue-800/30">
-                    <div className="flex items-center gap-1 mb-1">
-                      <FolderTree size={12} className="text-blue-600" />
-                      <span className="text-xs font-medium text-blue-700 dark:text-blue-400">CP Station</span>
-                    </div>
-                    <div className="font-mono text-xs text-blue-600">
-                      {previewStyle().toLowerCase()}_[1-{patFd.patterns?.length || 1}]_*.png
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-1">{patFd.patterns?.length || 0} pattern files</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Pattern Parts */}
-              <div className="bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-900/10 dark:to-slate-800/30 rounded-xl border border-emerald-100 dark:border-emerald-800/30 p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/40 rounded-lg">
-                      <Layers size={16} className="text-emerald-600 dark:text-emerald-400" />
-                    </div>
+            <form onSubmit={savePat} className="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-slate-900">
+              <div className="p-6 space-y-8">
+                {/* Style Code Setup */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Hash size={16} className="text-indigo-500" />
+                    Identity
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pl-6">
                     <div>
-                      <h4 className="font-bold text-sm text-slate-900 dark:text-white">Pattern Parts</h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Define parts for Check Panel inspection</p>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                        Style Code <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        required
+                        type="text"
+                        className="w-full px-4 py-3 text-lg font-bold uppercase tracking-widest border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-indigo-700 dark:text-indigo-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
+                        placeholder="e.g. K1YH"
+                        value={patFd.styleCode}
+                        onChange={e => setPatFd({ ...patFd, styleCode: e.target.value.toUpperCase() })}
+                        disabled={patEdit}
+                      />
                     </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={addPat}
-                    className="group px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-lg text-xs font-medium flex items-center gap-1 hover:from-emerald-700 hover:to-emerald-600 transition-all"
-                  >
-                    <Plus size={14} />
-                    Add Part
-                  </button>
-                </div>
-
-                <div className="space-y-3 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
-                  {(patFd.patterns || []).map((p, i) => (
-                    <div
-                      key={i}
-                      className="group p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 transition-all"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-400 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <span className="text-white font-bold text-xs">{i + 1}</span>
-                        </div>
-                        <div className="flex-1 space-y-3">
-                          <div>
-                            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                              Pattern Name <span className="text-rose-500">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all"
-                              placeholder={`e.g. Part ${i + 1}`}
-                              value={p.name}
-                              onChange={e => handlePatName(i, e.target.value)}
-                              autoFocus={i === (patFd.patterns?.length || 0) - 1}
-                            />
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Good Image</label>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all"
-                                onChange={e => {
-                                  const f = e.target.files?.[0];
-                                  setUpFiles(pv => {
-                                    const g = [...pv.patternGood];
-                                    g[i] = f || null;
-                                    return { ...pv, patternGood: g };
-                                  });
-                                }}
-                              />
-                              {p.imgGood && !upFiles.patternGood[i] && (
-                                <p className="mt-1 text-xs text-slate-500">Current: {p.imgGood}</p>
-                              )}
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">NG Image</label>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all"
-                                onChange={e => {
-                                  const f = e.target.files?.[0];
-                                  setUpFiles(pv => {
-                                    const ng = [...pv.patternNg];
-                                    ng[i] = f || null;
-                                    return { ...pv, patternNg: ng };
-                                  });
-                                }}
-                              />
-                              {p.imgNg && !upFiles.patternNg[i] && (
-                                <p className="mt-1 text-xs text-slate-500">Current: {p.imgNg}</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        {(patFd.patterns?.length || 0) > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removePat(i)}
-                            className="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors flex-shrink-0"
-                            title="Remove Pattern"
-                          >
-                            <MinusCircle size={16} />
-                          </button>
-                        )}
+                    <div className="flex items-center">
+                      <div className="w-full bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700/50 flex flex-col justify-center">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Target Line Association</span>
+                        <span className="font-extrabold text-base text-slate-900 dark:text-white">
+                          {sel?.code} <span className="text-slate-400 font-normal">|</span> {sel?.name}
+                        </span>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                </div>
+                
+                <hr className="border-slate-100 dark:border-slate-800" />
+
+                {/* Set Images */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                      <ImageIcon size={16} className="text-amber-500" />
+                      QC Set Images
+                    </h4>
+                    <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">Optional</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pl-6">
+                    <div className="bg-slate-50 dark:bg-slate-800/30 p-4 rounded-xl border border-slate-200/60 dark:border-slate-700/50">
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-emerald-600 dark:text-emerald-400">Set Good Image</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 dark:file:bg-emerald-500/10 dark:file:text-emerald-400 transition-colors"
+                        onChange={e => setUpFiles(p => ({ ...p, setGood: e.target.files?.[0] }))}
+                      />
+                      {patFd.imgSetGood && !upFiles.setGood && (
+                        <p className="mt-3 text-[11px] font-medium text-slate-500 flex items-center gap-1"><CheckCircle size={10} className="text-emerald-500"/> Saved: {patFd.imgSetGood}</p>
+                      )}
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800/30 p-4 rounded-xl border border-slate-200/60 dark:border-slate-700/50">
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-rose-600 dark:text-rose-400">Set NG Image</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100 dark:file:bg-rose-500/10 dark:file:text-rose-400 transition-colors"
+                        onChange={e => setUpFiles(p => ({ ...p, setNg: e.target.files?.[0] }))}
+                      />
+                      {patFd.imgSetNg && !upFiles.setNg && (
+                        <p className="mt-3 text-[11px] font-medium text-slate-500 flex items-center gap-1"><CheckCircle size={10} className="text-emerald-500"/> Saved: {patFd.imgSetNg}</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="mt-3 p-3 bg-slate-100 dark:bg-slate-800/50 rounded-lg">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-600 dark:text-slate-400">
-                      Total Patterns: <span className="font-bold">{patFd.patterns?.length || 0}</span>
-                    </span>
-                    <span className="text-slate-500 text-[10px]">Minimum 1 required</span>
+                <hr className="border-slate-100 dark:border-slate-800" />
+
+                {/* Pattern Parts */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                        <Grid size={16} className="text-emerald-500" />
+                        Pattern Components (Parts)
+                      </h4>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1 pl-6">Parts config used for Check Panel vision inspection</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addPat}
+                      className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                    >
+                      <Plus size={14} /> Add Part Component
+                    </button>
+                  </div>
+
+                  <div className="pl-6 space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {(patFd.patterns || []).map((p, i) => (
+                      <div
+                        key={i}
+                        className="group p-5 bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-600/50 transition-all shadow-sm relative overflow-hidden"
+                      >
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-400/50 rounded-l-2xl group-hover:bg-emerald-500 transition-colors" />
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-50 dark:group-hover:bg-emerald-500/10 transition-colors">
+                            <span className="text-slate-500 group-hover:text-emerald-600 dark:text-slate-400 dark:group-hover:text-emerald-400 font-extrabold text-sm">{i + 1}</span>
+                          </div>
+                          
+                          <div className="flex-1 space-y-4">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                                Part Name <span className="text-rose-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                className="w-full px-4 py-2.5 text-sm font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none"
+                                placeholder={`e.g. Front Panel ${i + 1}`}
+                                value={p.name}
+                                onChange={e => handlePatName(i, e.target.value)}
+                                autoFocus={i === (patFd.patterns?.length || 0) - 1 && i > 0}
+                              />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                                <label className="block text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-2">Good State Image</label>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 dark:file:bg-emerald-500/20 dark:file:text-emerald-400 transition-colors cursor-pointer"
+                                  onChange={e => {
+                                    const f = e.target.files?.[0];
+                                    setUpFiles(pv => {
+                                      const g = [...pv.patternGood];
+                                      g[i] = f || null;
+                                      return { ...pv, patternGood: g };
+                                    });
+                                  }}
+                                />
+                                {p.imgGood && !upFiles.patternGood[i] && (
+                                  <p className="mt-2 text-[10px] font-medium text-slate-500 truncate" title={p.imgGood}>File: {p.imgGood}</p>
+                                )}
+                              </div>
+                              <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                                <label className="block text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-2">NG State Image</label>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-rose-100 file:text-rose-700 hover:file:bg-rose-200 dark:file:bg-rose-500/20 dark:file:text-rose-400 transition-colors cursor-pointer"
+                                  onChange={e => {
+                                    const f = e.target.files?.[0];
+                                    setUpFiles(pv => {
+                                      const ng = [...pv.patternNg];
+                                      ng[i] = f || null;
+                                      return { ...pv, patternNg: ng };
+                                    });
+                                  }}
+                                />
+                                {p.imgNg && !upFiles.patternNg[i] && (
+                                  <p className="mt-2 text-[10px] font-medium text-slate-500 truncate" title={p.imgNg}>File: {p.imgNg}</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {(patFd.patterns?.length || 0) > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removePat(i)}
+                              className="mt-4 sm:mt-0 sm:absolute sm:top-5 sm:right-5 p-2 text-rose-400 hover:text-white hover:bg-rose-500 rounded-xl transition-colors flex-shrink-0"
+                              title="Remove Component"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
 
-              {/* Form Actions */}
-              <div className="flex gap-3 pt-4 border-t border-slate-100 dark:border-slate-700/50">
+              {/* Form Actions footer */}
+              <div className="p-5 px-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-md flex gap-3">
                 <button
                   type="button"
                   onClick={() => setPatModal(false)}
-                  className="flex-1 py-3 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-bold hover:border-slate-300 dark:hover:border-slate-600 transition-all text-sm"
+                  className="flex-1 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-sm shadow-sm active:scale-95"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={patSaving}
-                  className="group flex-1 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white rounded-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-md hover:shadow-lg text-sm"
+                  className="group flex-[2] py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-md shadow-indigo-500/20 active:scale-95 text-sm"
                 >
                   {patSaving ? (
                     <>
-                      <Loader2 size={16} className="animate-spin" />
-                      <span>Saving...</span>
+                      <Loader2 size={18} className="animate-spin" />
+                      <span>Saving Architecture...</span>
                     </>
                   ) : (
                     <>
-                      <Save size={16} />
-                      <span>{patEdit ? 'Update Pattern' : 'Create Pattern'}</span>
+                      <Save size={18} />
+                      <span>{patEdit ? 'Update Pattern Architecture' : 'Save Pattern Architecture'}</span>
                     </>
                   )}
                 </button>

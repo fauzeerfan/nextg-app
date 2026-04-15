@@ -1,4 +1,3 @@
-// frontend/src/features/manpower/ManpowerMonitoringView.tsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Calendar, RefreshCw, Loader2, Search, Activity, TrendingUp, FilterX, AlertCircle } from 'lucide-react';
 import SankeyChart from '../../components/ui/SankeyChart';
@@ -355,58 +354,103 @@ export const ManpowerMonitoringView = () => {
   }, [heatmapData]);
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-white to-purple-50/30 dark:from-slate-900 dark:to-purple-900/10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl mb-6">
-        <div className="p-6">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+    <div className="p-6 space-y-6">
+      {/* Header Panel */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] overflow-hidden relative">
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-purple-500/10 blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-64 h-64 rounded-full bg-indigo-500/10 blur-3xl"></div>
+        
+        <div className="p-6 relative z-10">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/20 transform transition-transform hover:scale-105">
                 <Activity size={24} className="text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-white">Manpower Monitoring</h1>
-                <p className="text-sm text-slate-600 dark:text-slate-400">Analisis perpindahan dan alokasi manpower</p>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Manpower Monitoring</h1>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Analisis perpindahan dan alokasi manpower</p>
               </div>
             </div>
-            <div className="flex gap-3 items-center flex-wrap">
-              <input type="date" className="border rounded-lg p-2 dark:bg-slate-800" value={startDate} onChange={e => setStartDate(e.target.value)} />
-              <span>to</span>
-              <input type="date" className="border rounded-lg p-2 dark:bg-slate-800" value={endDate} onChange={e => setEndDate(e.target.value)} />
-              <button onClick={fetchFlowData} className="p-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"><RefreshCw size={16} /></button>
+            
+            <div className="flex flex-wrap items-center gap-3 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <Calendar size={16} className="text-slate-400 ml-2 hidden sm:block" />
+                <input 
+                  type="date" 
+                  className="bg-transparent border-none text-sm font-medium text-slate-700 dark:text-slate-300 focus:ring-0 cursor-pointer p-2" 
+                  value={startDate} 
+                  onChange={e => setStartDate(e.target.value)} 
+                />
+              </div>
+              <span className="text-slate-300 dark:text-slate-600 font-medium">/</span>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="date" 
+                  className="bg-transparent border-none text-sm font-medium text-slate-700 dark:text-slate-300 focus:ring-0 cursor-pointer p-2" 
+                  value={endDate} 
+                  onChange={e => setEndDate(e.target.value)} 
+                />
+              </div>
+              <button 
+                onClick={fetchFlowData} 
+                className="ml-2 p-2.5 bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 hover:bg-purple-50 dark:hover:bg-slate-700 transition-all hover:scale-105 group"
+                title="Refresh Data"
+              >
+                <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-500" />
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 mb-6 shadow-md">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div>
-            <label className="block text-xs font-medium mb-1">Filter Line</label>
-            <select className="w-full border rounded-lg p-2 dark:bg-slate-700" value={filterLine} onChange={e => setFilterLine(e.target.value)}>
-              <option value="">Semua Line</option>
-              {uniqueLines.map(line => <option key={line} value={line}>{line}</option>)}
-            </select>
+      {/* Filters Card */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-5">
+          <div className="col-span-1 md:col-span-2">
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Filter Line</label>
+            <div className="relative">
+              <select 
+                className="w-full appearance-none bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 py-2.5 pl-4 pr-10 transition-all cursor-pointer" 
+                value={filterLine} 
+                onChange={e => setFilterLine(e.target.value)}
+              >
+                <option value="">Semua Line</option>
+                {uniqueLines.map(line => <option key={line} value={line}>{line}</option>)}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+            </div>
           </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Filter Karyawan</label>
-            <select
-              className="w-full border rounded-lg p-2 dark:bg-slate-700"
-              value={searchNik}
-              onChange={(e) => setSearchNik(e.target.value)}
-            >
-              <option value="">Semua Karyawan</option>
-              {uniqueEmployees.map(emp => {
-                const nikMatch = emp.match(/\(([^)]+)\)/);
-                const nik = nikMatch ? nikMatch[1] : emp;
-                return <option key={nik} value={nik}>{emp}</option>;
-              })}
-            </select>
+          
+          <div className="col-span-1 md:col-span-2">
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Filter Karyawan</label>
+            <div className="relative">
+              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <select
+                className="w-full appearance-none bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 py-2.5 pl-10 pr-10 transition-all cursor-pointer"
+                value={searchNik}
+                onChange={(e) => setSearchNik(e.target.value)}
+              >
+                <option value="">Cari & Pilih Karyawan</option>
+                {uniqueEmployees.map(emp => {
+                  const nikMatch = emp.match(/\(([^)]+)\)/);
+                  const nik = nikMatch ? nikMatch[1] : emp;
+                  return <option key={nik} value={nik}>{emp}</option>;
+                })}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+            </div>
           </div>
+          
           <div className="flex items-end">
-            <button onClick={resetFilters} className="w-full px-3 py-2 bg-slate-500 text-white rounded-lg flex items-center justify-center gap-2 hover:bg-slate-600">
-              <FilterX size={16} /> Reset Filter
+            <button 
+              onClick={resetFilters} 
+              className="w-full px-4 py-2.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl flex items-center justify-center gap-2 hover:bg-white dark:hover:bg-slate-700 hover:text-red-500 hover:border-red-200 dark:hover:border-red-900/50 transition-all shadow-sm font-medium text-sm group"
+            >
+              <FilterX size={16} className="group-hover:scale-110 transition-transform" /> Reset
             </button>
           </div>
         </div>
@@ -414,33 +458,42 @@ export const ManpowerMonitoringView = () => {
 
       {/* Error Message */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center gap-3">
-          <AlertCircle size={20} className="text-red-600" />
-          <span className="text-red-800 dark:text-red-300">{error}</span>
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+          <AlertCircle size={20} className="text-red-500" />
+          <span className="text-sm font-medium text-red-800 dark:text-red-300">{error}</span>
         </div>
       )}
 
       {/* Sankey Diagram: Flow Karyawan → Line per Tanggal */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg mb-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
-          <h3 className="text-lg font-bold flex items-center gap-2">
-            <TrendingUp size={20} /> Flow Manpower
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-[0_4px_20px_rgb(0,0,0,0.1)]">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
+            <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
+              <TrendingUp size={20} /> 
+            </div>
+            Flow Manpower
           </h3>
-          <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700">
+          <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-full border border-indigo-100 dark:border-indigo-800/50 flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></div>
             Scroll area grafik untuk melihat detail
           </span>
         </div>
         
         {flowLoading ? (
-          <div className="flex justify-center py-12"><Loader2 className="animate-spin text-purple-600" size={32} /></div>
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <Loader2 className="animate-spin text-purple-600" size={32} />
+            <span className="text-sm text-slate-500 font-medium">Memproses data diagram...</span>
+          </div>
         ) : processedFlow.nodes.length === 0 ? (
-          <div className="text-center py-12 text-slate-500">Tidak ada data untuk periode dan filter yang dipilih.</div>
+          <div className="text-center py-20 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-500 text-sm font-medium">
+            Tidak ada data untuk periode dan filter yang dipilih.
+          </div>
         ) : (
           <div 
-            className="w-full overflow-auto rounded-lg border border-slate-100 dark:border-slate-700 bg-slate-50/30 dark:bg-slate-900/30"
+            className="w-full overflow-auto rounded-xl border border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-900/30 custom-scrollbar"
             style={{ maxHeight: '600px' }}
           >
-            <div style={{ padding: '10px' }}>
+            <div style={{ padding: '16px' }}>
               <SankeyChart
                 nodes={processedFlow.nodes}
                 links={processedFlow.links}
@@ -455,31 +508,31 @@ export const ManpowerMonitoringView = () => {
       </div>
 
       {/* ========== HEATMAP: Employee Daily Activity ========== */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg mb-6">
-        <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-[0_4px_20px_rgb(0,0,0,0.1)]">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
-            <h3 className="text-lg font-bold flex items-center gap-2">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
               🔥 Heatmap: Employee Daily Activity
             </h3>
-            <p className="text-xs text-slate-500">Visualisasi kehadiran per karyawan per hari (hijau = hadir)</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">Visualisasi kehadiran per karyawan per hari</p>
           </div>
-          <div className="flex gap-3 items-center">
+          <div className="flex flex-wrap gap-2 items-center bg-slate-50 dark:bg-slate-900/50 p-1.5 rounded-xl border border-slate-100 dark:border-slate-800">
             <input
               type="date"
-              className="border rounded-lg p-2 dark:bg-slate-700 text-sm"
+              className="bg-transparent border-none text-sm font-medium text-slate-700 dark:text-slate-300 focus:ring-0 cursor-pointer p-2"
               value={heatmapStartDate}
               onChange={(e) => setHeatmapStartDate(e.target.value)}
             />
-            <span>to</span>
+            <span className="text-slate-300 dark:text-slate-600 font-medium">/</span>
             <input
               type="date"
-              className="border rounded-lg p-2 dark:bg-slate-700 text-sm"
+              className="bg-transparent border-none text-sm font-medium text-slate-700 dark:text-slate-300 focus:ring-0 cursor-pointer p-2"
               value={heatmapEndDate}
               onChange={(e) => setHeatmapEndDate(e.target.value)}
             />
             <button
               onClick={fetchHeatmapData}
-              className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm flex items-center gap-1"
+              className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-sm hover:shadow-md active:scale-95 ml-1"
             >
               <RefreshCw size={14} /> Refresh
             </button>
@@ -487,88 +540,94 @@ export const ManpowerMonitoringView = () => {
         </div>
 
         {loadingHeatmap ? (
-          <div className="flex justify-center py-8"><Loader2 className="animate-spin text-indigo-600" size={24} /></div>
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+             <Loader2 className="animate-spin text-indigo-600" size={28} />
+             <span className="text-sm text-slate-500 font-medium">Memuat data heatmap...</span>
+          </div>
         ) : heatmapData.length === 0 ? (
-          <div className="text-center py-8 text-slate-500">No data for selected period</div>
+          <div className="text-center py-16 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-500 text-sm font-medium">
+            Tidak ada data untuk periode terpilih
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <div className="inline-block min-w-full align-middle">
-              <div className="overflow-hidden border border-slate-200 dark:border-slate-700 rounded-lg">
-                <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-                  <thead className="bg-slate-50 dark:bg-slate-900/50">
-                    <tr>
-                      <th className="sticky left-0 bg-slate-50 dark:bg-slate-900/50 z-10 px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        Employee
-                      </th>
-                      {heatmapDates.map(date => (
-                        <th key={date} className="px-2 py-2 text-center text-xs font-semibold text-slate-700 dark:text-slate-300 min-w-[70px]">
-                          {date}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-800">
-                    {heatmapData.map(emp => (
-                      <tr key={emp.nik} className="hover:bg-slate-50 dark:hover:bg-slate-900/30">
-                        <td className="sticky left-0 bg-white dark:bg-slate-800 z-10 px-3 py-2 text-sm font-medium text-slate-900 dark:text-white whitespace-nowrap">
-                          <div className="truncate max-w-[180px]">{emp.fullName}</div>
-                          <div className="text-xs text-slate-500">{emp.nik}</div>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm">
+            <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+              <thead className="bg-slate-50 dark:bg-slate-900/80">
+                <tr>
+                  <th className="sticky left-0 bg-slate-50 dark:bg-slate-900/80 z-20 px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider shadow-[4px_0_12px_rgba(0,0,0,0.03)] dark:shadow-[4px_0_12px_rgba(0,0,0,0.2)] border-r border-slate-200 dark:border-slate-700">
+                    Employee
+                  </th>
+                  {heatmapDates.map(date => (
+                    <th key={date} className="px-3 py-3 text-center text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider min-w-[80px]">
+                      {new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-100 dark:divide-slate-700/50">
+                {heatmapData.map(emp => (
+                  <tr key={emp.nik} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors group">
+                    <td className="sticky left-0 bg-white dark:bg-slate-800 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 z-10 px-4 py-3 shadow-[4px_0_12px_rgba(0,0,0,0.03)] dark:shadow-[4px_0_12px_rgba(0,0,0,0.2)] border-r border-slate-200 dark:border-slate-700 transition-colors">
+                      <div className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-[180px]">{emp.fullName}</div>
+                      <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">{emp.nik}</div>
+                    </td>
+                    {heatmapDates.map(date => {
+                      const activity = emp.daily[date];
+                      const isPresent = !!activity;
+                      const tooltipText = isPresent ? `${activity.lineCode} | ${activity.station}` : 'Tidak hadir';
+                      return (
+                        <td
+                          key={date}
+                          className="px-3 py-2 text-center"
+                        >
+                          <div
+                            className={`w-8 h-8 mx-auto rounded-lg flex items-center justify-center cursor-help transition-all duration-300 ${
+                              isPresent
+                                ? 'bg-gradient-to-br from-emerald-400 to-emerald-500 shadow-md shadow-emerald-500/30 hover:scale-110 hover:shadow-lg hover:shadow-emerald-500/40'
+                                : 'bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+                            }`}
+                            title={tooltipText}
+                          >
+                            {isPresent && (
+                              <span className="text-white text-sm font-bold drop-shadow-sm">✓</span>
+                            )}
+                          </div>
                         </td>
-                        {heatmapDates.map(date => {
-                          const activity = emp.daily[date];
-                          const isPresent = !!activity;
-                          const tooltipText = isPresent ? `${activity.lineCode} | ${activity.station}` : 'Tidak hadir';
-                          return (
-                            <td
-                              key={date}
-                              className="px-2 py-2 text-center border-l border-slate-100 dark:border-slate-800"
-                            >
-                              <div
-                                className={`w-8 h-8 mx-auto rounded-md cursor-help transition-all hover:scale-110 ${
-                                  isPresent
-                                    ? 'bg-emerald-500 hover:bg-emerald-600 shadow-md'
-                                    : 'bg-slate-200 dark:bg-slate-700'
-                                }`}
-                                title={tooltipText}
-                              >
-                                {isPresent && (
-                                  <div className="w-full h-full flex items-center justify-center text-white text-xs font-bold">
-                                    ✓
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-        <div className="mt-3 text-xs text-slate-500 flex justify-between items-center">
-          <span>Total manpower (unique employees): <strong>{heatmapData.length}</strong> people</span>
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1"><div className="w-4 h-4 bg-emerald-500 rounded"></div> Hadir</span>
-            <span className="flex items-center gap-1"><div className="w-4 h-4 bg-slate-200 dark:bg-slate-700 rounded"></div> Tidak hadir</span>
+        <div className="mt-4 flex flex-col sm:flex-row justify-between items-center bg-slate-50 dark:bg-slate-900/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 font-medium">
+          <span>Total manpower terpantau: <strong className="text-indigo-600 dark:text-indigo-400 text-sm ml-1">{heatmapData.length}</strong> orang</span>
+          <div className="flex items-center gap-4 mt-2 sm:mt-0">
+            <span className="flex items-center gap-2">
+              <div className="w-3.5 h-3.5 bg-gradient-to-br from-emerald-400 to-emerald-500 rounded shadow-sm shadow-emerald-500/30"></div> Hadir
+            </span>
+            <span className="flex items-center gap-2">
+              <div className="w-3.5 h-3.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded"></div> Tidak hadir
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Tabel Data Attendance (tidak diubah) */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg">
-        <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-          <h3 className="text-lg font-bold flex items-center gap-2">
-            <Activity size={20} /> Detail Attendance
+      {/* Tabel Data Attendance */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-[0_4px_20px_rgb(0,0,0,0.1)]">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
+            <div className="p-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
+              <Activity size={20} />
+            </div>
+            Detail Attendance
           </h3>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">Total: {totalRecords} records</span>
+          <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 p-1.5 rounded-xl border border-slate-100 dark:border-slate-800">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-2 hidden sm:inline">Total: {totalRecords} records</span>
             <select
               value={tableLimit}
               onChange={(e) => { setTableLimit(Number(e.target.value)); setTablePage(1); }}
-              className="text-xs border rounded px-2 py-1 dark:bg-slate-700"
+              className="text-xs font-medium border-none bg-white dark:bg-slate-800 rounded-lg px-3 py-1.5 shadow-sm focus:ring-2 focus:ring-purple-500/20 cursor-pointer text-slate-700 dark:text-slate-300"
             >
               <option value={10}>10 per page</option>
               <option value={25}>25 per page</option>
@@ -578,56 +637,71 @@ export const ManpowerMonitoringView = () => {
         </div>
 
         {loadingTable ? (
-          <div className="flex justify-center py-8"><Loader2 className="animate-spin text-purple-600" size={24} /></div>
+          <div className="flex justify-center py-16"><Loader2 className="animate-spin text-purple-600" size={32} /></div>
         ) : attendanceList.length === 0 ? (
-          <div className="text-center py-8 text-slate-500">Tidak ada data untuk filter yang dipilih.</div>
+          <div className="text-center py-16 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-500 text-sm font-medium">
+            Tidak ada data untuk filter yang dipilih.
+          </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm">
               <table className="w-full text-sm">
-                <thead className="bg-slate-100 dark:bg-slate-700/50">
+                <thead className="bg-slate-50 dark:bg-slate-900/80">
                   <tr>
-                    <th className="py-2 px-3 text-left">No</th>
-                    <th className="py-2 px-3 text-left">Tanggal</th>
-                    <th className="py-2 px-3 text-left">NIK</th>
-                    <th className="py-2 px-3 text-left">Nama Karyawan</th>
-                    <th className="py-2 px-3 text-left">Line</th>
-                    <th className="py-2 px-3 text-left">Station</th>
-                    <th className="py-2 px-3 text-left">Scan Time</th>
+                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">No</th>
+                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Tanggal</th>
+                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">NIK</th>
+                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Nama Karyawan</th>
+                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Line</th>
+                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Station</th>
+                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Scan Time</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50 bg-white dark:bg-slate-800">
                   {attendanceList.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      <td className="py-2 px-3">{(tablePage - 1) * tableLimit + idx + 1}</td>
-                      <td className="py-2 px-3">{new Date(item.tanggal).toLocaleDateString('id-ID')}</td>
-                      <td className="py-2 px-3 font-mono">{item.nik}</td>
-                      <td className="py-2 px-3">{item.fullName}</td>
-                      <td className="py-2 px-3">{item.lineCode}</td>
-                      <td className="py-2 px-3">{item.station}</td>
-                      <td className="py-2 px-3">{new Date(item.scanTime).toLocaleTimeString('id-ID')}</td>
+                    <tr key={item.id} className="hover:bg-purple-50/50 dark:hover:bg-purple-900/20 transition-colors">
+                      <td className="py-3 px-4 font-medium text-slate-500">{(tablePage - 1) * tableLimit + idx + 1}</td>
+                      <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-300">{new Date(item.tanggal).toLocaleDateString('id-ID')}</td>
+                      <td className="py-3 px-4 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20 rounded px-2 py-1 w-max my-2">{item.nik}</td>
+                      <td className="py-3 px-4 font-medium text-slate-900 dark:text-white">{item.fullName}</td>
+                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
+                          {item.lineCode}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{item.station}</td>
+                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{new Date(item.scanTime).toLocaleTimeString('id-ID')}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            
+            {/* Pagination */}
             {totalRecords > tableLimit && (
-              <div className="flex justify-between items-center mt-4 pt-2 border-t border-slate-200 dark:border-slate-700">
-                <button
-                  onClick={() => setTablePage(p => Math.max(1, p - 1))}
-                  disabled={tablePage === 1}
-                  className="px-3 py-1 text-sm bg-slate-100 dark:bg-slate-700 rounded disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <span className="text-sm">Page {tablePage} of {Math.ceil(totalRecords / tableLimit)}</span>
-                <button
-                  onClick={() => setTablePage(p => Math.min(Math.ceil(totalRecords / tableLimit), p + 1))}
-                  disabled={tablePage === Math.ceil(totalRecords / tableLimit)}
-                  className="px-3 py-1 text-sm bg-slate-100 dark:bg-slate-700 rounded disabled:opacity-50"
-                >
-                  Next
-                </button>
+              <div className="flex flex-col sm:flex-row justify-between items-center mt-6 gap-4">
+                <span className="text-sm font-medium text-slate-500">
+                  Showing <span className="font-bold text-slate-700 dark:text-slate-300">{((tablePage - 1) * tableLimit) + 1}</span> to <span className="font-bold text-slate-700 dark:text-slate-300">{Math.min(tablePage * tableLimit, totalRecords)}</span> of <span className="font-bold text-slate-700 dark:text-slate-300">{totalRecords}</span> entries
+                </span>
+                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 p-1 rounded-lg border border-slate-100 dark:border-slate-800">
+                  <button
+                    onClick={() => setTablePage(p => Math.max(1, p - 1))}
+                    disabled={tablePage === 1}
+                    className="px-4 py-2 text-sm font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    Previous
+                  </button>
+                  <span className="px-4 text-sm font-bold text-slate-700 dark:text-slate-300">
+                    {tablePage} / {Math.ceil(totalRecords / tableLimit)}
+                  </span>
+                  <button
+                    onClick={() => setTablePage(p => Math.min(Math.ceil(totalRecords / tableLimit), p + 1))}
+                    disabled={tablePage === Math.ceil(totalRecords / tableLimit)}
+                    className="px-4 py-2 text-sm font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             )}
           </>
@@ -636,41 +710,80 @@ export const ManpowerMonitoringView = () => {
 
       {/* Employee Timeline Modal */}
       {showTimeline && selectedEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl max-w-3xl w-full max-h-[80vh] overflow-auto">
-            <div className="p-5 border-b flex justify-between items-center">
-              <h3 className="text-lg font-bold">Riwayat {selectedEmployee.fullName} ({selectedEmployee.nik})</h3>
-              <button onClick={() => setShowTimeline(false)} className="p-1 hover:bg-slate-100 rounded">✕</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setShowTimeline(false)}></div>
+          
+          {/* Modal Content */}
+          <div className="relative bg-white dark:bg-slate-800 rounded-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden shadow-2xl ring-1 ring-slate-900/5 dark:ring-white/10 flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700/60 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Riwayat Kehadiran</h3>
+                <p className="text-sm font-medium text-slate-500 mt-0.5">{selectedEmployee.fullName} <span className="text-indigo-500">({selectedEmployee.nik})</span></p>
+              </div>
+              <button 
+                onClick={() => setShowTimeline(false)} 
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 transition-colors"
+              >
+                ✕
+              </button>
             </div>
-            <div className="p-4">
+            
+            <div className="p-6 overflow-auto custom-scrollbar">
               {employeeTimeline.length === 0 ? (
-                <p className="text-center text-slate-500">Tidak ada catatan kehadiran</p>
+                <div className="text-center py-12 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
+                  <p className="text-slate-500 font-medium text-sm">Tidak ada catatan kehadiran pada periode ini.</p>
+                </div>
               ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-100 dark:bg-slate-700">
-                    <tr>
-                      <th className="p-2 text-left">Tanggal</th>
-                      <th className="p-2 text-left">Line</th>
-                      <th className="p-2 text-left">Station</th>
-                      <th className="p-2 text-left">Scan Time</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {employeeTimeline.map(att => (
-                      <tr key={att.id} className="border-t">
-                        <td className="p-2">{new Date(att.tanggal).toLocaleDateString()}</td>
-                        <td className="p-2">{att.lineCode}</td>
-                        <td className="p-2">{att.station}</td>
-                        <td className="p-2">{new Date(att.scanTime).toLocaleTimeString()}</td>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700/60 overflow-hidden shadow-sm">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-700/60">
+                      <tr>
+                        <th className="p-3 px-4 text-left font-bold text-slate-500 uppercase tracking-wider text-xs">Tanggal</th>
+                        <th className="p-3 px-4 text-left font-bold text-slate-500 uppercase tracking-wider text-xs">Line</th>
+                        <th className="p-3 px-4 text-left font-bold text-slate-500 uppercase tracking-wider text-xs">Station</th>
+                        <th className="p-3 px-4 text-left font-bold text-slate-500 uppercase tracking-wider text-xs">Scan Time</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                      {employeeTimeline.map(att => (
+                        <tr key={att.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                          <td className="p-3 px-4 font-medium text-slate-700 dark:text-slate-300">{new Date(att.tanggal).toLocaleDateString('id-ID', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                          <td className="p-3 px-4">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                              {att.lineCode}
+                            </span>
+                          </td>
+                          <td className="p-3 px-4 font-medium text-slate-600 dark:text-slate-300">{att.station}</td>
+                          <td className="p-3 px-4 text-slate-500 font-mono text-xs">{new Date(att.scanTime).toLocaleTimeString('id-ID')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
         </div>
       )}
+      
+      {/* Add Custom Scrollbar Styles Globally or Scope it */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #cbd5e1;
+          border-radius: 20px;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #475569;
+        }
+      `}} />
     </div>
   );
 };

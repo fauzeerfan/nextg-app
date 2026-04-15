@@ -52,6 +52,7 @@ interface ShipmentRecord {
 
 // ==================== Helper Components ====================
 
+// Modern Solid Metric Card
 const MetricCard = ({ 
   title, 
   value, 
@@ -70,27 +71,32 @@ const MetricCard = ({
   trend?: string; 
 }) => {
   const colors = {
-    emerald: { bg: 'from-emerald-100 to-emerald-50', icon: 'text-emerald-600', darkBg: 'from-emerald-900/20 to-emerald-900/10' },
-    blue: { bg: 'from-blue-100 to-blue-50', icon: 'text-blue-600', darkBg: 'from-blue-900/20 to-blue-900/10' },
-    amber: { bg: 'from-amber-100 to-amber-50', icon: 'text-amber-600', darkBg: 'from-amber-900/20 to-amber-900/10' },
-    purple: { bg: 'from-purple-100 to-purple-50', icon: 'text-purple-600', darkBg: 'from-purple-900/20 to-purple-900/10' }
+    emerald: { bg: 'bg-emerald-100', icon: 'text-emerald-600', border: 'border-emerald-500', darkBg: 'dark:bg-emerald-900/40', darkIcon: 'dark:text-emerald-400' },
+    blue: { bg: 'bg-blue-100', icon: 'text-blue-600', border: 'border-blue-500', darkBg: 'dark:bg-blue-900/40', darkIcon: 'dark:text-blue-400' },
+    amber: { bg: 'bg-amber-100', icon: 'text-amber-600', border: 'border-amber-500', darkBg: 'dark:bg-amber-900/40', darkIcon: 'dark:text-amber-400' },
+    purple: { bg: 'bg-purple-100', icon: 'text-purple-600', border: 'border-purple-500', darkBg: 'dark:bg-purple-900/40', darkIcon: 'dark:text-purple-400' }
   };
   
   const selected = colors[color] || colors.emerald;
   
   return (
-    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg hover:shadow-xl transition-all duration-300">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{title}</div>
-        <div className={`w-8 h-8 bg-gradient-to-br ${selected.bg} dark:${selected.darkBg} rounded-lg flex items-center justify-center`}>
-          <Icon size={16} className={selected.icon} />
+    <div className={`bg-white dark:bg-slate-800 rounded-2xl border-l-4 ${selected.border} border-y border-r border-slate-200 dark:border-slate-700 p-5 shadow-sm hover:shadow-md transition-shadow`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{title}</div>
+        <div className={`w-10 h-10 ${selected.bg} ${selected.darkBg} rounded-xl flex items-center justify-center`}>
+          <Icon size={20} className={`${selected.icon} ${selected.darkIcon}`} />
         </div>
       </div>
-      <div className="text-2xl font-bold text-slate-900 dark:text-white">
-        {value}{suffix && <span className="text-sm text-slate-500 dark:text-slate-400 ml-1">{suffix}</span>}
+      <div className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white leading-none">
+        {value}{suffix && <span className="text-sm font-semibold text-slate-400 dark:text-slate-500 ml-1.5">{suffix}</span>}
       </div>
-      {subtitle && <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{subtitle}</div>}
-      {trend && <div className="flex items-center gap-2 mt-2 text-xs"><TrendingUp size={12} className="text-emerald-500"/><span className="text-emerald-600 dark:text-emerald-400 font-semibold">{trend}</span></div>}
+      {subtitle && <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-2">{subtitle}</div>}
+      {trend && (
+        <div className="flex items-center gap-1.5 mt-2.5 text-xs bg-emerald-50 dark:bg-emerald-900/20 w-fit px-2 py-1 rounded-md border border-emerald-100 dark:border-emerald-800/30">
+          <TrendingUp size={14} className="text-emerald-500"/>
+          <span className="text-emerald-600 dark:text-emerald-400 font-bold">{trend}</span>
+        </div>
+      )}
     </div>
   );
 };
@@ -318,205 +324,229 @@ export const FinishedGoodsView = () => {
     .reduce((sum, s) => sum + s.totalQty, 0);
 
   return (
-    <div className="animate-in fade-in duration-300">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-white to-emerald-50/30 dark:from-slate-900 dark:to-emerald-900/10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden mb-6">
-        <div className="p-6">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-            <div className="flex items-center gap-3">
+    <div className="font-poppins text-slate-800 dark:text-slate-100 min-h-screen animate-in fade-in duration-300">
+      <style>
+        {`
+          @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+          .font-poppins { font-family: 'Poppins', sans-serif; }
+        `}
+      </style>
+
+      {/* Header - Solid Style */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
+        <div className="p-6 md:p-8">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5">
+            <div className="flex items-center gap-4">
               <div className="relative">
-                <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <Truck size={24} className="text-white" />
+                <div className="w-14 h-14 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                  <Truck size={28} className="text-white" />
                 </div>
-                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-400 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-lg">
+                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-800 shadow-md">
                   <Package size={14} className="text-white" />
                 </div>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
                   Finished Goods
-                  <span className="text-xs px-2 py-1 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-full font-bold">
+                  <span className="text-[11px] px-2.5 py-1 bg-emerald-500 text-white rounded-md font-bold uppercase tracking-wider">
                     STOCK & SHIPPING
                   </span>
                 </h1>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">Inventory Management & Fulfillment</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => { fetchStocks(); fetchShippingDocs(); fetchShipments(); }}
-                className="group px-4 py-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2 hover:border-emerald-300 transition-all"
+                className="group px-5 py-3 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-2 hover:border-emerald-500 hover:text-emerald-600 dark:hover:border-emerald-400 dark:hover:text-emerald-400 transition-colors shadow-sm text-sm"
               >
-                <RefreshCw size={16} className="group-hover:rotate-180 transition-transform" />
+                <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-500" />
                 Refresh
               </button>
               <button
                 onClick={() => setShowHistory(true)}
-                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg text-sm font-semibold flex items-center gap-2 hover:from-purple-700 transition-all"
+                className="px-5 py-3 bg-purple-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-purple-700 transition-all shadow-md shadow-purple-600/20 text-sm"
               >
-                <History size={16} />
+                <History size={18} />
                 History
               </button>
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 pb-6">
-          <MetricCard title="Total Stock" value={totalStock} icon={Package} color="emerald" suffix="pcs" subtitle={`${stocks.length} FG items`} />
-          <MetricCard title="Total Boxes" value={totalItems} icon={Warehouse} color="blue" suffix="boxes" subtitle="From packing" />
-          <MetricCard title="Shipped Today" value={totalShippedToday} icon={Truck} color="amber" suffix="pcs" />
-          <MetricCard title="Avg per Box" value={totalItems > 0 ? Math.round(totalStock / totalItems) : 0} icon={BarChart} color="purple" suffix="pcs" />
+        
+        {/* Metric Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 md:px-8 pb-6 md:pb-8">
+          <MetricCard title="Total Stock" value={totalStock} icon={Package} color="emerald" suffix="sets" subtitle={`${stocks.length} FG items available`} />
+          <MetricCard title="Total Boxes" value={totalItems} icon={Warehouse} color="blue" suffix="boxes" subtitle="From packing station" />
+          <MetricCard title="Shipped Today" value={totalShippedToday} icon={Truck} color="amber" suffix="sets" />
+          <MetricCard title="Avg Sets / Box" value={totalItems > 0 ? Math.round(totalStock / totalItems) : 0} icon={BarChart} color="purple" suffix="sets" />
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex border-b border-slate-200 dark:border-slate-700 mb-6">
+      {/* Tab Navigation - Solid Style */}
+      <div className="flex gap-2 mb-6">
         <button
           onClick={() => setActiveTab('stock')}
-          className={`px-5 py-2 text-sm font-medium transition-all relative ${
+          className={`flex-1 sm:flex-none px-6 py-3 text-sm font-black transition-all rounded-xl border-2 flex items-center justify-center gap-2 ${
             activeTab === 'stock'
-              ? 'text-emerald-600 dark:text-emerald-400 border-b-2 border-emerald-500'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+              ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-500 shadow-sm'
+              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-300 hover:text-emerald-500'
           }`}
         >
-          <Package size={16} className="inline mr-2" />
-          Stock
+          <Package size={18} />
+          FG INVENTORY
         </button>
         <button
           onClick={() => setActiveTab('shipping')}
-          className={`px-5 py-2 text-sm font-medium transition-all relative ${
+          className={`flex-1 sm:flex-none px-6 py-3 text-sm font-black transition-all rounded-xl border-2 flex items-center justify-center gap-2 ${
             activeTab === 'shipping'
-              ? 'text-amber-600 dark:text-amber-400 border-b-2 border-amber-500'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+              ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-500 shadow-sm'
+              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-amber-300 hover:text-amber-500'
           }`}
         >
-          <Truck size={16} className="inline mr-2" />
-          Shipping
+          <Truck size={18} />
+          SHIPPING PROCESS
         </button>
       </div>
 
       {/* Konten Berdasarkan Tab */}
       {activeTab === 'stock' && (
         <div className="space-y-6">
-          {/* QR Input Section - hanya di tab Stock */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-lg">
-            <div className="flex flex-col md:flex-row gap-4 items-end">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          {/* QR Input Section */}
+          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-6 md:p-8 shadow-sm">
+            <div className="flex flex-col md:flex-row gap-5 items-end">
+              <div className="flex-1 w-full">
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">
                   Scan / Input Box QR Code
                 </label>
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <input
                     type="text"
-                    className="flex-1 px-4 py-3 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all"
-                    placeholder="Example: PACK-123456"
+                    className="flex-1 px-5 py-4 text-base font-semibold border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-xl text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900/30 transition-all outline-none"
+                    placeholder="Scan QR Code here..."
                     value={qrInput}
                     onChange={(e) => setQrInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleConfirmQr()}
                   />
                   <button
                     onClick={handleConfirmQr}
                     disabled={processingQr}
-                    className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-lg font-bold flex items-center gap-2 text-sm disabled:opacity-50"
+                    className="px-8 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black flex items-center justify-center gap-2 text-base transition-colors shadow-lg shadow-emerald-500/30 disabled:opacity-50 disabled:shadow-none uppercase tracking-wider"
                   >
-                    {processingQr ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle size={18} />}
-                    Confirm
+                    {processingQr ? <Loader2 className="animate-spin" size={20} /> : <CheckCircle size={20} />}
+                    Receive Box
                   </button>
                 </div>
               </div>
-              {qrMessage && (
-                <div className={`px-4 py-3 rounded-lg flex items-center gap-2 text-sm ${
-                  qrMessage.type === 'success' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400'
-                }`}>
-                  {qrMessage.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
-                  {qrMessage.text}
-                </div>
-              )}
             </div>
+            
+            {qrMessage && (
+              <div className={`mt-4 px-5 py-4 rounded-xl flex items-center gap-3 text-sm font-bold border-2 ${
+                qrMessage.type === 'success' 
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-400' 
+                  : 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-400'
+              }`}>
+                {qrMessage.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                {qrMessage.text}
+              </div>
+            )}
           </div>
 
-          {/* Stock Table - Full Width */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg overflow-hidden">
-            <div className="p-5 border-b border-slate-100 dark:border-slate-700/50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-900/10 rounded-lg flex items-center justify-center">
-                    <Package size={18} className="text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-slate-900 dark:text-white">Finished Goods Stock</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Click row to view OP details</p>
-                  </div>
+          {/* Stock Table */}
+          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <Package size={24} />
                 </div>
-                <div className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-full">
-                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{stocks.length} FG</span>
+                <div>
+                  <h3 className="font-black text-slate-900 dark:text-white text-lg leading-none">Finished Goods Inventory</h3>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">Click row to view Box details</p>
                 </div>
+              </div>
+              <div className="px-4 py-1.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded-lg text-sm font-black uppercase tracking-widest">
+                {stocks.length} FG Types
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
-                  <tr>
-                    <th className="py-3 px-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">FG Number</th>
-                    <th className="py-3 px-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Stock</th>
-                    <th className="py-3 px-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Boxes</th>
-                    <th className="py-3 px-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Last Updated</th>
+              <table className="w-full text-sm">
+                <thead className="bg-slate-100 dark:bg-slate-700/50">
+                  <tr className="text-left text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                    <th className="py-4 px-6">FG Number</th>
+                    <th className="py-4 px-6">Total Stock</th>
+                    <th className="py-4 px-6">Boxes</th>
+                    <th className="py-4 px-6">Last Received</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {stocks.map((stock) => {
-                    const isExpanded = expandedRows.has(stock.id);
-                    return (
-                      <>
-                        <tr
-                          key={stock.id}
-                          className="group hover:bg-slate-50 dark:hover:bg-slate-900/30 cursor-pointer transition-colors"
-                          onClick={() => {
-                            const newSet = new Set(expandedRows);
-                            if (isExpanded) newSet.delete(stock.id);
-                            else newSet.add(stock.id);
-                            setExpandedRows(newSet);
-                          }}
-                        >
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2">
-                              {isExpanded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
-                              <span className="font-mono font-bold text-sm text-slate-900 dark:text-white">{stock.fgNumber}</span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">{stock.totalQty}</span>
-                            <span className="text-xs text-slate-500 ml-1">pcs</span>
-                          </td>
-                          <td className="py-3 px-4">{stock.items.length}</td>
-                          <td className="py-3 px-4 text-xs text-slate-500">
-                            {new Date(stock.items[0]?.createdAt || '').toLocaleDateString('en-US')}
-                          </td>
-                        </tr>
-                        {isExpanded && (
-                          <tr className="bg-slate-50 dark:bg-slate-900/30">
-                            <td colSpan={4} className="p-3">
-                              <div className="ml-6 space-y-1">
-                                <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">OP details in this stock:</h4>
-                                {stock.items.map((item) => (
-                                  <div key={item.id} className="flex justify-between items-center p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                                    <div>
-                                      <span className="font-mono text-xs">{item.op?.opNumber}</span>
-                                      <span className="text-xs text-slate-500 ml-2">({item.op?.styleCode})</span>
-                                    </div>
-                                    <span className="font-bold text-emerald-600 text-sm">{item.qty} pcs</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </>
-                    );
-                  })}
-                  {stocks.length === 0 && (
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                  {stocks.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-6 text-center text-slate-500 text-sm">
-                        No finished goods stock yet
+                      <td colSpan={4} className="py-10 text-center font-bold text-slate-500 text-lg">
+                        <Package size={48} className="mx-auto mb-4 opacity-30" />
+                        No finished goods stock available
                       </td>
                     </tr>
+                  ) : (
+                    stocks.map((stock) => {
+                      const isExpanded = expandedRows.has(stock.id);
+                      return (
+                        <>
+                          <tr
+                            key={stock.id}
+                            className={`group hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors ${isExpanded ? 'bg-slate-50 dark:bg-slate-700/20' : ''}`}
+                            onClick={() => {
+                              const newSet = new Set(expandedRows);
+                              if (isExpanded) newSet.delete(stock.id);
+                              else newSet.add(stock.id);
+                              setExpandedRows(newSet);
+                            }}
+                          >
+                            <td className="py-4 px-6">
+                              <div className="flex items-center gap-3">
+                                <div className={`p-1 rounded-md transition-colors ${isExpanded ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400' : 'text-slate-400'}`}>
+                                  {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                </div>
+                                <span className="font-mono font-black text-base text-slate-900 dark:text-white">{stock.fgNumber}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6">
+                              <div className="flex items-baseline gap-1.5">
+                                <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{stock.totalQty}</span>
+                                <span className="text-xs font-bold text-slate-500 uppercase">sets</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6 font-bold text-slate-700 dark:text-slate-300">{stock.items.length}</td>
+                            <td className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                              {stock.items[0]?.createdAt ? new Date(stock.items[0].createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '-'}
+                            </td>
+                          </tr>
+                          
+                          {/* Expanded Content */}
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={4} className="p-0 border-b-2 border-emerald-100 dark:border-emerald-900/30">
+                                <div className="bg-slate-50/80 dark:bg-slate-900/30 px-8 py-5">
+                                  <h4 className="text-[10px] font-black text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-widest">Boxes in this Inventory:</h4>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                    {stock.items.map((item) => (
+                                      <div key={item.id} className="flex justify-between items-center p-3 bg-white dark:bg-slate-800 rounded-xl border-2 border-slate-100 dark:border-slate-700 shadow-sm hover:border-emerald-300 transition-colors">
+                                        <div>
+                                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-xs block">{item.op?.opNumber}</span>
+                                          <span className="text-[10px] font-semibold text-slate-500 uppercase">{item.op?.styleCode}</span>
+                                        </div>
+                                        <div className="bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 rounded-lg">
+                                          <span className="font-black text-emerald-700 dark:text-emerald-400 text-sm">{item.qty}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -527,79 +557,100 @@ export const FinishedGoodsView = () => {
 
       {activeTab === 'shipping' && (
         <div className="w-full space-y-6">
-          {/* Shipping Form - Full width */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg overflow-hidden">
-            <div className="p-5 border-b border-slate-100 dark:border-slate-700/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/30 dark:to-amber-900/10 rounded-lg flex items-center justify-center">
-                  <FileText size={18} className="text-amber-600 dark:text-amber-400" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">Shipping</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Select shipping document & enter quantity</p>
-                </div>
+          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center gap-4">
+              <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/40 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400">
+                <FileText size={24} />
+              </div>
+              <div>
+                <h3 className="font-black text-slate-900 dark:text-white text-lg leading-none">Shipping Fulfillment</h3>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">Select document & assign quantities</p>
               </div>
             </div>
-            <div className="p-5 space-y-4">
-              {/* Shipping Document Dropdown */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Shipping Document No.</label>
-                <select
-                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all"
-                  value={selectedDoc?.no_surat_jalan || ''}
-                  onChange={(e) => {
-                    const doc = shippingDocs.find(d => d.no_surat_jalan === Number(e.target.value));
-                    handleSelectDoc(doc || null);
-                  }}
-                >
-                  <option value="">-- Select Shipping Document --</option>
-                  {shippingDocs.map(doc => (
-                    <option key={doc.no_surat_jalan} value={doc.no_surat_jalan}>
-                      {doc.no_surat_jalan} - {doc.customer} ({new Date(doc.tanggal_surat_jalan).toLocaleDateString('en-US')})
-                    </option>
-                  ))}
-                </select>
-                {loadingDocs && <Loader2 className="animate-spin mt-1" size={14} />}
+            
+            <div className="p-6 md:p-8">
+              {/* Shipping Document Select */}
+              <div className="mb-8">
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Shipping Document Number</label>
+                <div className="relative">
+                  <select
+                    className="w-full pl-5 pr-10 py-4 text-base font-bold border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-xl text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-900/30 transition-all outline-none appearance-none cursor-pointer"
+                    value={selectedDoc?.no_surat_jalan || ''}
+                    onChange={(e) => {
+                      const doc = shippingDocs.find(d => d.no_surat_jalan === Number(e.target.value));
+                      handleSelectDoc(doc || null);
+                    }}
+                  >
+                    <option value="">-- Choose Shipping Document --</option>
+                    {shippingDocs.map(doc => (
+                      <option key={doc.no_surat_jalan} value={doc.no_surat_jalan}>
+                        DO #{doc.no_surat_jalan} - {doc.customer} ({new Date(doc.tanggal_surat_jalan).toLocaleDateString('en-US')})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={20} />
+                  {loadingDocs && <Loader2 className="absolute right-12 top-1/2 -translate-y-1/2 animate-spin text-amber-500" size={18} />}
+                </div>
               </div>
 
-              {/* Document Items Table */}
+              {/* Document Items Allocation */}
               {selectedDoc && (
-                <div className="mt-2">
-                  <h4 className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Items to ship</h4>
+                <div className="bg-slate-50 dark:bg-slate-900/30 p-6 rounded-2xl border-2 border-slate-100 dark:border-slate-700 mb-6">
+                  <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 mb-4 uppercase tracking-wider flex items-center gap-2">
+                    <Package size={16} className="text-amber-500" />
+                    Items to Fulfill
+                  </h4>
+                  
                   {loadingDocItems ? (
-                    <div className="flex justify-center py-3"><Loader2 className="animate-spin text-amber-600" size={20} /></div>
+                    <div className="flex justify-center items-center py-10"><Loader2 className="animate-spin text-amber-500" size={32} /></div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                       {docItems.map((item) => {
                         const stock = stocks.find(s => s.fgNumber === item.kode_item);
                         const available = stock?.totalQty || 0;
                         const qty = shippingQuantities[item.kode_item] || 0;
+                        const isFulfilled = qty === item.qty;
+                        
                         return (
-                          <div key={item.kode_item} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                            <div className="flex justify-between items-start mb-2">
+                          <div key={item.kode_item} className={`p-4 bg-white dark:bg-slate-800 rounded-xl border-2 transition-colors ${
+                            isFulfilled ? 'border-emerald-400 shadow-sm' : 'border-slate-200 dark:border-slate-700'
+                          }`}>
+                            <div className="flex justify-between items-start mb-3">
                               <div>
-                                <div className="font-mono font-bold text-xs">{item.kode_item}</div>
-                                <div className="text-xs text-slate-500 truncate max-w-[150px]">{item.name_finishgood}</div>
+                                <div className="font-mono font-black text-sm text-slate-900 dark:text-white">{item.kode_item}</div>
+                                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide truncate max-w-[200px]">{item.name_finishgood}</div>
                               </div>
                               <div className="text-right">
-                                <div className="text-xs text-slate-500">Doc: {item.qty}</div>
-                                <div className="text-xs text-emerald-600">Stock: {available}</div>
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Requested</div>
+                                <div className="text-base font-black text-amber-600 dark:text-amber-400">{item.qty}</div>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                min="0"
-                                max={Math.min(available, item.qty)}
-                                className="flex-1 px-2 py-1 text-sm border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg focus:border-amber-500"
-                                placeholder="Qty"
-                                value={qty}
-                                onChange={(e) => setShippingQuantities({
-                                  ...shippingQuantities,
-                                  [item.kode_item]: Math.min(Number(e.target.value) || 0, available, item.qty)
-                                })}
-                              />
-                              <span className="text-xs text-slate-500 w-8">/{item.qty}</span>
+                            
+                            <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
+                              <div className="flex-1">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Ship Qty</div>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={Math.min(available, item.qty)}
+                                    className="w-full pl-3 pr-10 py-2 text-base font-black border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-lg focus:border-amber-500 outline-none transition-colors"
+                                    placeholder="0"
+                                    value={qty || ''}
+                                    onChange={(e) => setShippingQuantities({
+                                      ...shippingQuantities,
+                                      [item.kode_item]: Math.min(Number(e.target.value) || 0, available, item.qty)
+                                    })}
+                                  />
+                                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">/{item.qty}</span>
+                                </div>
+                              </div>
+                              <div className="px-3 py-2 text-center">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Available</div>
+                                <div className={`text-base font-black ${available >= item.qty ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                  {available}
+                                </div>
+                              </div>
                             </div>
                           </div>
                         );
@@ -609,15 +660,15 @@ export const FinishedGoodsView = () => {
                 </div>
               )}
 
-              {/* Process Shipment Button */}
+              {/* Action Button */}
               {selectedDoc && (
                 <button
                   onClick={handleShip}
                   disabled={processingShip || loadingDocItems}
-                  className="w-full mt-4 py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-600 text-white rounded-lg font-bold flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                  className="w-full py-5 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-black flex items-center justify-center gap-3 text-lg transition-all shadow-lg shadow-amber-500/30 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed hover:-translate-y-1 active:translate-y-0 uppercase tracking-wider"
                 >
-                  {processingShip ? <Loader2 className="animate-spin" size={16} /> : <Truck size={16} />}
-                  Process Shipment
+                  {processingShip ? <Loader2 className="animate-spin" size={24} /> : <Truck size={24} />}
+                  Process Shipment Document
                 </button>
               )}
             </div>
@@ -625,53 +676,80 @@ export const FinishedGoodsView = () => {
         </div>
       )}
 
-      {/* History Modal - tetap sama */}
+      {/* History Modal - Solid Style */}
       {showHistory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
-            <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-              <h3 className="text-lg font-bold">Shipping History</h3>
-              <button onClick={() => setShowHistory(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
-                <X size={18} />
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-5xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-slate-800 dark:bg-slate-700 rounded-xl flex items-center justify-center shadow-lg text-white">
+                  <History size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white leading-none">Shipping History</h3>
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider">Processed Delivery Orders</p>
+                </div>
+              </div>
+              <button onClick={() => setShowHistory(false)} className="p-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors shadow-sm">
+                <X size={24} className="text-slate-500" />
               </button>
             </div>
-            <div className="p-5 overflow-y-auto">
+            
+            <div className="p-6 flex-1 overflow-y-auto bg-slate-50/30 dark:bg-slate-900/30 custom-scrollbar">
               {loadingHistory ? (
-                <div className="flex justify-center py-6"><Loader2 className="animate-spin text-amber-600" size={24} /></div>
+                <div className="flex justify-center items-center h-full py-10">
+                  <Loader2 className="animate-spin text-amber-500" size={32} />
+                </div>
               ) : shipments.length === 0 ? (
-                <p className="text-center text-slate-500 py-6">No shipments yet</p>
+                <div className="flex flex-col items-center justify-center h-full text-slate-500 py-10">
+                  <History size={48} className="mb-4 text-slate-300 dark:text-slate-600" />
+                  <p className="font-bold text-lg">No shipment history yet.</p>
+                </div>
               ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr className="text-left text-xs text-slate-500">
-                      <th className="pb-2">Date</th>
-                      <th className="pb-2">Doc No.</th>
-                      <th className="pb-2">Customer</th>
-                      <th className="pb-2">FG</th>
-                      <th className="pb-2">Qty</th>
-                      <th className="pb-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {shipments.map(ship => (
-                      <tr key={ship.id} className="border-t border-slate-100 dark:border-slate-700">
-                        <td className="py-2 text-sm">{new Date(ship.tanggal).toLocaleDateString('en-US')}</td>
-                        <td className="py-2 text-sm">{ship.suratJalan}</td>
-                        <td className="py-2 text-sm">{ship.customerName || '-'}</td>
-                        <td className="py-2 text-sm">{ship.fgNumber}</td>
-                        <td className="py-2 text-sm">{ship.totalQty}</td>
-                        <td className="py-2">
-                          <span className={`px-2 py-0.5 rounded-lg text-xs font-medium ${
-                            ship.status === 'SHIPPED' 
-                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' 
-                              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                          }`}>{ship.status}</span>
-                        </td>
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-100 dark:bg-slate-700/50">
+                      <tr className="text-left text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        <th className="py-4 px-5">Date</th>
+                        <th className="py-4 px-5">Doc Number</th>
+                        <th className="py-4 px-5">Customer</th>
+                        <th className="py-4 px-5">FG Item</th>
+                        <th className="py-4 px-5 text-right">Qty</th>
+                        <th className="py-4 px-5">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                      {shipments.map(ship => (
+                        <tr key={ship.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                          <td className="py-4 px-5 font-semibold text-slate-700 dark:text-slate-300">{new Date(ship.tanggal).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</td>
+                          <td className="py-4 px-5 font-mono font-black text-slate-900 dark:text-white">{ship.suratJalan}</td>
+                          <td className="py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">{ship.customerName || '-'}</td>
+                          <td className="py-4 px-5 font-black text-indigo-600 dark:text-indigo-400">{ship.fgNumber}</td>
+                          <td className="py-4 px-5 font-black text-right">{ship.totalQty}</td>
+                          <td className="py-4 px-5">
+                            <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                              ship.status === 'SHIPPED' 
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800' 
+                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                            }`}>
+                              {ship.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
+            </div>
+            
+            <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-end">
+              <button
+                onClick={() => setShowHistory(false)}
+                className="px-8 py-3 bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-black hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors uppercase tracking-wider"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

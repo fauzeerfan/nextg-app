@@ -31,26 +31,27 @@ interface MetricCardProps {
   suffix?: string;
 }
 
+// Modern Solid Metric Card
 const MetricCard = ({ title, value, icon: Icon, color = 'purple', subtitle, suffix }: MetricCardProps) => {
   const colors = {
-    purple: { bg: 'from-purple-100 to-purple-50', icon: 'text-purple-600', darkBg: 'from-purple-900/20 to-purple-900/10' },
-    emerald: { bg: 'from-emerald-100 to-emerald-50', icon: 'text-emerald-600', darkBg: 'from-emerald-900/20 to-emerald-900/10' },
-    blue: { bg: 'from-blue-100 to-blue-50', icon: 'text-blue-600', darkBg: 'from-blue-900/20 to-blue-900/10' },
-    amber: { bg: 'from-amber-100 to-amber-50', icon: 'text-amber-600', darkBg: 'from-amber-900/20 to-amber-900/10' }
+    purple: { bg: 'bg-purple-100', icon: 'text-purple-600', border: 'border-purple-500', darkBg: 'dark:bg-purple-900/40', darkIcon: 'dark:text-purple-400' },
+    emerald: { bg: 'bg-emerald-100', icon: 'text-emerald-600', border: 'border-emerald-500', darkBg: 'dark:bg-emerald-900/40', darkIcon: 'dark:text-emerald-400' },
+    blue: { bg: 'bg-blue-100', icon: 'text-blue-600', border: 'border-blue-500', darkBg: 'dark:bg-blue-900/40', darkIcon: 'dark:text-blue-400' },
+    amber: { bg: 'bg-amber-100', icon: 'text-amber-600', border: 'border-amber-500', darkBg: 'dark:bg-amber-900/40', darkIcon: 'dark:text-amber-400' }
   };
   const selected = colors[color];
   return (
-    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{title}</div>
-        <div className={`w-8 h-8 bg-gradient-to-br ${selected.bg} dark:${selected.darkBg} rounded-lg flex items-center justify-center`}>
-          <Icon size={16} className={selected.icon} />
+    <div className={`bg-white dark:bg-slate-800 rounded-2xl border-l-4 ${selected.border} border-y border-r border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-shadow`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{title}</div>
+        <div className={`w-9 h-9 ${selected.bg} ${selected.darkBg} rounded-xl flex items-center justify-center`}>
+          <Icon size={18} className={`${selected.icon} ${selected.darkIcon}`} />
         </div>
       </div>
-      <div className="text-2xl font-bold text-slate-900 dark:text-white">
-        {value}{suffix && <span className="text-sm text-slate-500 ml-1">{suffix}</span>}
+      <div className="text-2xl font-black text-slate-900 dark:text-white leading-none">
+        {value}{suffix && <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 ml-1.5">{suffix}</span>}
       </div>
-      {subtitle && <div className="text-xs text-slate-500 mt-1">{subtitle}</div>}
+      {subtitle && <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-2">{subtitle}</div>}
     </div>
   );
 };
@@ -58,13 +59,13 @@ const MetricCard = ({ title, value, icon: Icon, color = 'purple', subtitle, suff
 const StartProgressBar = ({ startIndex, current, target }: { startIndex: number; current: number; target: number }) => {
   const percentage = target > 0 ? Math.min((current / target) * 100, 100) : 0;
   return (
-    <div className="mb-1.5">
-      <div className="flex justify-between text-[10px] mb-0.5">
-        <span className="font-medium text-slate-700 dark:text-slate-300">Start {startIndex}</span>
-        <span className="text-slate-600 dark:text-slate-400">{current} / {target}</span>
+    <div className="mb-2">
+      <div className="flex justify-between text-[10px] mb-1 font-bold">
+        <span className="text-slate-600 dark:text-slate-400 uppercase tracking-widest">Start {startIndex}</span>
+        <span className="text-slate-800 dark:text-slate-200">{current} / {target}</span>
       </div>
-      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
-        <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }} />
+      <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+        <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }} />
       </div>
     </div>
   );
@@ -73,23 +74,23 @@ const StartProgressBar = ({ startIndex, current, target }: { startIndex: number;
 const FinishProgressBar = ({ finishIndex, current, target }: { finishIndex: number; current: number; target: number }) => {
   const percentage = target > 0 ? Math.min((current / target) * 100, 100) : 0;
   return (
-    <div className="mb-1.5">
-      <div className="flex justify-between text-[10px] mb-0.5">
-        <span className="font-medium text-slate-700 dark:text-slate-300">Finish {finishIndex}</span>
-        <span className="text-slate-600 dark:text-slate-400">{current} / {target}</span>
+    <div className="mb-2">
+      <div className="flex justify-between text-[10px] mb-1 font-bold">
+        <span className="text-slate-600 dark:text-slate-400 uppercase tracking-widest">Finish {finishIndex}</span>
+        <span className="text-slate-800 dark:text-slate-200">{current} / {target}</span>
       </div>
-      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
-        <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }} />
+      <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+        <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }} />
       </div>
     </div>
   );
 };
 
 const SewingOpCard = ({ op, onSelect, isSelected }: { op: SewingOp; onSelect: () => void; isSelected: boolean }) => {
-const target = op.qtySewingIn || 0;
-const output = op.qtySewingOut || 0;
-const remaining = target - output;
-  const isCompleted = remaining <= 0;
+  const target = op.qtySewingIn || 0;
+  const output = op.qtySewingOut || 0;
+  const remaining = target - output;
+  const isCompleted = remaining <= 0 && target > 0;
 
   const startMap = new Map(op.sewingStartProgress?.map(s => [s.startIndex, s.qty]) || []);
 
@@ -98,45 +99,46 @@ const remaining = target - output;
 
   return (
     <div
-      className={`group relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border-2 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden cursor-pointer ${
-        isSelected ? 'border-purple-500 dark:border-purple-600' : 'border-slate-200 dark:border-slate-700'
+      className={`group relative bg-white dark:bg-slate-800 rounded-2xl border-2 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden cursor-pointer ${
+        isSelected ? 'border-purple-500 dark:border-purple-500 ring-2 ring-purple-500/20' : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
       }`}
       onClick={onSelect}
     >
-      <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${
-        isCompleted ? 'from-emerald-500 to-emerald-400' : 'from-purple-500 to-purple-400'
+      <div className={`absolute top-0 left-0 w-full h-1.5 ${
+        isCompleted ? 'bg-emerald-500' : 'bg-purple-500'
       }`} />
-      <div className="p-4">
-        <div className="flex justify-between items-start mb-2">
+      
+      <div className="p-5">
+        <div className="flex justify-between items-start mb-4">
           <div>
-            <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">
+            <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
               OP {op.opNumber}
             </div>
-            <div className="font-bold text-base text-slate-900 dark:text-white">{op.styleCode}</div>
+            <div className="font-bold text-lg text-slate-900 dark:text-white leading-none mt-1">{op.styleCode}</div>
           </div>
-          <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-            isCompleted ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+          <div className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${
+            isCompleted ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400'
           }`}>
             {isCompleted ? 'COMPLETED' : 'IN PROGRESS'}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div className="text-center">
-            <div className="text-[10px] text-slate-500 dark:text-slate-400">Target Sets</div>
-            <div className="text-lg font-bold text-slate-900 dark:text-white">{target}</div>
+        <div className="grid grid-cols-2 gap-3 mb-5">
+          <div className="bg-slate-50 dark:bg-slate-700/30 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700 text-center">
+            <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Target Sets</div>
+            <div className="text-xl font-black text-slate-900 dark:text-white leading-none mt-1">{target}</div>
           </div>
-          <div className="text-center">
-            <div className="text-[10px] text-slate-500 dark:text-slate-400">Output Sets</div>
-            <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{output}</div>
+          <div className="bg-slate-50 dark:bg-slate-700/30 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700 text-center">
+            <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Output Sets</div>
+            <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none mt-1">{output}</div>
           </div>
         </div>
 
         {/* Progress Start */}
-        <div className="mb-3">
-          <div className="flex items-center gap-1 mb-1.5">
-            <Layers size={12} className="text-blue-500" />
-            <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300">Start Progress</span>
+        <div className="mb-4 bg-slate-50 dark:bg-slate-700/20 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
+          <div className="flex items-center gap-1.5 mb-2.5">
+            <Layers size={14} className="text-blue-600 dark:text-blue-400" />
+            <span className="text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Start Progress</span>
           </div>
           {startIndices.map(idx => (
             <StartProgressBar key={idx} startIndex={idx} current={startMap.get(idx) || 0} target={target} />
@@ -144,10 +146,10 @@ const remaining = target - output;
         </div>
 
         {/* Progress Finish */}
-        <div className="mb-3">
-          <div className="flex items-center gap-1 mb-1.5">
-            <CheckCircle size={12} className="text-emerald-500" />
-            <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300">Finish Progress</span>
+        <div className="mb-4 bg-slate-50 dark:bg-slate-700/20 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
+          <div className="flex items-center gap-1.5 mb-2.5">
+            <CheckCircle size={14} className="text-emerald-600 dark:text-emerald-400" />
+            <span className="text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Finish Progress</span>
           </div>
           {finishIndices.map(idx => (
             <FinishProgressBar
@@ -159,14 +161,14 @@ const remaining = target - output;
           ))}
         </div>
 
-        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-700 pt-2">
-          <div className="flex items-center gap-1">
-            <Clock size={10} />
-            <span>Updated {new Date(op.updatedAt || '').toLocaleTimeString()}</span>
+        <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 dark:text-slate-500 border-t border-slate-100 dark:border-slate-700 pt-3">
+          <div className="flex items-center gap-1.5">
+            <Clock size={12} className="text-slate-400" />
+            <span>Updated {new Date(op.updatedAt || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
           {!isCompleted && (
-            <div className="flex items-center gap-1 text-purple-600 dark:text-purple-400">
-              <span>{remaining} sets left</span>
+            <div className="flex items-center gap-1 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded-md">
+              <span className="uppercase tracking-wider">{remaining} left</span>
               <ArrowRight size={10} />
             </div>
           )}
@@ -200,7 +202,7 @@ export const SewingView = () => {
           })
         );
         setOps(opsWithProgress);
-        setLastUpdate(new Date().toLocaleTimeString());
+        setLastUpdate(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       }
     } catch (error) {
       console.error('Failed to fetch sewing OPs', error);
@@ -217,75 +219,88 @@ export const SewingView = () => {
 
   const totalOps = ops.length;
   const totalOutput = ops.reduce((sum, op) => sum + (op.qtySewingOut || 0), 0);
-  // Perbaikan: gunakan qtySewingIn sebagai target agar konsisten dengan kartu OP
   const totalTarget = ops.reduce((sum, op) => sum + (op.qtySewingIn || 0), 0);
   const overallProgress = totalTarget > 0 ? Math.round((totalOutput / totalTarget) * 100) : 0;
 
   return (
-    <div className="animate-in fade-in duration-300">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-white to-purple-50/30 dark:from-slate-900 dark:to-purple-900/10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden mb-6">
+    <div className="font-poppins text-slate-800 dark:text-slate-100 min-h-screen animate-in fade-in duration-300">
+      <style>
+        {`
+          @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+          .font-poppins { font-family: 'Poppins', sans-serif; }
+        `}
+      </style>
+
+      {/* Header - Solid Style */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
         <div className="p-6">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5">
+            <div className="flex items-center gap-4">
               <div className="relative">
-                <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <Shirt size={24} className="text-white" />
+                <div className="w-14 h-14 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-600/30">
+                  <Shirt size={28} className="text-white" />
                 </div>
-                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-gradient-to-br from-pink-500 to-pink-400 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-lg">
+                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-pink-500 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-800 shadow-md">
                   <Activity size={14} className="text-white" />
                 </div>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
                   Sewing Station
-                  <span className="text-xs px-2 py-1 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-full font-bold">
+                  <span className="text-[11px] px-2.5 py-1 bg-purple-600 text-white rounded-md font-bold uppercase tracking-wider">
                     SPARSHA IOT
                   </span>
                 </h1>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">Assembly & Stitching Progress Monitoring</p>
               </div>
             </div>
+            
             <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-              <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl shadow-lg">
+              <div className="flex items-center gap-4 px-5 py-3 bg-purple-600 text-white rounded-xl shadow-lg shadow-purple-600/20">
                 <div className="flex flex-col">
-                  <div className="text-xs font-medium opacity-90">Active OPs</div>
-                  <div className="text-xl font-bold">{totalOps}</div>
+                  <div className="text-[11px] font-bold opacity-90 uppercase tracking-wider">Active OPs</div>
+                  <div className="text-2xl font-black leading-none mt-1">{totalOps}</div>
                 </div>
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
-                  <Package size={18} className="text-white" />
+                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                  <Package size={24} className="text-white" />
                 </div>
               </div>
               <button
                 onClick={fetchOps}
                 disabled={loading}
-                className="group px-4 py-2 bg-gradient-to-r from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-300 shadow-sm hover:shadow-md text-sm"
+                className="group px-5 py-3 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-2 hover:border-purple-600 dark:hover:border-purple-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors shadow-sm"
               >
-                {loading ? <RefreshCw size={16} className="animate-spin" /> : <RefreshCw size={16} className="group-hover:rotate-180 transition-transform duration-500" />}
+                {loading ? <RefreshCw size={18} className="animate-spin text-purple-600" /> : <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-500" />}
                 Refresh
               </button>
             </div>
           </div>
         </div>
+        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 px-6 pb-6">
-          <MetricCard title="Active OPs" value={totalOps} icon={Activity} color="purple" subtitle="In progress" />
-          <MetricCard title="Total Output" value={totalOutput} icon={Target} color="emerald" suffix="sets" subtitle="Cumulative" />
-          <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-lg">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Overall Progress</div>
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-900/20 dark:to-blue-900/10 rounded-lg flex items-center justify-center">
-                <Activity size={16} className="text-blue-600 dark:text-blue-400" />
+          <MetricCard title="Active OPs" value={totalOps} icon={Activity} color="purple" subtitle="Jobs currently in progress" />
+          <MetricCard title="Total Output" value={totalOutput} icon={Target} color="emerald" suffix="sets" subtitle="Cumulative finished sets" />
+          
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border-l-4 border-blue-500 border-y border-r border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Overall Progress</div>
+              <div className="w-9 h-9 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex items-center justify-center">
+                <Activity size={18} className="text-blue-600 dark:text-blue-400" />
               </div>
             </div>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">{overallProgress}%</div>
-            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mt-2 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-1000" style={{ width: `${overallProgress}%` }} />
+            <div className="text-2xl font-black text-slate-900 dark:text-white leading-none">{overallProgress}%</div>
+            <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2 mt-2.5 overflow-hidden">
+              <div className="h-full bg-blue-500 rounded-full transition-all duration-1000" style={{ width: `${overallProgress}%` }} />
+            </div>
+            <div className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 mt-2 uppercase tracking-wide">
+              {totalOutput} / {totalTarget} Sets Finished
             </div>
           </div>
         </div>
       </div>
 
-      {/* Grid OP Cards - Diubah dari lg:grid-cols-3 menjadi lg:grid-cols-4 agar card lebih kecil */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Grid OP Cards - Diubah dari lg:grid-cols-3 menjadi lg:grid-cols-4 agar card lebih proporsional */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {ops.map(op => (
           <SewingOpCard
             key={op.id}
@@ -294,13 +309,16 @@ export const SewingView = () => {
             onSelect={() => setSelectedOp(op)}
           />
         ))}
+        
         {ops.length === 0 && !loading && (
-          <div className="col-span-full flex flex-col items-center justify-center py-10 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
-            <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl flex items-center justify-center mb-3">
-              <Shirt size={28} className="text-slate-400" />
+          <div className="col-span-full h-64 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-3xl bg-white dark:bg-slate-800 shadow-sm">
+            <div className="w-20 h-20 bg-slate-100 dark:bg-slate-700/50 rounded-full flex items-center justify-center mb-4">
+              <Shirt size={32} className="text-slate-400 dark:text-slate-500" />
             </div>
-            <h3 className="text-base font-medium text-slate-700 dark:text-slate-300 mb-1">No Active Sewing Orders</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Waiting for orders from Check Panel</p>
+            <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">No Active Sewing Orders</h3>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 text-center max-w-sm">
+              Waiting for production orders to be transferred from Check Panel station.
+            </p>
           </div>
         )}
       </div>

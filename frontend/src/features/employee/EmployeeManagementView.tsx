@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit, Trash2, Save, X, Search, Loader2 } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Save, X, Search, Loader2, UserPlus, FileEdit } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:3000';
 
@@ -33,7 +33,6 @@ export const EmployeeManagementView = () => {
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
-  // Perubahan: initial gender, station, department menjadi string kosong (bukan default 'Laki-laki')
   const [form, setForm] = useState<Partial<Employee>>({
     nik: '', fullName: '', gender: '', jobTitle: '', lineCode: '', station: '', section: '', department: ''
   });
@@ -106,132 +105,299 @@ export const EmployeeManagementView = () => {
   };
 
   return (
-    <div className="p-6">
-      <div className="bg-gradient-to-br from-white to-blue-50/30 dark:from-slate-900 dark:to-blue-900/10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl mb-6">
-        <div className="p-6">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Users size={24} className="text-white" />
+    <div className="p-6 max-w-[1600px] mx-auto text-slate-800 dark:text-slate-200">
+      {/* Header Card */}
+      <div className="bg-gradient-to-r from-white to-blue-50/50 dark:from-slate-900 dark:to-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm mb-6 overflow-hidden relative">
+        {/* Decorative background accent */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+        
+        <div className="p-6 md:p-8 relative z-10">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+            
+            {/* Title Section */}
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20 text-white shrink-0">
+                <Users size={28} strokeWidth={2} />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-white">Employee Management</h1>
-                <p className="text-sm text-slate-600 dark:text-slate-400">Manage employee master data</p>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Employee Master</h1>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Manage and organize your workforce efficiently</p>
               </div>
             </div>
-            <div className="flex gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+
+            {/* Actions Section */}
+            <div className="flex flex-col sm:flex-row w-full lg:w-auto gap-3">
+              <div className="relative w-full sm:w-72 group">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                  <Search className="w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                </div>
                 <input
                   type="text"
-                  placeholder="Search by name or NIK..."
-                  className="pl-9 pr-3 py-2 border-2 border-slate-300 dark:border-slate-700 rounded-lg text-sm"
+                  placeholder="Search name or NIK..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-500 transition-all placeholder:text-slate-400"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
               </div>
-              <button onClick={openCreate} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold flex items-center gap-2">
-                <Plus size={16} /> Add Employee
+              <button 
+                onClick={openCreate} 
+                className="shrink-0 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 transition-all active:scale-[0.98]"
+              >
+                <Plus size={18} strokeWidth={2.5} />
+                <span>Add Employee</span>
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-lg">
+      {/* Table Section */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900/50">
+          <table className="w-full text-sm text-left">
+            <thead className="text-xs uppercase bg-slate-50/80 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 font-semibold tracking-wider">
               <tr>
-                <th className="py-3 px-4 text-left">NIK</th>
-                <th className="py-3 px-4 text-left">Full Name</th>
-                <th className="py-3 px-4 text-left">Gender</th>
-                <th className="py-3 px-4 text-left">Job Title</th>
-                <th className="py-3 px-4 text-left">Line</th>
-                <th className="py-3 px-4 text-left">Station</th>
-                <th className="py-3 px-4 text-left">Section</th>
-                <th className="py-3 px-4 text-left">Department</th>
-                <th className="py-3 px-4 text-center">Actions</th>
+                <th className="px-6 py-4">NIK</th>
+                <th className="px-6 py-4">Full Name</th>
+                <th className="px-6 py-4">Gender</th>
+                <th className="px-6 py-4">Job Title</th>
+                <th className="px-6 py-4">Line</th>
+                <th className="px-6 py-4">Station</th>
+                <th className="px-6 py-4">Section</th>
+                <th className="px-6 py-4">Department</th>
+                <th className="px-6 py-4 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filtered.map(emp => (
-                <tr key={emp.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/30">
-                  <td className="py-2 px-4 font-mono">{emp.nik}</td>
-                  <td className="py-2 px-4 font-medium">{emp.fullName}</td>
-                  <td className="py-2 px-4">{emp.gender}</td>
-                  <td className="py-2 px-4">{emp.jobTitle}</td>
-                  <td className="py-2 px-4">{emp.lineCode}</td>
-                  <td className="py-2 px-4">{emp.station}</td>
-                  <td className="py-2 px-4">{emp.section}</td>
-                  <td className="py-2 px-4">{emp.department}</td>
-                  <td className="py-2 px-4 text-center">
-                    <button onClick={() => openEdit(emp)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Edit size={16} /></button>
-                    <button onClick={() => handleDelete(emp.id)} className="p-1 text-rose-600 hover:bg-rose-50 rounded ml-1"><Trash2 size={16} /></button>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+              {loading && employees.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3 text-slate-400">
+                      <Loader2 size={24} className="animate-spin text-blue-500" />
+                      <span>Loading data...</span>
+                    </div>
                   </td>
                 </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr><td colSpan={9} className="py-8 text-center text-slate-500">No employees found</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Users size={32} className="text-slate-300 dark:text-slate-600 mb-2" />
+                      <p className="font-medium">No employees found</p>
+                      <p className="text-xs text-slate-400">Try adjusting your search criteria</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filtered.map(emp => (
+                  <tr key={emp.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
+                    <td className="px-6 py-3.5">
+                      <span className="inline-flex items-center px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-mono font-medium border border-slate-200 dark:border-slate-700">
+                        {emp.nik}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-slate-100">{emp.fullName}</td>
+                    <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">{emp.gender || '-'}</td>
+                    <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">{emp.jobTitle || '-'}</td>
+                    <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">{emp.lineCode || '-'}</td>
+                    <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">{emp.station || '-'}</td>
+                    <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">{emp.section || '-'}</td>
+                    <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">
+                      <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold">
+                        {emp.department || '-'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3.5">
+                      <div className="flex justify-center items-center gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => openEdit(emp)} 
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                          title="Edit"
+                        >
+                          <Edit size={18} />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(emp.id)} 
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Modal Overlay & Form */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-auto">
-            <div className="p-5 border-b flex justify-between items-center">
-              <h3 className="text-lg font-bold">{editing ? 'Edit Employee' : 'Add Employee'}</h3>
-              <button onClick={() => setModalOpen(false)} className="p-1"><X size={20} /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-slate-200 dark:border-slate-800">
+            
+            {/* Modal Header */}
+            <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg">
+                  {editing ? <FileEdit size={20} /> : <UserPlus size={20} />}
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                  {editing ? 'Edit Employee Details' : 'Register New Employee'}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setModalOpen(false)} 
+                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+              >
+                <X size={20} />
+              </button>
             </div>
-            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><label className="block text-xs font-medium">NIK *</label><input type="text" className="w-full border rounded-lg p-2" value={form.nik} onChange={e => setForm({...form, nik: e.target.value})} disabled={!!editing} /></div>
-              <div><label className="block text-xs font-medium">Full Name *</label><input type="text" className="w-full border rounded-lg p-2" value={form.fullName} onChange={e => setForm({...form, fullName: e.target.value})} /></div>
-              
-              {/* Gender dropdown dengan opsi kosong */}
-              <div>
-                <label className="block text-xs font-medium">Gender</label>
-                <select className="w-full border rounded-lg p-2" value={form.gender || ''} onChange={e => setForm({...form, gender: e.target.value})}>
-                  <option value="">- Pilih Gender -</option>
-                  {genderOptions.map(g => <option key={g}>{g}</option>)}
-                </select>
-              </div>
-              
-              <div><label className="block text-xs font-medium">Job Title</label><input type="text" className="w-full border rounded-lg p-2" value={form.jobTitle} onChange={e => setForm({...form, jobTitle: e.target.value})} /></div>
-              <div><label className="block text-xs font-medium">Line Code</label><input type="text" className="w-full border rounded-lg p-2" value={form.lineCode} onChange={e => setForm({...form, lineCode: e.target.value})} /></div>
-              
-              {/* Station dropdown dengan opsi kosong */}
-              <div>
-                <label className="block text-xs font-medium">Station</label>
-                <select className="w-full border rounded-lg p-2" value={form.station || ''} onChange={e => setForm({...form, station: e.target.value})}>
-                  <option value="">- Pilih Station -</option>
-                  {stationOptions.map(s => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-              
-              <div><label className="block text-xs font-medium">Section</label><input type="text" className="w-full border rounded-lg p-2" value={form.section} onChange={e => setForm({...form, section: e.target.value})} /></div>
-              
-              {/* Department dropdown dengan opsi kosong */}
-              <div>
-                <label className="block text-xs font-medium">Department</label>
-                <select className="w-full border rounded-lg p-2" value={form.department || ''} onChange={e => setForm({...form, department: e.target.value})}>
-                  <option value="">- Pilih Department -</option>
-                  {departmentOptions.map(d => <option key={d}>{d}</option>)}
-                </select>
+            
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                {/* Form Group NIK */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">NIK <span className="text-rose-500">*</span></label>
+                  <input 
+                    type="text" 
+                    className={`w-full px-4 py-2.5 border rounded-xl text-sm outline-none transition-all ${editing ? 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-500 cursor-not-allowed' : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'}`}
+                    value={form.nik} 
+                    onChange={e => setForm({...form, nik: e.target.value})} 
+                    disabled={!!editing} 
+                    placeholder="Enter NIK number"
+                  />
+                </div>
+                
+                {/* Form Group Full Name */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Full Name <span className="text-rose-500">*</span></label>
+                  <input 
+                    type="text" 
+                    className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                    value={form.fullName} 
+                    onChange={e => setForm({...form, fullName: e.target.value})} 
+                    placeholder="Enter full name"
+                  />
+                </div>
+                
+                {/* Form Group Gender */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Gender</label>
+                  <select 
+                    className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none" 
+                    value={form.gender || ''} 
+                    onChange={e => setForm({...form, gender: e.target.value})}
+                  >
+                    <option value="" disabled className="text-slate-400">Select gender</option>
+                    {genderOptions.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+                
+                {/* Form Group Job Title */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Job Title</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                    value={form.jobTitle} 
+                    onChange={e => setForm({...form, jobTitle: e.target.value})} 
+                    placeholder="e.g. Operator"
+                  />
+                </div>
+
+                {/* Form Group Department */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Department</label>
+                  <select 
+                    className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none" 
+                    value={form.department || ''} 
+                    onChange={e => setForm({...form, department: e.target.value})}
+                  >
+                    <option value="" disabled className="text-slate-400">Select department</option>
+                    {departmentOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+
+                {/* Form Group Section */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Section</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                    value={form.section} 
+                    onChange={e => setForm({...form, section: e.target.value})} 
+                    placeholder="Enter section"
+                  />
+                </div>
+
+                {/* Form Group Station */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Station</label>
+                  <select 
+                    className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none" 
+                    value={form.station || ''} 
+                    onChange={e => setForm({...form, station: e.target.value})}
+                  >
+                    <option value="" disabled className="text-slate-400">Select station</option>
+                    {stationOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                
+                {/* Form Group Line Code */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Line Code</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                    value={form.lineCode} 
+                    onChange={e => setForm({...form, lineCode: e.target.value})} 
+                    placeholder="e.g. L-01"
+                  />
+                </div>
               </div>
             </div>
-            <div className="p-5 border-t flex gap-3 justify-end">
-              <button onClick={() => setModalOpen(false)} className="px-4 py-2 border rounded-lg">Cancel</button>
-              <button onClick={handleSubmit} disabled={submitting} className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2">
-                {submitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save
+            
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col-reverse sm:flex-row gap-3 justify-end items-center">
+              <button 
+                onClick={() => setModalOpen(false)} 
+                className="w-full sm:w-auto px-5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleSubmit} 
+                disabled={submitting || !form.nik || !form.fullName} 
+                className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
+              >
+                {submitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} 
+                <span>Save Employee</span>
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Global styles for custom scrollbar (optional, but nice for modals) */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #cbd5e1;
+          border-radius: 20px;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #334155;
+        }
+      `}} />
     </div>
   );
 };

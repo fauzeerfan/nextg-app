@@ -1,13 +1,12 @@
-// frontend/src/App.tsx
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginView } from './features/auth/LoginView';
 import { AppRouter } from './routes/AppRouter';
 import { Sidebar } from './components/layout/Sidebar';
-import { SplashPopup } from './components/ui/SplashPopup'; // 👈 TAMBAHKAN IMPORT
+import { SplashPopup } from './components/ui/SplashPopup';
 
-// Types - Perbarui untuk mencocokkan dengan yang diharapkan oleh Sidebar
 type UserData = {
   id: number;
   username: string;
@@ -18,76 +17,33 @@ type UserData = {
   permissions: string[];
 };
 
-// Tipe untuk data yang diterima dari API login
-type LoginResponseData = {
-  id: number;
-  username: string;
-  email: string;
-  role: string;
-  lineCode?: string;
-  fullName: string;
-  permissions: string[];
-  token: string;
-};
-
 const AppContent = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, token, isAuthenticated, login, logout, sessionType, users } = useAuth();
   
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(() => {
     return localStorage.getItem('nextg_active_tab') || 'dashboard';
   });
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
-  const [showSplashPopup, setShowSplashPopup] = useState(false); // 👈 STATE BARU
+  const [showSplashPopup, setShowSplashPopup] = useState(false);
 
-  // Setup responsive dan authentication
   useEffect(() => {
-    // Check Authentication
-    const checkAuth = () => {
-      const storedUser = localStorage.getItem('nextg_user');
-      const storedToken = localStorage.getItem('nextg_token');
-
-      if (storedUser && storedToken) {
-        try {
-          const parsedUser: UserData = JSON.parse(storedUser);
-          setCurrentUser(parsedUser);
-          setIsAuthenticated(true);
-        } catch (error) {
-          console.error('Invalid session data:', error);
-          localStorage.clear();
-        }
-      }
-      setIsLoading(false);
-    };
-
-    // Setup Responsive Layout
     const handleResize = () => {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
-      if (mobile) {
-        setSidebarOpen(false);
-      } else {
-        setSidebarOpen(true);
-      }
+      if (mobile) setSidebarOpen(false);
+      else setSidebarOpen(true);
     };
-
-    // Initialize
-    checkAuth();
     handleResize();
-
-    // Add Event Listener
     window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
+    setIsLoading(false);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Sync URL dengan activeTab (tab -> path)
+  // Sync URL with activeTab
   useEffect(() => {
     const tabToPath: Record<string, string> = {
       'dashboard': '/dashboard',
@@ -101,79 +57,58 @@ const AppContent = () => {
       'reports': '/reports',
       'traceability': '/traceability',
       'line_master': '/line-master',
-      'pattern_master': '/pattern-master',
       'user_management': '/user-management',
       'employee_management': '/employee-management',
       'manpower_control': '/manpower-control',
       'manpower_monitoring': '/manpower-monitoring',
     };
-
     const path = tabToPath[activeTab] || '/dashboard';
-    if (location.pathname !== path) {
-      navigate(path);
-    }
+    if (location.pathname !== path) navigate(path);
   }, [activeTab, navigate, location.pathname]);
 
-  // Sync activeTab dengan URL saat load (path -> tab)
   useEffect(() => {
-    const pathToTab: Record<string, string> = {
-      '/dashboard': 'dashboard',
-      '/cutting-entan': 'cutting_entan',
-      '/cutting-pond': 'cutting_pond',
-      '/check-panel': 'cp',
-      '/sewing': 'sewing',
-      '/quality-control': 'qc',
-      '/packing': 'packing',
-      '/finished-goods': 'fg',
-      '/reports': 'reports',
-      '/traceability': 'traceability',
-      '/line-master': 'line_master',
-      '/pattern-master': 'pattern_master',
-      '/user-management': 'user_management',
-      '/employee-management': 'employee_management',
-      '/manpower-control': 'manpower_control',
-      '/manpower-monitoring': 'manpower_monitoring',
-    };
-
+const pathToTab: Record<string, string> = {
+  '/dashboard': 'dashboard',
+  '/cutting-entan': 'cutting_entan',
+  '/cutting-pond': 'cutting_pond',
+  '/check-panel': 'cp',
+  '/sewing': 'sewing',
+  '/quality-control': 'qc',        // perbaikan untuk QC
+  '/packing': 'packing',           // perbaikan untuk Packing
+  '/finished-goods': 'fg',
+  '/reports': 'reports',
+  '/traceability': 'traceability',
+  '/line-master': 'line_master',
+  '/user-management': 'user_management',
+  '/employee-management': 'employee_management',
+  '/manpower-control': 'manpower_control',
+  '/manpower-monitoring': 'manpower_monitoring',
+};
     const tab = pathToTab[location.pathname];
-    if (tab && tab !== activeTab) {
-      setActiveTab(tab);
-    }
+    if (tab && tab !== activeTab) setActiveTab(tab);
   }, [location.pathname]);
 
-  // Save active tab state
   useEffect(() => {
-    if (isAuthenticated) {
-      localStorage.setItem('nextg_active_tab', activeTab);
-    }
+    if (isAuthenticated) localStorage.setItem('nextg_active_tab', activeTab);
   }, [activeTab, isAuthenticated]);
 
-  // Handlers
-  const handleLogin = (userData: LoginResponseData, token: string) => {
-    // Ekstrak data user yang diperlukan (tanpa token)
-    const { token: _, ...userWithoutToken } = userData;
-    const userForState: UserData = userWithoutToken;
-    
-    setIsAuthenticated(true);
-    setCurrentUser(userForState);
-    localStorage.setItem('nextg_user', JSON.stringify(userForState));
-    localStorage.setItem('nextg_token', token);
+  const handleLogin = (userData: any, token: string, sessionType?: 'single' | 'multi', additionalUsers?: any[]) => {
+    if (sessionType === 'multi') {
+      const primaryUser = { ...userData, id: Number(userData.id) };
+      const additional = additionalUsers?.map(u => ({ user: { ...u.user, id: Number(u.user.id) }, token: u.token })) || [];
+      login(token, primaryUser, 'multi', additional);
+    } else {
+      login(token, { ...userData, id: Number(userData.id) }, 'single');
+    }
     setActiveTab('dashboard');
-    setShowSplashPopup(true); // 👈 TAMPILKAN POPUP SETELAH LOGIN
+    setShowSplashPopup(true);
   };
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    localStorage.removeItem('nextg_user');
-    localStorage.removeItem('nextg_token');
-    localStorage.removeItem('nextg_active_tab');
-    setActiveTab('dashboard');
-    setShowSplashPopup(false); // 👈 RESET SAAT LOGOUT
-    navigate('/');
+    logout();
+    setShowSplashPopup(false);
   };
 
-  // Loading state
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
@@ -189,36 +124,40 @@ const AppContent = () => {
     return <LoginView onLogin={handleLogin} />;
   }
 
-  // Get page title (tidak digunakan, tetapi dipertahankan)
-  const getPageTitle = () => {
-    const titleMap: Record<string, string> = {
-      'dashboard': 'Production Dashboard',
-      'cutting_entan': 'Cutting Entan',
-      'cutting_pond': 'Cutting Pond',
-      'cp': 'Check Panel',
-      'sewing': 'Sewing',
-      'qc': 'Quality Control',
-      'packing': 'Packing',
-      'fg': 'Finished Goods',
-      'reports': 'Reports & Analytics',
-      'traceability': 'Traceability',
-      'line_master': 'Line Master',
-      'pattern_master': 'Pattern Master',
-      'user_management': 'User Management',
-      'employee_management': 'Employee Management',
-      'manpower_control': 'Manpower Control',
-      'manpower_monitoring': 'Manpower Monitoring',
+  // Determine currentUserForSidebar untuk menu (single user atau multi user ambil user pertama)
+  let currentUserForSidebar = null;
+  if (sessionType === 'single' && user) {
+    currentUserForSidebar = {
+      username: user.username,
+      fullName: user.fullName,
+      role: user.role,
+      lineCode: user.lineCode,
+      allowedStations: user.allowedStations
     };
-    return titleMap[activeTab] || activeTab.replace(/_/g, ' ').toUpperCase();
-  };
+  } else if (sessionType === 'multi' && users.length > 0) {
+    // Gunakan user pertama untuk menentukan menu (karena semua user punya allowedStations sama)
+    const firstUser = users[0].user;
+    currentUserForSidebar = {
+      username: firstUser.username,
+      fullName: firstUser.fullName,
+      role: firstUser.role,
+      lineCode: firstUser.lineCode,
+      allowedStations: firstUser.allowedStations
+    };
+  }
+
+  const multiUsersForSidebar = sessionType === 'multi' ? users.map(u => ({
+    username: u.user.username,
+    fullName: u.user.fullName,
+    role: u.user.role,
+    lineCode: u.user.lineCode,
+    allowedStations: u.user.allowedStations
+  })) : [];
 
   return (
     <>
-      {/* Popup Splash Screen */}
       <SplashPopup show={showSplashPopup} onClose={() => setShowSplashPopup(false)} />
-
       <div className="flex min-h-screen font-sans transition-colors duration-300 bg-slate-100 dark:bg-slate-950 text-black dark:text-white">
-        {/* Sidebar - Hanya tampil di desktop */}
         <div className="hidden md:block">
           <Sidebar 
             activeTab={activeTab}
@@ -226,40 +165,31 @@ const AppContent = () => {
             isMobile={isMobile}
             isOpen={isSidebarOpen}
             toggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
-            currentUser={currentUser}
+            currentUser={currentUserForSidebar}
+            multiUsers={multiUsersForSidebar}
+            sessionType={sessionType}
             onLogout={handleLogout}
           />
         </div>
-
-        {/* Mobile Overlay */}
         {isMobile && isSidebarOpen && (
-          <div 
-            className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm md:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
+          <div className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm md:hidden" onClick={() => setSidebarOpen(false)} />
         )}
-
-        {/* Mobile Sidebar */}
         {isMobile && (
-          <div className={`fixed inset-y-0 left-0 z-50 md:hidden transition-transform duration-300 ${
-            isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}>
+          <div className={`fixed inset-y-0 left-0 z-50 md:hidden transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <Sidebar 
               activeTab={activeTab}
               setActiveTab={setActiveTab}
               isMobile={isMobile}
               isOpen={isSidebarOpen}
               toggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
-              currentUser={currentUser}
+              currentUser={currentUserForSidebar}
+              multiUsers={multiUsersForSidebar}
+              sessionType={sessionType}
               onLogout={handleLogout}
             />
           </div>
         )}
-
-        {/* Main Content Area */}
-        <div className={`flex-1 flex flex-col min-h-screen overflow-hidden transition-all duration-300 ${
-          !isMobile && isSidebarOpen ? 'md:ml-64 lg:ml-72' : 'md:ml-20'
-        }`}>
+        <div className={`flex-1 flex flex-col min-h-screen overflow-hidden transition-all duration-300 ${!isMobile && isSidebarOpen ? 'md:ml-64 lg:ml-72' : 'md:ml-20'}`}>
           <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-100 dark:bg-slate-950">
             <div className="max-w-[1600px] mx-auto">
               <AppRouter 
@@ -276,12 +206,14 @@ const AppContent = () => {
   );
 };
 
-export default function NextGApp() { 
+export default function NextGApp() {
   return (
     <ThemeProvider>
       <Router>
-        <AppContent />
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
       </Router>
     </ThemeProvider>
-  ); 
+  );
 }

@@ -26,6 +26,8 @@ interface SidebarProps {
   isOpen: boolean;
   toggleSidebar: () => void;
   currentUser: UserData | null;
+  multiUsers?: UserData[];
+  sessionType?: 'single' | 'multi' | null;
   onLogout: () => void;
 }
 
@@ -36,6 +38,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   toggleSidebar,
   currentUser,
+  multiUsers = [],
+  sessionType = 'single',
   onLogout
 }) => {
   const { theme, toggleTheme } = useTheme();
@@ -168,18 +172,72 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (tab && tab !== activeTab) setActiveTab(tab);
   }, [location.pathname, setActiveTab]);
 
+  // Helper to display user info in footer
+  const renderUserInfo = () => {
+    if (sessionType === 'single' && currentUser) {
+      return (
+        <div className="bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200/50 dark:border-slate-800/50 rounded-2xl p-3 flex items-center gap-3 mb-4 shadow-sm transition-all hover:shadow-md">
+          <div className="relative shrink-0">
+            <img
+              src={getAvatarUrl(currentUser.username)}
+              alt={currentUser.fullName}
+              className="w-10 h-10 lg:w-11 lg:h-11 rounded-full bg-white dark:bg-slate-800 object-cover shadow-sm ring-2 ring-white dark:ring-slate-700"
+              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.style.display = 'none'; }}
+            />
+            {currentUser.role === 'ADMINISTRATOR' && (
+              <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-amber-500 rounded-full border-2 border-white dark:border-slate-800 shadow-sm"></div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-sm text-slate-800 dark:text-white truncate">
+              {currentUser.fullName}
+            </div>
+            <div className="text-[10px] lg:text-xs font-medium text-slate-500 dark:text-slate-400 capitalize truncate mt-0.5">
+              {currentUser.role?.toLowerCase().replace('_', ' ') || 'Operator'}
+            </div>
+            {currentUser.lineCode && (
+              <div className="inline-flex items-center mt-1.5 px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-[10px] font-bold">
+                Line {currentUser.lineCode}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    } else if (sessionType === 'multi' && multiUsers.length > 0) {
+      return (
+        <div className="bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200/50 dark:border-slate-800/50 rounded-2xl p-3 mb-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <Users size={14} className="text-blue-500" />
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Multi-User ({multiUsers.length})</span>
+          </div>
+          <div className="space-y-2 max-h-32 overflow-y-auto">
+            {multiUsers.map((u, idx) => (
+              <div key={idx} className="flex items-center gap-2 text-xs">
+                <img src={getAvatarUrl(u.username)} className="w-6 h-6 rounded-full" alt="" />
+                <span className="font-medium text-slate-700 dark:text-slate-300 truncate">{u.fullName}</span>
+                <span className="text-[10px] text-slate-400">@{u.username}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
-    <aside className={`fixed inset-y-0 left-0 z-50 bg-gradient-to-b from-slate-50 to-white dark:from-slate-900 dark:to-slate-950 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 ease-in-out shadow-xl h-screen flex flex-col ${
+    <aside className={`fixed inset-y-0 left-0 z-50 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-xl border-r border-slate-200/60 dark:border-slate-800/60 transition-all duration-300 ease-in-out shadow-2xl h-screen flex flex-col ${
       isMobile
         ? (isOpen ? 'translate-x-0' : '-translate-x-full')
         : (isOpen ? 'w-64 lg:w-72' : 'w-16 lg:w-20')
     }`}>
-      <div className="flex items-center h-20 lg:h-24 border-b border-slate-100 dark:border-slate-800/50 shrink-0 px-3 lg:px-4">
-        <div className={`flex items-center w-full transition-all duration-300 ${isCollapsed ? 'justify-center' : 'gap-2 lg:gap-3'}`}>
-          <NextGLogo className="h-14 lg:h-16 w-auto text-blue-600 dark:text-white drop-shadow-sm shrink-0" />
+      {/* Header / Logo */}
+      <div className="flex items-center h-20 lg:h-24 border-b border-slate-200/50 dark:border-slate-800/50 shrink-0 px-4 lg:px-5">
+        <div className={`flex items-center w-full transition-all duration-300 ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
+          <NextGLogo className="h-14 lg:h-16 w-auto text-blue-600 dark:text-blue-500 drop-shadow-sm shrink-0 hover:scale-105 transition-transform duration-300" />
           {!isCollapsed && (
             <div className="flex flex-col">
-              <span className="text-xl lg:text-2xl font-bold italic tracking-wider text-slate-800 dark:text-white truncate max-w-[120px] lg:max-w-none">
+              <span className="text-xl lg:text-2xl font-black italic tracking-wide bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-500 dark:from-white dark:to-slate-400 truncate">
                 NextG<span className="text-blue-600 dark:text-blue-500">App</span>
               </span>
             </div>
@@ -187,16 +245,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
+      {/* Navigation Menu */}
       <div className="flex-1 overflow-hidden flex flex-col">
-        <nav className="flex-1 overflow-y-auto py-3 px-2 lg:px-3">
+        <nav className="flex-1 overflow-y-auto py-4 px-3 lg:px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-200 dark:[&::-webkit-scrollbar-thumb]:bg-slate-800 [&::-webkit-scrollbar-thumb]:rounded-full">
           {filteredGroups.map((group, idx) => (
-            <div key={idx} className="mb-4 lg:mb-6">
+            <div key={idx} className="mb-6 lg:mb-8 last:mb-2">
               {!isCollapsed && (
-                <div className="text-[8px] lg:text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 lg:mb-2 px-2 lg:px-3">
+                <div className="text-[10px] lg:text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500 mb-2.5 px-3 flex items-center gap-2">
                   {group.title}
+                  <div className="h-px flex-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-full"></div>
                 </div>
               )}
-              <div className="space-y-0.5 lg:space-y-1">
+              <div className="space-y-1 lg:space-y-1.5">
                 {group.items.map((item) => {
                   const Icon = item.icon;
                   const isActive = activeTab === item.id;
@@ -205,27 +265,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       key={item.id}
                       type="button"
                       onClick={() => handleTabClick(item.id)}
-                      className={`w-full flex items-center gap-2 lg:gap-3 px-2 lg:px-3 py-2 lg:py-3 rounded-xl transition-all duration-200 group relative overflow-hidden cursor-pointer
+                      className={`w-full flex items-center gap-3 px-2 lg:px-3 py-2.5 lg:py-3 rounded-xl transition-all duration-300 group relative overflow-hidden cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-blue-500
                         ${isActive
-                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30'
-                          : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white'
+                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-[0_4px_20px_-4px_rgba(59,130,246,0.4)]'
+                          : 'hover:bg-slate-200/50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                         }
                         ${isCollapsed ? 'justify-center px-0' : ''}
                       `}
                       title={isCollapsed ? item.label : ''}
                     >
-                      <div className={`p-1.5 lg:p-2 rounded-lg transition-colors ${
-                        isActive ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-800 group-hover:bg-slate-200 dark:group-hover:bg-slate-700'
+                      <div className={`p-2 lg:p-2.5 rounded-lg transition-all duration-300 flex items-center justify-center ${
+                        isActive 
+                          ? 'bg-white/20 shadow-inner' 
+                          : 'bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-800 group-hover:scale-110'
                       }`}>
-                        <Icon size={18} className={isActive ? 'text-white' : item.color} />
+                        <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-white' : item.color} />
                       </div>
+                      
                       {!isCollapsed && (
-                        <div className="flex-1 text-left">
-                          <div className="font-semibold text-xs lg:text-sm truncate">{item.label}</div>
+                        <div className="flex-1 text-left overflow-hidden">
+                          <div className={`font-semibold text-xs lg:text-sm truncate transition-transform duration-300 ${!isActive && 'group-hover:translate-x-1'}`}>
+                            {item.label}
+                          </div>
                         </div>
                       )}
+
+                      {/* Active Indicator Dot */}
                       {isActive && !isCollapsed && (
-                        <div className="absolute right-2 lg:right-3 top-1/2 transform -translate-y-1/2 w-1.5 h-1.5 bg-white rounded-full"></div>
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)]"></div>
                       )}
                     </button>
                   );
@@ -235,44 +302,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ))}
         </nav>
 
-        <div className={`border-t border-slate-100 dark:border-slate-800/50 shrink-0 ${isCollapsed ? 'px-1 lg:px-2' : 'px-3 lg:px-4'}`}>
-          {!isCollapsed && (
-            <div className="flex items-center gap-2 lg:gap-3 mb-3 lg:mb-4 pt-3 lg:pt-4">
-              <div className="relative">
-                <img
-                  src={getAvatarUrl(currentUser?.username || 'default')}
-                  alt={currentUser?.fullName || 'User'}
-                  className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-slate-200 dark:bg-slate-700 object-cover"
-                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.style.display = 'none'; }}
-                />
-                {currentUser?.role === 'ADMINISTRATOR' && (
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border-2 border-white dark:border-slate-900"></div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-bold text-xs lg:text-sm text-slate-800 dark:text-white truncate">
-                  {currentUser?.fullName || 'User'}
+        {/* Footer / User Profile & Actions */}
+        <div className={`border-t border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-md shrink-0 ${isCollapsed ? 'p-2 lg:p-3' : 'p-4 lg:p-5'}`}>
+          {!isCollapsed && renderUserInfo()}
+          
+          <div className={`flex gap-2 ${isCollapsed ? 'flex-col items-center' : 'justify-between'}`}>
+            <div className={`flex gap-2 ${isCollapsed ? 'flex-col' : ''}`}>
+              <button 
+                onClick={toggleTheme} 
+                className="p-2 lg:p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-all duration-200 flex items-center justify-center group outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                title="Toggle Theme"
+              >
+                <div className="group-hover:rotate-12 transition-transform duration-300">
+                  {theme === 'dark' ? <Sun size={18} strokeWidth={2.5} /> : <Moon size={18} strokeWidth={2.5} />}
                 </div>
-                <div className="text-[10px] lg:text-xs text-slate-500 dark:text-slate-400 capitalize truncate">
-                  {currentUser?.role?.toLowerCase().replace('_', ' ') || 'Operator'}
+              </button>
+              <button 
+                onClick={toggleSidebar} 
+                className="p-2 lg:p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-all duration-200 flex items-center justify-center group outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                title={isOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+              >
+                <div className="group-hover:-translate-x-0.5 transition-transform duration-300">
+                  {isOpen ? <PanelLeftClose size={18} strokeWidth={2.5} /> : <PanelLeftOpen size={18} strokeWidth={2.5} />}
                 </div>
-                {currentUser?.lineCode && (
-                  <div className="text-[9px] lg:text-xs text-slate-400 mt-0.5 truncate">
-                    Line {currentUser.lineCode}
-                  </div>
-                )}
-              </div>
+              </button>
             </div>
-          )}
-          <div className={`flex gap-1 lg:gap-2 pb-3 lg:pb-4 ${isCollapsed ? 'flex-col items-center' : 'justify-center'}`}>
-            <button onClick={toggleTheme} className="p-1.5 lg:p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 w-8 h-8 lg:w-10 lg:h-10 flex items-center justify-center">
-              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-            </button>
-            <button onClick={toggleSidebar} className="p-1.5 lg:p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 w-8 h-8 lg:w-10 lg:h-10 flex items-center justify-center">
-              {isOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-            </button>
-            <button onClick={() => { if (window.confirm('Are you sure you want to log out?')) onLogout(); }} className="p-1.5 lg:p-2 rounded-lg bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 w-8 h-8 lg:w-10 lg:h-10 flex items-center justify-center">
-              <LogOut size={16} className="text-red-600 dark:text-red-400" />
+            <button 
+              onClick={() => { if (window.confirm('Are you sure you want to log out?')) onLogout(); }} 
+              className={`p-2 lg:p-2.5 rounded-xl transition-all duration-200 flex items-center justify-center group outline-none focus-visible:ring-2 focus-visible:ring-red-500
+                ${isCollapsed 
+                  ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40' 
+                  : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-500 hover:text-white shadow-sm hover:shadow-red-500/30 flex-1 ml-2'
+                }`}
+              title="Logout"
+            >
+              <div className="flex items-center justify-center gap-2">
+                <LogOut size={18} strokeWidth={2.5} className="group-hover:-translate-x-0.5 transition-transform duration-300" />
+                {!isCollapsed && <span className="font-bold text-sm">Logout</span>}
+              </div>
             </button>
           </div>
         </div>

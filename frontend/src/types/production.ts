@@ -337,12 +337,15 @@ export interface DashboardComprehensive {
     defectRate: number;
     target: number;
   }>;
-  stationFlow: Array<{           // 🔥 NEW: Station flow progress
-    station: string;
-    count: number;
-    wipQty: number;
-    progress: number;
-  }>;
+stationFlow: Array<{
+  station: string;
+  count: number;
+  wipQty: number;
+  todayInput: number;    // tambahan
+  todayOutput: number;   // tambahan
+  qtyNg: number;         // tambahan
+  progress: number;
+}>;
   qualityTrend: Array<{          // 🔥 NEW: 7-day quality trend
     date: string;
     defectRate: number;
