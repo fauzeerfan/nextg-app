@@ -20,16 +20,14 @@ interface RunningOp {
 }
 
 type ReportType = 
-  | 'ng-cutting-pond-checkpanel'
-  | 'ng-quality-control'
+  | 'ng-all'
   | 'line-check-time'
   | 'station-performance'
   | 'line-performance'
   | 'daily-production';
 
 const reportTypes: { value: ReportType; label: string; icon: any }[] = [
-  { value: 'ng-cutting-pond-checkpanel', label: 'NG Cutting Pond & Check Panel', icon: AlertTriangle },
-  { value: 'ng-quality-control', label: 'NG Quality Control', icon: ClipboardCheck },
+  { value: 'ng-all', label: 'NG Pond, Panel, & QC', icon: AlertTriangle },
   { value: 'line-check-time', label: 'Line Check Time', icon: Clock },
   { value: 'station-performance', label: 'Station Performance', icon: Activity },
   { value: 'line-performance', label: 'Line Performance', icon: Factory },
@@ -47,7 +45,7 @@ const getAuthHeaders = () => {
 };
 
 export const ReportsView = () => {
-  const [selectedReport, setSelectedReport] = useState<ReportType>('ng-cutting-pond-checkpanel');
+  const [selectedReport, setSelectedReport] = useState<ReportType>('ng-all');
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -56,7 +54,7 @@ export const ReportsView = () => {
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [lineCode, setLineCode] = useState('');
   const [station, setStation] = useState('');
-  const [selectedOpId, setSelectedOpId] = useState('');
+  const [searchOpInput, setSearchOpInput] = useState('');
   const [groupBy, setGroupBy] = useState<'line' | 'station' | ''>('');
   const [lines, setLines] = useState<any[]>([]);
   const [runningOps, setRunningOps] = useState<RunningOp[]>([]);
@@ -64,6 +62,7 @@ export const ReportsView = () => {
   const [loading, setLoading] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [expandedOp, setExpandedOp] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchLines = useCallback(async () => {
     try {
@@ -81,6 +80,7 @@ export const ReportsView = () => {
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams({
         startDate: new Date(startDate).toISOString(),
@@ -90,10 +90,54 @@ export const ReportsView = () => {
       if (station && selectedReport === 'line-check-time') params.append('station', station);
       if (station && selectedReport === 'station-performance') params.append('station', station);
       if (lineCode && selectedReport === 'line-performance') params.append('lineCode', lineCode);
-      if (selectedOpId && (selectedReport === 'ng-cutting-pond-checkpanel' || selectedReport === 'ng-quality-control')) {
-        params.append('opId', selectedOpId);
-      }
       if (groupBy && selectedReport === 'daily-production') params.append('groupBy', groupBy);
+
+      // Handle NG All (gabungan)
+      if (selectedReport === 'ng-all') {
+        let opIdToSend = '';
+        if (searchOpInput.trim()) {
+          const matchedOp = runningOps.find(op => 
+            op.opNumber.toLowerCase() === searchOpInput.trim().toLowerCase()
+          );
+          if (matchedOp) {
+            opIdToSend = matchedOp.id;
+          } else {
+            setError(`OP "${searchOpInput}" tidak ditemukan`);
+            setLoading(false);
+            return;
+          }
+        }
+        if (opIdToSend) params.append('opId', opIdToSend);
+        
+        const [res1, res2] = await Promise.all([
+          fetch(`${API_BASE_URL}/reports/ng-cutting-pond-checkpanel?${params}`, { headers: getAuthHeaders() }),
+          fetch(`${API_BASE_URL}/reports/ng-quality-control?${params}`, { headers: getAuthHeaders() })
+        ]);
+        if (res1.ok && res2.ok) {
+          const data1 = await res1.json();
+          const data2 = await res2.json();
+          const combined = {
+            summary: {
+              totalNgPond: data1.summary?.totalNgPond || 0,
+              totalNgCP: data1.summary?.totalNgCP || 0,
+              totalNgQC: data2.summary?.totalNg || 0,
+              totalNg: (data1.summary?.totalNg || 0) + (data2.summary?.totalNg || 0),
+              period: data1.summary?.period || { start: startDate, end: endDate },
+            },
+            cuttingPond: data1.cuttingPond || [],
+            checkPanel: data1.checkPanel || [],
+            qualityControl: data2.byOp || [],
+            rawPond: data1.rawPond || [],
+            rawCP: data1.rawCP || [],
+            rawQC: data2.raw || [],
+          };
+          setData(combined);
+        } else {
+          setData(null);
+        }
+        setLoading(false);
+        return;
+      }
 
       const res = await fetch(`${API_BASE_URL}/reports/${selectedReport}?${params}`, {
         headers: getAuthHeaders()
@@ -106,7 +150,7 @@ export const ReportsView = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedReport, startDate, endDate, lineCode, station, selectedOpId, groupBy]);
+  }, [selectedReport, startDate, endDate, lineCode, station, groupBy, searchOpInput, runningOps]);
 
   useEffect(() => {
     fetchLines();
@@ -118,16 +162,11 @@ export const ReportsView = () => {
   }, [fetchReport]);
 
   const handleExport = async () => {
-    let exportEndpoint = '';
-    if (selectedReport === 'ng-cutting-pond-checkpanel') exportEndpoint = 'ng-cutting-pond';
-    else if (selectedReport === 'ng-quality-control') exportEndpoint = 'ng-quality-control';
-    else return alert('Export not available for this report');
-    const params = new URLSearchParams({
-      startDate: new Date(startDate).toISOString(),
-      endDate: new Date(endDate).toISOString(),
-    });
-    if (lineCode) params.append('lineCode', lineCode);
-    window.open(`${API_BASE_URL}/reports/export/${exportEndpoint}?${params}`, '_blank');
+    if (selectedReport === 'ng-all') {
+      alert('Export untuk laporan gabungan belum tersedia. Silakan export masing-masing laporan terpisah.');
+      return;
+    }
+    alert('Export not available for this report');
   };
 
   const renderSummary = () => {
@@ -492,6 +531,291 @@ export const ReportsView = () => {
     );
   };
 
+  const renderNgAll = () => {
+    if (!data) return null;
+    return (
+      <div className="space-y-6">
+        {/* Cutting Pond Section */}
+        {data.cuttingPond && data.cuttingPond.length > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+              <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center shadow-md text-white">
+                  <Scissors size={20} />
+                </div>
+                Cutting Pond NG Data
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-100 dark:bg-slate-700/50 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+                  <tr>
+                    <th className="py-4 px-6">OP Number</th>
+                    <th className="py-4 px-6">Style</th>
+                    <th className="py-4 px-6">Line</th>
+                    <th className="py-4 px-6 text-right">Total NG</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                  {data.cuttingPond.map((op: any) => (
+                    <React.Fragment key={op.opNumber}>
+                      <tr 
+                        className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors duration-150 group" 
+                        onClick={() => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber)}
+                      >
+                        <td className="py-4 px-6 font-mono font-black text-slate-900 dark:text-white">{op.opNumber}</td>
+                        <td className="py-4 px-6 font-semibold text-slate-700 dark:text-slate-300">{op.styleCode}</td>
+                        <td className="py-4 px-6">
+                          <span className="px-3 py-1 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-bold uppercase tracking-wider">
+                            {op.lineCode}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-right font-black text-rose-600 dark:text-rose-400 text-base">
+                          <div className="flex items-center justify-end gap-3">
+                            {op.totalNg}
+                            <div className={`p-1.5 rounded-lg transition-colors ${expandedOp === op.opNumber ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>
+                              {expandedOp === op.opNumber ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedOp === op.opNumber && (
+                        <tr className="bg-slate-50/50 dark:bg-slate-900/30">
+                          <td colSpan={4} className="p-0 border-b border-slate-200 dark:border-slate-700">
+                            <div className="px-8 py-6 border-l-4 border-orange-500">
+                              {op.patternNgDetails && op.patternNgDetails.length > 0 ? (
+                                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border-2 border-slate-100 dark:border-slate-700 shadow-sm">
+                                  <div className="font-black text-sm text-slate-800 dark:text-slate-200 mb-5 flex items-center gap-2 uppercase tracking-wider">
+                                    <div className="w-1.5 h-5 bg-orange-500 rounded-full"></div>
+                                    Detail Qty NG per Pola
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                    {op.patternNgDetails.map((p: any, idx: number) => (
+                                      <div key={idx} className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex justify-between items-center hover:border-orange-300 dark:hover:border-orange-500/50 transition-colors">
+                                        <span className="font-bold text-slate-700 dark:text-slate-300 truncate pr-2 text-sm">{p.patternName}</span>
+                                        <span className="bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400 font-black px-3 py-1.5 rounded-lg text-xs shrink-0">
+                                          {p.ng} pcs
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-center py-8 text-slate-500 dark:text-slate-400 font-semibold bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 border-dashed">
+                                  Belum ada detail per pola untuk OP ini.
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Check Panel Section */}
+        {data.checkPanel && data.checkPanel.length > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+              <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-md text-white">
+                  <ClipboardCheck size={20} />
+                </div>
+                Check Panel NG Data
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-100 dark:bg-slate-700/50 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+                  <tr>
+                    <th className="py-4 px-6">OP Number</th>
+                    <th className="py-4 px-6">Style</th>
+                    <th className="py-4 px-6">Line</th>
+                    <th className="py-4 px-6 text-right">Total NG</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                  {data.checkPanel.map((op: any) => (
+                    <React.Fragment key={op.opNumber}>
+                      <tr 
+                        className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors duration-150 group" 
+                        onClick={() => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber)}
+                      >
+                        <td className="py-4 px-6 font-mono font-black text-slate-900 dark:text-white">{op.opNumber}</td>
+                        <td className="py-4 px-6 font-semibold text-slate-700 dark:text-slate-300">{op.styleCode}</td>
+                        <td className="py-4 px-6">
+                          <span className="px-3 py-1 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-bold uppercase tracking-wider">
+                            {op.lineCode}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-right font-black text-rose-600 dark:text-rose-400 text-base">
+                          <div className="flex items-center justify-end gap-3">
+                            {op.totalNg}
+                            <div className={`p-1.5 rounded-lg transition-colors ${expandedOp === op.opNumber ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>
+                              {expandedOp === op.opNumber ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedOp === op.opNumber && op.patternDetails && (
+                        <tr className="bg-slate-50/50 dark:bg-slate-900/30">
+                          <td colSpan={4} className="p-0 border-b border-slate-200 dark:border-slate-700">
+                            <div className="px-8 py-6 border-l-4 border-emerald-500">
+                              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border-2 border-slate-100 dark:border-slate-700 shadow-sm">
+                                <div className="font-black text-sm text-slate-800 dark:text-slate-200 mb-5 flex items-center gap-2 uppercase tracking-wider">
+                                  <div className="w-1.5 h-5 bg-emerald-500 rounded-full"></div>
+                                  Detail NG per Pola dan Reason
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                                  {op.patternDetails.map((p: any, i: number) => {
+                                    const reasonsList = Array.isArray(p.ngReasons) ? p.ngReasons : [];
+                                    const reasonCounts: Record<string, number> = {};
+                                    reasonsList.forEach((reason: string) => {
+                                      reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+                                    });
+                                    const reasonEntries = Object.entries(reasonCounts);
+                                    return (
+                                      <div key={i} className="bg-slate-50 dark:bg-slate-900/50 p-5 rounded-2xl border-2 border-slate-100 dark:border-slate-700 flex flex-col h-full hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-colors">
+                                        <div className="flex justify-between items-start mb-4 gap-3">
+                                          <span className="font-black text-slate-800 dark:text-slate-200 text-sm leading-tight uppercase">{p.patternName}</span>
+                                          <span className="bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400 font-black px-2.5 py-1 rounded-lg text-xs shrink-0">
+                                            NG: {p.ng}
+                                          </span>
+                                        </div>
+                                        <div className="flex-1">
+                                          {reasonEntries.length > 0 ? (
+                                            <div className="space-y-2">
+                                              {reasonEntries.map(([reason, qty], idx) => (
+                                                <div key={idx} className="flex justify-between items-center bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 shadow-sm">
+                                                  <span className="text-xs text-slate-700 dark:text-slate-300 font-bold truncate pr-2">{reason}</span>
+                                                  <span className="text-sm font-black text-rose-600 dark:text-rose-400 shrink-0">{qty}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <span className="text-xs text-slate-500 font-medium italic">Tidak ada keterangan reason</span>
+                                          )}
+                                        </div>
+                                        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-4 pt-3 border-t-2 border-slate-200 dark:border-slate-700 flex items-center justify-end gap-1.5 uppercase tracking-widest">
+                                          <Clock size={12} />
+                                          {new Date(p.timestamp).toLocaleString()}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Quality Control Section */}
+        {data.qualityControl && data.qualityControl.length > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+              <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center shadow-md text-white">
+                  <ClipboardCheck size={20} />
+                </div>
+                Quality Control NG Data
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-100 dark:bg-slate-700/50 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+                  <tr>
+                    <th className="py-4 px-6">OP Number</th>
+                    <th className="py-4 px-6">Style</th>
+                    <th className="py-4 px-6">Line</th>
+                    <th className="py-4 px-6 text-right">Good</th>
+                    <th className="py-4 px-6 text-right">NG</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                  {data.qualityControl.map((op: any) => {
+                    const opReasonCounts: Record<string, number> = {};
+                    op.inspections?.forEach((i: any) => {
+                      const rList = Array.isArray(i.ngReasons) ? i.ngReasons : [];
+                      rList.forEach((r: string) => opReasonCounts[r] = (opReasonCounts[r] || 0) + 1);
+                    });
+                    const reasonEntries = Object.entries(opReasonCounts);
+                    return (
+                      <React.Fragment key={op.opNumber}>
+                        <tr 
+                          className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors duration-150 group" 
+                          onClick={() => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber)}
+                        >
+                          <td className="py-4 px-6 font-mono font-black text-slate-900 dark:text-white">{op.opNumber}</td>
+                          <td className="py-4 px-6 font-semibold text-slate-700 dark:text-slate-300">{op.styleCode}</td>
+                          <td className="py-4 px-6">
+                            <span className="px-3 py-1 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-bold uppercase tracking-wider">
+                              {op.lineCode}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 text-right font-black text-emerald-600 dark:text-emerald-400 text-base">{op.totalGood}</td>
+                          <td className="py-4 px-6 text-right font-black text-rose-600 dark:text-rose-400 text-base">
+                            <div className="flex items-center justify-end gap-3">
+                              {op.totalNg}
+                              <div className={`p-1.5 rounded-lg transition-colors ${expandedOp === op.opNumber ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>
+                                {expandedOp === op.opNumber ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                        {expandedOp === op.opNumber && (
+                          <tr className="bg-slate-50/50 dark:bg-slate-900/30">
+                            <td colSpan={5} className="p-0 border-b border-slate-200 dark:border-slate-700">
+                              <div className="px-8 py-6 border-l-4 border-amber-500">
+                                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border-2 border-slate-100 dark:border-slate-700 shadow-sm">
+                                  <div className="font-black text-sm text-slate-800 dark:text-slate-200 mb-5 flex items-center gap-2 uppercase tracking-wider">
+                                    <div className="w-1.5 h-5 bg-amber-500 rounded-full"></div>
+                                    Detail Aggregated NG Reasons (Total)
+                                  </div>
+                                  {reasonEntries.length > 0 ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                      {reasonEntries.map(([reason, qty], idx) => (
+                                        <div key={idx} className="flex justify-between items-center p-4 bg-rose-50 dark:bg-rose-900/20 rounded-xl border-2 border-rose-100 dark:border-rose-900/50 hover:border-rose-300 dark:hover:border-rose-700 transition-colors">
+                                          <span className="font-bold text-slate-800 dark:text-slate-200 text-sm truncate pr-2">{reason}</span>
+                                          <span className="bg-white dark:bg-slate-800 shadow-sm text-rose-600 dark:text-rose-400 font-black px-3 py-1.5 rounded-lg text-sm shrink-0 border border-slate-200 dark:border-slate-700">
+                                            {qty} pcs
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="text-center py-8 text-slate-500 dark:text-slate-400 font-semibold bg-slate-50 dark:bg-slate-900/50 rounded-2xl border-2 border-slate-200 dark:border-slate-700 border-dashed">
+                                      Tidak ada keterangan detail reason untuk OP ini.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderLineCheckTime = () => {
     if (!data?.data) return null;
     return (
@@ -746,6 +1070,13 @@ export const ReportsView = () => {
         <div className="text-sm font-bold text-slate-500 uppercase tracking-widest animate-pulse">Generating comprehensive report...</div>
       </div>
     );
+    if (error) return (
+      <div className="flex flex-col items-center justify-center py-24 text-slate-500 bg-white dark:bg-slate-800 rounded-3xl border-2 border-dashed border-rose-300 dark:border-rose-700 shadow-sm">
+        <AlertTriangle size={64} className="mb-6 text-rose-400 dark:text-rose-500" />
+        <p className="text-xl font-black text-rose-600 dark:text-rose-400 mb-2">Error</p>
+        <p className="text-sm font-medium text-slate-500">{error}</p>
+      </div>
+    );
     if (!data) return (
       <div className="flex flex-col items-center justify-center py-24 text-slate-500 bg-white dark:bg-slate-800 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700 shadow-sm">
         <FileText size={64} className="mb-6 text-slate-300 dark:text-slate-600" />
@@ -755,8 +1086,7 @@ export const ReportsView = () => {
     );
     
     switch (selectedReport) {
-      case 'ng-cutting-pond-checkpanel': return renderNgCuttingPondCheckPanel();
-      case 'ng-quality-control': return renderNgQualityControl();
+      case 'ng-all': return renderNgAll();
       case 'line-check-time': return renderLineCheckTime();
       case 'station-performance': return renderStationPerformance();
       case 'line-performance': return renderLinePerformance();
@@ -885,18 +1215,19 @@ export const ReportsView = () => {
 
         {/* Conditional Filters Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6 pt-6 border-t-2 border-slate-100 dark:border-slate-700 empty:hidden">
-          {(selectedReport === 'ng-cutting-pond-checkpanel' || selectedReport === 'ng-quality-control') && (
+          {selectedReport === 'ng-all' && (
             <div>
-              <label className={labelClassName}>Select OP (Running)</label>
-              <div className="relative">
-                <select value={selectedOpId} onChange={e => setSelectedOpId(e.target.value)} className={inputClassName}>
-                  <option value="">All Running OPs</option>
-                  {runningOps.map(op => <option key={op.id} value={op.id}>{op.opNumber} - {op.styleCode} ({op.line?.code})</option>)}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-slate-500">
-                  <ChevronDown size={20} strokeWidth={3} />
-                </div>
-              </div>
+              <label className={labelClassName}>Search OP (Nomor OP)</label>
+              <input
+                type="text"
+                className={inputClassName}
+                placeholder="Contoh: K1YH260001"
+                value={searchOpInput}
+                onChange={e => setSearchOpInput(e.target.value)}
+              />
+              <p className="text-[10px] font-medium text-slate-400 mt-1">
+                Masukkan nomor OP untuk filter, kosongkan untuk semua OP
+              </p>
             </div>
           )}
           
