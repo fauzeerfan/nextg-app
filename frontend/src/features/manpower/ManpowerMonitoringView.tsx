@@ -143,9 +143,13 @@ export const ManpowerMonitoringView = () => {
           nodeMap.set(firstNodeId, {
             id: firstNodeId,
             name: `${first.lineCode} (${firstDate})`,
-            type: 'line-date'
+            type: 'line-date',
+            employees: [] // <-- tambah properti employees
           });
         }
+        // Tambahkan karyawan ke node line pertama
+        const firstNode = nodeMap.get(firstNodeId);
+        firstNode.employees.push(empData.fullName);
 
         // Link employee -> line pertama
         const linkKeyFirst = `${empNodeId}->${firstNodeId}`;
@@ -164,16 +168,24 @@ export const ManpowerMonitoringView = () => {
             nodeMap.set(currNodeId, {
               id: currNodeId,
               name: `${current.lineCode} (${currDate})`,
-              type: 'line-date'
+              type: 'line-date',
+              employees: [] // <-- tambah properti employees
             });
           }
           if (!nodeMap.has(nextNodeId)) {
             nodeMap.set(nextNodeId, {
               id: nextNodeId,
               name: `${next.lineCode} (${nextDate})`,
-              type: 'line-date'
+              type: 'line-date',
+              employees: [] // <-- tambah properti employees
             });
           }
+
+          // Tambahkan karyawan ke node current dan next (jika belum ada)
+          const currNode = nodeMap.get(currNodeId);
+          const nextNode = nodeMap.get(nextNodeId);
+          if (!currNode.employees.includes(empData.fullName)) currNode.employees.push(empData.fullName);
+          if (!nextNode.employees.includes(empData.fullName)) nextNode.employees.push(empData.fullName);
 
           const linkKey = `${currNodeId}->${nextNodeId}`;
           linkMap.set(linkKey, (linkMap.get(linkKey) || 0) + 1);

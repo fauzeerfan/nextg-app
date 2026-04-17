@@ -10,18 +10,76 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async validateUser(username: string, password: string): Promise<any> {
+  async validateUser(
+    username: string,
+    password: string,
+    ipAddress: string,
+    userAgent: string,
+  ): Promise<{ user: any; errorMessage?: string }> {
     const user = await this.prisma.user.findUnique({
       where: { username },
     });
-    if (!user) return null;
+
+    if (!user) {
+      // catat log gagal (user tidak ditemukan)
+      await this.prisma.userLoginLog.create({
+        data: {
+          username,
+          ipAddress,
+          userAgent,
+          status: 'FAILED',
+          errorMessage: 'User not found',
+        },
+      });
+      return { user: null, errorMessage: 'Username atau Password salah' };
+    }
+
     const match = await bcrypt.compare(password, user.password);
-    if (!match) return null;
+    if (!match) {
+      await this.prisma.userLoginLog.create({
+        data: {
+          username,
+          ipAddress,
+          userAgent,
+          status: 'FAILED',
+          errorMessage: 'Wrong password',
+          userId: user.id,
+        },
+      });
+      return { user: null, errorMessage: 'Username atau Password salah' };
+    }
+
+    if (!user.isActive) {
+      await this.prisma.userLoginLog.create({
+        data: {
+          username,
+          ipAddress,
+          userAgent,
+          status: 'FAILED',
+          errorMessage: 'Account inactive',
+          userId: user.id,
+        },
+      });
+      return { user: null, errorMessage: 'Akun tidak aktif' };
+    }
+
     const { password: _, ...result } = user;
-    return result;
+    return { user: result };
   }
 
-  async login(user: any) {
+  async login(user: any, ipAddress: string, userAgent: string) {
+    // catat log sukses
+    await this.prisma.userLoginLog.create({
+      data: {
+        userId: user.id,
+        username: user.username,
+        ipAddress,
+        userAgent,
+        status: 'SUCCESS',
+        station: user.allowedStations?.[0] || null, // ambil station pertama jika ada
+      },
+    });
+
     const payload = {
       username: user.username,
       sub: user.id,

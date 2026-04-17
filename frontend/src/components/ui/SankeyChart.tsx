@@ -6,6 +6,7 @@ interface SankeyNode {
   id: string;
   name: string;
   type: string;
+  employees?: string[]; // tambahan untuk daftar karyawan pada node line-date
 }
 
 interface SankeyLink {
@@ -308,12 +309,28 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
           ? d.name.replace(/\s*\(.*?\)/, '')
           : d.name.split(' ')[0];
 
+        // Bangun HTML tambahan jika node adalah line-date dan memiliki employees
+        let additionalHtml = '';
+        if (d.type === 'line-date' && d.employees && d.employees.length > 0) {
+          const uniqueEmployees = [...new Set(d.employees)];
+          const employeeList = uniqueEmployees.map(emp => 
+            `<div style="padding: 4px 8px; background: #f1f5f9; border-radius: 8px; margin: 4px 0; font-size: 12px; font-weight: 500;">${emp}</div>`
+          ).join('');
+          additionalHtml = `
+            <div style="margin-top: 12px; border-top: 1px solid #e2e8f0; padding-top: 8px;">
+              <div style="font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 6px;">👥 Manpower (${uniqueEmployees.length}):</div>
+              <div style="max-height: 200px; overflow-y: auto;">${employeeList}</div>
+            </div>
+          `;
+        }
+
         tooltip.style('visibility', 'visible')
           .html(`
             <div style="font-weight: 700; font-size: 16px; margin-bottom: 4px; color: ${getNodeColor(d)};">${cleanName}</div>
             <div style="font-size: 12px; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">
               ${d.type === 'employee' ? '• Karyawan Aktif' : '• Area / Line Kerja'}
             </div>
+            ${additionalHtml}
           `);
       })
       .on('mousemove', function(event) {

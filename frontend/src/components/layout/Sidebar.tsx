@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Scissors, Grid, ClipboardCheck, Shirt,
   CheckCircle, Package, Truck, Factory, Users,
   PanelLeftClose, PanelLeftOpen, LogOut, Sun, Moon,
-  BarChart3, History, Scan, Calendar
+  BarChart3, History, Scan, Calendar, Target, LogIn
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { NextGLogo } from '../ui/Logo';
@@ -74,6 +74,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { id: 'reports', label: 'Reports', icon: BarChart3, color: 'text-cyan-500' },
         { id: 'traceability', label: 'Traceability', icon: History, color: 'text-violet-500' },
+        { id: 'target_monitoring', label: 'Target Monitoring', icon: BarChart3, color: 'text-amber-500' },
+        { id: 'login_monitoring', label: 'Login Monitoring', icon: LogIn, color: 'text-blue-500' },
       ]
     },
     {
@@ -89,6 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'line_master', label: 'Line Master', icon: Factory, color: 'text-cyan-500' },
         { id: 'user_management', label: 'User Management', icon: Users, color: 'text-red-500' },
         { id: 'employee_management', label: 'Employee Management', icon: Users, color: 'text-green-500' },
+        { id: 'target_management', label: 'Target Management', icon: Target, color: 'text-amber-500' },
       ]
     }
   ];
@@ -141,6 +144,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       'employee_management': '/employee-management',
       'manpower_control': '/manpower-control',
       'manpower_monitoring': '/manpower-monitoring',
+      'target_management': '/target-management',
+      'target_monitoring': '/target-monitoring',
+      'login_monitoring': '/login-monitoring',   // ✅ mapping sudah benar
     };
     const path = tabToPath[tabId];
     if (path) {
@@ -167,6 +173,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       '/employee-management': 'employee_management',
       '/manpower-control': 'manpower_control',
       '/manpower-monitoring': 'manpower_monitoring',
+      '/target-management': 'target_management',
+      '/target-monitoring': 'target_monitoring',
+      '/login-monitoring': 'login_monitoring',   // ✅ mapping sudah benar
     };
     const tab = pathToTab[location.pathname];
     if (tab && tab !== activeTab) setActiveTab(tab);

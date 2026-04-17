@@ -3,14 +3,14 @@ import {
   Search, Package, Truck, FileText, Layers, ClipboardCheck,
   CheckCircle, AlertCircle, Clock, Box, Archive,
   ChevronDown, ChevronRight, Loader2, TrendingUp,
-  Scissors, Shirt, QrCode, Grid, Activity
+  Scissors, Shirt, QrCode, Grid, Activity, Hash
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:3000';
 
 // Types
 interface BcDocument {
-  nomor_er: number;
+  nomor_el: number;
   kode_bc: string;
   nomor_dokumen_bc: string;
   tanggal_dokumen_bc: string;
@@ -150,18 +150,66 @@ interface TraceResult {
     fgNumber: string;
     totalQty: number;
     ops: OpTraceResult[];
+    materials?: {
+      material: {
+        set_artnr_u: string;
+        Art_name: string;
+        consumptionPerUnit: number;
+        unit: string;
+      };
+      totalConsumption: number;
+      totalQtyFG: number;
+    }[];
   }[];
 }
 
 interface BcTraceResult {
   bcDocument: string;
-  bcEr: string | null;
+  bcEl: string | null;
   relatedShipments: {
     suratJalan: string;
     shipmentDate: string;
     totalQty: number;
     ops: { opNumber: string; qty: number }[];
   }[];
+  foundInProduction?: boolean;
+  relatedOps?: string[];
+  message?: string;
+}
+
+// === TIPE LAMA (masih dipertahankan untuk kompatibilitas) ===
+interface MaterialDetail {
+  set_artnr_u: string;
+  Art_name: string;
+  total: number;
+  Art_einheit: string;
+  Art_ekletzt: number;
+}
+
+interface BcDocumentMaterial {
+  nomor_el: number;
+  kode_bc: string;
+  nomor_dokumen_bc: string;
+  tanggal_dokumen_bc: string;
+}
+
+interface MaterialItem {
+  material: MaterialDetail;
+  list_batch: string[];
+  list_dokumen_bc: BcDocumentMaterial[];
+  totalQtyShipped?: number;
+  totalConsumption?: number;
+}
+
+interface SuratJalanTraceResult {
+  itemFinishgood: string;
+  list_op_number: string[];
+  list_material: MaterialItem[];
+}
+
+// === TYPE GUARD ===
+function isTraceResult(obj: any): obj is TraceResult {
+  return obj && typeof obj === 'object' && 'suratJalan' in obj && Array.isArray((obj as any).fgItems);
 }
 
 const getAuthHeaders = () => {
@@ -185,7 +233,7 @@ const uniqueBy = <T, K extends keyof T>(arr: T[], key: K): T[] => {
 const uniqueBcDocuments = (docs: BcDocument[]): BcDocument[] => {
   const seen = new Set();
   return docs.filter(doc => {
-    const key = `${doc.nomor_dokumen_bc}|${doc.nomor_er}`;
+    const key = `${doc.nomor_dokumen_bc}|${doc.nomor_el}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -300,10 +348,10 @@ const OpDetailCard = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {uniqueBcDocuments(op.bcDocuments).map((doc, idx) => (
                   <div key={idx} className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-rose-100 dark:border-rose-800/50 text-sm text-slate-700 dark:text-slate-300 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-center mb-3 pb-3 border-b border-rose-100 dark:border-slate-700/50">
-                      <span className="text-slate-500 font-bold uppercase text-xs tracking-wider">No. ER</span> 
-                      <span className="font-black text-rose-600 dark:text-rose-400 text-base">{doc.nomor_er}</span>
-                    </div>
+<div className="flex justify-between items-center mb-3 pb-3 border-b border-rose-100 dark:border-slate-700/50">
+  <span className="text-slate-500 font-bold uppercase text-xs tracking-wider">No. EL</span> 
+  <span className="font-black text-rose-600 dark:text-rose-400 text-base">{doc.nomor_el}</span>
+</div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Dokumen</span> 
                       <span className="font-bold text-slate-800 dark:text-slate-200">{doc.nomor_dokumen_bc}</span>
@@ -674,17 +722,25 @@ const OpDetailCard = ({
 export const TraceabilityExtendedView = () => {
   const [searchType, setSearchType] = useState<'surat-jalan' | 'bc-document' | 'op'>('surat-jalan');
   const [searchQuery, setSearchQuery] = useState('');
-  const [bcNomorEr, setBcNomorEr] = useState('');
+  const [bcNomorEl, setBcNomorEl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<OpTraceResult | TraceResult | BcTraceResult | null>(null);
+  const [result, setResult] = useState<OpTraceResult | TraceResult | BcTraceResult | SuratJalanTraceResult | null>(null);
   const [expandedFg, setExpandedFg] = useState<Set<string>>(new Set());
   const [expandedOp, setExpandedOp] = useState<Set<string>>(new Set());
 
   const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      setError('Masukkan nomor OP, surat jalan, atau nomor dokumen BC');
-      return;
+    // Validasi untuk pencarian BC: boleh hanya nomor EL atau hanya nomor dokumen
+    if (searchType === 'bc-document') {
+      if (!searchQuery.trim() && !bcNomorEl.trim()) {
+        setError('Masukkan nomor dokumen BC atau nomor EL');
+        return;
+      }
+    } else {
+      if (!searchQuery.trim()) {
+        setError('Masukkan nomor OP atau surat jalan');
+        return;
+      }
     }
 
     setLoading(true);
@@ -698,35 +754,35 @@ export const TraceabilityExtendedView = () => {
       } else if (searchType === 'surat-jalan') {
         url = `${API_BASE_URL}/traceability-extended/surat-jalan/${encodeURIComponent(searchQuery)}`;
       } else {
-        let params = `nomorDokumen=${encodeURIComponent(searchQuery)}`;
-        if (bcNomorEr) params += `&nomorEr=${encodeURIComponent(bcNomorEr)}`;
-        url = `${API_BASE_URL}/traceability-extended/bc-document?${params}`;
+        // Pencarian BC: kirim nomor dokumen jika ada, kosongkan jika tidak
+        const params = new URLSearchParams();
+        if (searchQuery.trim()) params.append('nomorDokumen', searchQuery.trim());
+        if (bcNomorEl.trim()) params.append('nomorEl', bcNomorEl.trim());
+        url = `${API_BASE_URL}/traceability-extended/bc-document?${params.toString()}`;
       }
 
+      console.log('Fetching URL:', url);
+
       const res = await fetch(url, { headers: getAuthHeaders() });
-      if (res.ok) {
-        let data = await res.json();
-        if (searchType === 'surat-jalan' && data && (data as TraceResult).fgItems) {
-          const traceData = data as TraceResult;
-          traceData.fgItems = traceData.fgItems.map((fg: any) => ({
-            ...fg,
-            ops: uniqueBy(fg.ops, 'opNumber')
-          }));
-          traceData.fgItems.forEach((fg: any) => {
-            fg.ops.forEach((op: OpTraceResult) => {
-              if (op.bcDocuments) op.bcDocuments = uniqueBcDocuments(op.bcDocuments);
-            });
-          });
-          setResult(traceData);
-        } else {
-          setResult(data);
-        }
-      } else {
-        const err = await res.json();
-        setError(err.message || 'Data tidak ditemukan');
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Response error:', res.status, errorText);
+        setError(`Server error: ${res.status} - ${errorText.substring(0, 200)}`);
+        return;
       }
-    } catch (err) {
-      setError('Gagal terhubung ke server');
+
+      const data = await res.json();
+      console.log('Response data:', data);
+      setResult(data);
+      
+    } catch (err: any) {
+      console.error('Fetch error details:', err);
+      if (err.message === 'Failed to fetch') {
+        setError('Tidak dapat terhubung ke server. Pastikan backend berjalan di http://localhost:3000');
+      } else {
+        setError(`Network error: ${err.message}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -768,70 +824,328 @@ export const TraceabilityExtendedView = () => {
     </div>
   );
 
-  const renderSuratJalanResult = (res: TraceResult) => (
-    <div className="space-y-8">
-      <div className="bg-white dark:bg-slate-800 rounded-3xl border-2 border-slate-200 dark:border-slate-700 p-6 md:p-8 shadow-md">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 pb-6 border-b-2 border-slate-100 dark:border-slate-700/50">
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-600/30 flex items-center justify-center shrink-0">
-              <Truck size={32} />
-            </div>
-            <div>
-              <div className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-lg inline-block shadow-sm">Surat Jalan</div>
-              <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight mt-1">{res.suratJalan}</h2>
-            </div>
-          </div>
-          <div className="flex sm:flex-col gap-4 sm:gap-3 text-sm bg-slate-50 dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-            <div className="flex items-center gap-3"><Clock size={18} className="text-slate-400"/> <span className="font-bold text-slate-700 dark:text-slate-300">{new Date(res.shipmentDate).toLocaleString()}</span></div>
-            <div className="flex items-center gap-3"><Box size={18} className="text-slate-400"/> <span className="font-bold text-slate-500">Total:</span> <span className="font-black text-blue-600 dark:text-blue-400 text-lg bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded">{res.totalQty} pcs</span></div>
-          </div>
-        </div>
+  // Komponen untuk format baru (TraceResult)
+  const SuratJalanResultView = ({ data }: { data: TraceResult }) => {
+    const [expandedMaterialFg, setExpandedMaterialFg] = useState<Set<string>>(new Set());
 
-        <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-6 flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600"><Package size={20} /></div> Finished Goods Items</h3>
-        <div className="space-y-5">
-          {res.fgItems.map(fg => (
-            <div key={fg.fgNumber} className="border-2 border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-all group/item">
-              <div
-                className="flex items-center justify-between p-5 md:p-6 bg-slate-50 dark:bg-slate-800 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                onClick={() => toggleFg(fg.fgNumber)}
-              >
-                <div className="flex items-center gap-5">
-                  <div className="w-14 h-14 bg-emerald-600 text-white rounded-xl flex items-center justify-center group-hover/item:scale-105 group-hover/item:rotate-3 transition-transform shadow-md shadow-emerald-600/30">
-                    <Package size={24} />
+    const toggleFgMaterials = (fgNumber: string) => {
+      const newSet = new Set(expandedMaterialFg);
+      if (newSet.has(fgNumber)) newSet.delete(fgNumber);
+      else newSet.add(fgNumber);
+      setExpandedMaterialFg(newSet);
+    };
+
+    return (
+      <div className="space-y-8">
+        <div className="bg-white dark:bg-slate-800 rounded-3xl border-2 border-slate-200 dark:border-slate-700 p-6 md:p-8 shadow-md">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 pb-6 border-b-2 border-slate-100 dark:border-slate-700/50">
+            <div className="flex items-center gap-5">
+              <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-600/30 flex items-center justify-center shrink-0">
+                <Truck size={32} />
+              </div>
+              <div>
+                <div className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-lg inline-block shadow-sm">
+                  Surat Jalan
+                </div>
+                <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight mt-1">{data.suratJalan}</h2>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 text-sm bg-slate-50 dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="flex items-center gap-3">
+                <Box size={18} className="text-slate-400" />
+                <span className="font-bold text-slate-500">Total Qty:</span>
+                <span className="font-black text-blue-600 dark:text-blue-400 text-lg bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded">
+                  {data.totalQty} pcs
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Clock size={18} className="text-slate-400" />
+                <span className="font-bold text-slate-500">Tanggal:</span>
+                <span className="font-bold text-slate-700 dark:text-slate-300">
+                  {new Date(data.shipmentDate).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Daftar FG Items */}
+          <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-6 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+              <Package size={20} />
+            </div>
+            Finished Goods Items
+          </h3>
+          <div className="space-y-5">
+            {data.fgItems.map(fg => {
+              const isMaterialExpanded = expandedMaterialFg.has(fg.fgNumber);
+              return (
+                <div key={fg.fgNumber} className="border-2 border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-all group/item">
+                  <div
+                    className="flex items-center justify-between p-5 md:p-6 bg-slate-50 dark:bg-slate-800 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                    onClick={() => toggleFg(fg.fgNumber)}
+                  >
+                    <div className="flex items-center gap-5">
+                      <div className="w-14 h-14 bg-emerald-600 text-white rounded-xl flex items-center justify-center group-hover/item:scale-105 group-hover/item:rotate-3 transition-transform shadow-md shadow-emerald-600/30">
+                        <Package size={24} />
+                      </div>
+                      <div>
+                        <span className="text-xl font-black text-slate-900 dark:text-white block tracking-tight">{fg.fgNumber}</span>
+                        <span className="text-sm text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-lg shadow-sm inline-block mt-2">{fg.totalQty} pcs shipped</span>
+                      </div>
+                    </div>
+                    <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 text-slate-500 group-hover/item:bg-emerald-100 dark:group-hover/item:text-emerald-600 group-hover/item:border-emerald-300 transition-all shadow-sm">
+                      {expandedFg.has(fg.fgNumber) ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-xl font-black text-slate-900 dark:text-white block tracking-tight">{fg.fgNumber}</span>
-                    <span className="text-sm text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-lg shadow-sm inline-block mt-2">{fg.totalQty} pcs shipped</span>
+                  {expandedFg.has(fg.fgNumber) && (
+                    <div className="p-5 md:p-8 bg-slate-50/50 dark:bg-slate-900/30 border-t-2 border-slate-200 dark:border-slate-700 space-y-6">
+                      {/* Material Section */}
+{fg.materials && fg.materials.length > 0 && (
+  <div className="mb-4">
+    <div
+      className="flex items-center gap-3 cursor-pointer group/material"
+      onClick={(e) => { e.stopPropagation(); toggleFgMaterials(fg.fgNumber); }}
+    >
+      <div className={`p-2 rounded-xl transition-colors ${isMaterialExpanded ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400' : 'bg-slate-100 text-slate-400 dark:bg-slate-700'}`}>
+        {isMaterialExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+      </div>
+      <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-2">
+        <Package size={16} className="text-amber-500" />
+        Material yang Digunakan (Total untuk {fg.totalQty} pcs)
+      </h4>
+    </div>
+    {isMaterialExpanded && (
+      <div className="mt-4 space-y-3 pl-8">
+        {fg.materials.map((mat, idx) => {
+          const formatNumber = (num: number) => {
+            if (num % 1 === 0) return num.toString();
+            return parseFloat(num.toFixed(4)).toString();
+          };
+          const perUnit = mat.material.consumptionPerUnit;
+          const total = mat.totalConsumption;
+          const unit = mat.material.unit;
+          return (
+            <div key={idx} className="bg-white dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex flex-wrap justify-between items-start gap-3">
+                <div>
+                  <div className="font-mono font-black text-sm text-slate-900 dark:text-white">
+                    Part Number: {mat.material.set_artnr_u}
+                  </div>
+                  <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
+                    {mat.material.Art_name}
                   </div>
                 </div>
-                <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 text-slate-500 group-hover/item:bg-emerald-100 dark:group-hover/item:text-emerald-600 group-hover/item:border-emerald-300 transition-all shadow-sm">
-                  {expandedFg.has(fg.fgNumber) ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                <div className="text-right">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Konsumsi per unit (1 pcs)</div>
+                  <div className="font-black text-base text-amber-600 dark:text-amber-400">
+                    {formatNumber(perUnit)} {unit}
+                  </div>
                 </div>
               </div>
-              {expandedFg.has(fg.fgNumber) && (
-                <div className="p-5 md:p-8 bg-slate-50/50 dark:bg-slate-900/30 border-t-2 border-slate-200 dark:border-slate-700">
-                  <div className="text-sm font-black text-slate-500 uppercase mb-5 ml-1 tracking-wider">Order Produksi (OP) Terkait</div>
-                  <div className="space-y-5">
-                    {fg.ops.map(op => (
-                      <OpDetailCard
-                        key={op.opNumber}
-                        op={op}
-                        isExpanded={expandedOp.has(op.opNumber)}
-                        onToggle={() => toggleOpDetail(op.opNumber)}
-                        detailed={false}
-                        showBcDocuments={true}
-                        showProductionInfo={false}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+<div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center">
+  <div className="flex flex-col">
+    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">TOTAL KONSUMSI</span>
+    <span className="text-xs font-semibold text-slate-500">untuk {fg.totalQty} pcs {fg.fgNumber}</span>
+  </div>
+  <div className="flex items-center gap-2">
+    <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 rounded-md text-[10px] font-black uppercase tracking-wider">
+      TOTAL
+    </span>
+    <span className="font-black text-xl text-blue-600 dark:text-blue-400">
+      {formatNumber(total)} {unit}
+    </span>
+  </div>
+</div>
             </div>
-          ))}
+          );
+        })}
+      </div>
+    )}
+  </div>
+)}
+
+                      {/* OP List */}
+                      <div>
+                        <div className="text-sm font-black text-slate-500 uppercase mb-5 ml-1 tracking-wider">Order Produksi (OP) Terkait</div>
+                        <div className="space-y-5">
+                          {fg.ops.map(op => (
+                            <OpDetailCard
+                              key={op.opNumber}
+                              op={op}
+                              isExpanded={expandedOp.has(op.opNumber)}
+                              onToggle={() => toggleOpDetail(op.opNumber)}
+                              detailed={false}
+                              showBcDocuments={true}
+                              showProductionInfo={false}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
+
+  // Komponen untuk format lama (SuratJalanTraceResult) - fallback
+  const SuratJalanLegacyResultView = ({ data }: { data: SuratJalanTraceResult }) => {
+    const [expandedMaterial, setExpandedMaterial] = useState<number | null>(null);
+    
+    const toggleMaterial = (idx: number) => {
+      setExpandedMaterial(expandedMaterial === idx ? null : idx);
+    };
+
+    return (
+      <div className="space-y-8">
+        <div className="bg-white dark:bg-slate-800 rounded-3xl border-2 border-slate-200 dark:border-slate-700 p-6 md:p-8 shadow-md">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 pb-6 border-b-2 border-slate-100 dark:border-slate-700/50">
+            <div className="flex items-center gap-5">
+              <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-600/30 flex items-center justify-center shrink-0">
+                <Truck size={32} />
+              </div>
+              <div>
+                <div className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-lg inline-block shadow-sm">
+                  Surat Jalan
+                </div>
+                <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight mt-1">{data.itemFinishgood}</h2>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 text-sm bg-slate-50 dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="flex items-center gap-3">
+                <Box size={18} className="text-slate-400" />
+                <span className="font-bold text-slate-500">Total OP:</span>
+                <span className="font-black text-blue-600 dark:text-blue-400 text-lg bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded">
+                  {data.list_op_number.length}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Daftar OP Numbers */}
+          <div className="mb-8">
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+                <Layers size={18} />
+              </div>
+              Production Orders (OP)
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {data.list_op_number.map((op, idx) => (
+                <span key={idx} className="px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-xl text-sm font-mono font-bold border border-blue-200 dark:border-blue-800 shadow-sm">
+                  {op}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Daftar Material */}
+          <div>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600">
+                <Package size={18} />
+              </div>
+              Material yang Digunakan
+            </h3>
+            <div className="space-y-4">
+              {data.list_material.map((mat, idx) => {
+                const isExpanded = expandedMaterial === idx;
+                return (
+                  <div key={idx} className="border-2 border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-all">
+                    <div
+                      className="p-5 bg-slate-50 dark:bg-slate-800 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex flex-wrap justify-between items-center gap-4"
+                      onClick={() => toggleMaterial(idx)}
+                    >
+                      <div className="flex-1">
+                        <div className="font-black text-slate-900 dark:text-white text-base">Part Number: {mat.material.set_artnr_u}</div>
+                        <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
+                          {mat.material.Art_name}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+<div className="text-right">
+  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+    Konsumsi per unit (1 pcs)
+  </div>
+  <div className="font-black text-base text-amber-600 dark:text-amber-400">
+    {mat.material.total} {mat.material.Art_einheit}
+  </div>
+  {mat.totalConsumption !== undefined && (
+    <>
+      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-2">
+        TOTAL untuk {mat.totalQtyShipped} pcs
+      </div>
+      <div className="font-black text-lg text-blue-600 dark:text-blue-400">
+        {typeof mat.totalConsumption === 'number' ? mat.totalConsumption.toFixed(4) : mat.totalConsumption} {mat.material.Art_einheit}
+      </div>
+    </>
+  )}
+</div>
+                        <div className={`p-2 rounded-xl transition-colors ${isExpanded ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400' : 'bg-slate-100 text-slate-400 dark:bg-slate-700'}`}>
+                          {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                        </div>
+                      </div>
+                    </div>
+                    {isExpanded && (
+                      <div className="p-5 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Batch Numbers */}
+                          <div>
+                            <div className="text-xs font-black text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2 uppercase tracking-wider">
+                              <Hash size={14} /> Batch Numbers
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {mat.list_batch.map((batch, i) => (
+                                <span key={i} className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs font-mono font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
+                                  {batch}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Dokumen BC */}
+                          <div>
+                            <div className="text-xs font-black text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2 uppercase tracking-wider">
+                              <FileText size={14} /> Dokumen Bea Cukai (BC)
+                            </div>
+                            <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
+                              {mat.list_dokumen_bc.map((doc, i) => (
+                                <div key={i} className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                                  <div className="flex justify-between text-sm">
+                                    <span className="font-bold text-slate-600 dark:text-slate-300">No. Dokumen:</span>
+                                    <span className="font-mono font-black text-blue-600 dark:text-blue-400">{doc.nomor_dokumen_bc}</span>
+                                  </div>
+                                  <div className="flex justify-between text-sm mt-1">
+                                    <span className="font-bold text-slate-600 dark:text-slate-300">No. EL:</span>
+                                    <span className="font-mono font-bold">{doc.nomor_el}</span>
+                                  </div>
+                                  <div className="flex justify-between text-sm mt-1">
+                                    <span className="font-bold text-slate-600 dark:text-slate-300">Kode BC:</span>
+                                    <span>{doc.kode_bc}</span>
+                                  </div>
+                                  <div className="flex justify-between text-sm mt-1">
+                                    <span className="font-bold text-slate-600 dark:text-slate-300">Tanggal:</span>
+                                    <span>{new Date(doc.tanggal_dokumen_bc).toLocaleDateString('id-ID')}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderBcResult = (res: BcTraceResult) => (
     <div className="bg-white dark:bg-slate-800 rounded-3xl border-2 border-slate-200 dark:border-slate-700 p-6 md:p-8 shadow-md">
@@ -845,12 +1159,12 @@ export const TraceabilityExtendedView = () => {
             <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight mt-1">{res.bcDocument}</h2>
           </div>
         </div>
-        {res.bcEr && (
-          <div className="bg-amber-100 dark:bg-amber-900/40 px-6 py-4 rounded-2xl border-2 border-amber-200 dark:border-amber-800 shadow-sm text-center md:text-left">
-            <span className="text-amber-700 dark:text-amber-500 text-xs font-black uppercase tracking-widest block mb-1">Nomor ER</span>
-            <span className="font-black text-xl text-amber-800 dark:text-amber-400">{res.bcEr}</span>
-          </div>
-        )}
+{res.bcEl && (
+  <div className="bg-amber-100 dark:bg-amber-900/40 px-6 py-4 rounded-2xl border-2 border-amber-200 dark:border-amber-800 shadow-sm text-center md:text-left">
+    <span className="text-amber-700 dark:text-amber-500 text-xs font-black uppercase tracking-widest block mb-1">Nomor EL</span>
+    <span className="font-black text-xl text-amber-800 dark:text-amber-400">{res.bcEl}</span>
+  </div>
+)}
       </div>
 
       <h3 className="font-black text-xl text-slate-800 dark:text-slate-200 mb-6 flex items-center gap-3">
@@ -897,6 +1211,25 @@ export const TraceabilityExtendedView = () => {
           ))}
         </div>
       )}
+
+      {/* Jika ada relatedOps (dokumen BC ditemukan di OP tapi belum ada shipment) */}
+      {res.relatedOps && res.relatedOps.length > 0 && (!res.relatedShipments || res.relatedShipments.length === 0) && (
+        <div className="mt-6 p-5 bg-yellow-50 dark:bg-yellow-900/20 rounded-2xl border-2 border-yellow-200 dark:border-yellow-800">
+          <div className="flex items-center gap-3 mb-3">
+            <AlertCircle size={20} className="text-yellow-600" />
+            <p className="text-sm font-bold text-yellow-700 dark:text-yellow-400">
+              {res.message || 'Dokumen BC ditemukan pada material berikut, namun belum ada surat jalan (shipment):'}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {res.relatedOps.map((op: string, idx: number) => (
+              <span key={idx} className="px-3 py-1.5 bg-yellow-100 dark:bg-yellow-800/50 rounded-lg text-xs font-mono font-bold text-yellow-800 dark:text-yellow-200">
+                {op}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -905,6 +1238,11 @@ export const TraceabilityExtendedView = () => {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
         .font-poppins { font-family: 'Poppins', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-track { background: #334155; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; }
       `}</style>
       <div className="font-poppins p-4 md:p-8 max-w-full mx-auto space-y-8 bg-slate-50 dark:bg-slate-900 min-h-screen text-slate-800 dark:text-slate-100">
         {/* Header Card */}
@@ -936,7 +1274,7 @@ export const TraceabilityExtendedView = () => {
                     setResult(null);
                     setError('');
                     setSearchQuery('');
-                    setBcNomorEr('');
+                    setBcNomorEl('');
                     setExpandedFg(new Set());
                     setExpandedOp(new Set());
                     setSearchType(e.target.value as any);
@@ -952,40 +1290,58 @@ export const TraceabilityExtendedView = () => {
               </div>
             </div>
             
-            <div className="w-full md:flex-1">
-              <label className={labelClassName}>
-                {searchType === 'op' ? 'Nomor OP' : searchType === 'surat-jalan' ? 'Nomor Surat Jalan' : 'Nomor Dokumen BC'}
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-5 pointer-events-none text-slate-400">
-                  <Search size={20} />
-                </div>
-                <input
-                  type="text"
-                  className={`${inputClassName} pl-14`}
-                  placeholder={
-                    searchType === 'op' ? 'Contoh: K1YH260001' :
-                    searchType === 'surat-jalan' ? 'Contoh: 26007466' :
-                    'Contoh: 134746'
-                  }
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                />
-              </div>
-            </div>
-
             {searchType === 'bc-document' && (
-              <div className="w-full md:w-1/4">
-                <label className={labelClassName}>Nomor ER <span className="text-slate-400 font-semibold tracking-normal lowercase">(Opsional)</span></label>
-                <input
-                  type="text"
-                  className={inputClassName}
-                  placeholder="Contoh: 25002828"
-                  value={bcNomorEr}
-                  onChange={e => setBcNomorEr(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                />
+              <>
+                <div className="w-full md:flex-1">
+                  <label className={labelClassName}>Nomor Dokumen BC</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-5 pointer-events-none text-slate-400">
+                      <FileText size={20} />
+                    </div>
+                    <input
+                      type="text"
+                      className={`${inputClassName} pl-14`}
+                      placeholder="Contoh: 134746"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    />
+                  </div>
+                </div>
+                <div className="w-full md:w-1/4">
+                  <label className={labelClassName}>Nomor EL <span className="text-slate-400 font-semibold tracking-normal lowercase">(Opsional)</span></label>
+                  <input
+                    type="text"
+                    className={inputClassName}
+                    placeholder="Contoh: 25002828"
+                    value={bcNomorEl}
+                    onChange={e => setBcNomorEl(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  />
+                </div>
+              </>
+            )}
+
+            {searchType !== 'bc-document' && (
+              <div className="w-full md:flex-1">
+                <label className={labelClassName}>
+                  {searchType === 'op' ? 'Nomor OP' : 'Nomor Surat Jalan'}
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-5 pointer-events-none text-slate-400">
+                    <Search size={20} />
+                  </div>
+                  <input
+                    type="text"
+                    className={`${inputClassName} pl-14`}
+                    placeholder={
+                      searchType === 'op' ? 'Contoh: K1YH260001' : 'Contoh: 26007466'
+                    }
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  />
+                </div>
               </div>
             )}
 
@@ -1022,7 +1378,18 @@ export const TraceabilityExtendedView = () => {
 
           {!loading && result && (
             <div className="animate-in fade-in slide-in-from-bottom-6 duration-500">
-              {searchType === 'surat-jalan' && renderSuratJalanResult(result as TraceResult)}
+              {/* Render berdasarkan tipe hasil dengan type guard */}
+              {searchType === 'surat-jalan' && (
+                (() => {
+                  if ('itemFinishgood' in result) {
+                    return <SuratJalanLegacyResultView data={result as SuratJalanTraceResult} />;
+                  } else if (isTraceResult(result)) {
+                    return <SuratJalanResultView data={result} />;
+                  } else {
+                    return null;
+                  }
+                })()
+              )}
               {searchType === 'bc-document' && renderBcResult(result as BcTraceResult)}
               {searchType === 'op' && renderOpResult(result as OpTraceResult)}
             </div>

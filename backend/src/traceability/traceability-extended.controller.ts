@@ -12,16 +12,22 @@ export class TraceabilityExtendedController {
     return this.service.traceByOpNumberFull(opNumber);
   }
 
-  @Get('surat-jalan/:suratJalan')
-  async traceBySuratJalan(@Param('suratJalan') suratJalan: string) {
-    return this.service.traceBySuratJalanFull(suratJalan);
-  }
+@Get('surat-jalan/:suratJalan')
+async traceBySuratJalan(@Param('suratJalan') suratJalan: string) {
+  // Gunakan method yang mengambil data material dari external API
+  return this.service.getSuratJalanMaterialDetails(suratJalan);
+}
 
-  @Get('bc-document')
-  async traceByBcDocument(
-    @Query('nomorDokumen') nomorDokumen: string,
-    @Query('nomorEr') nomorEr?: string,
-  ) {
-    return this.service.traceByBcDocument(nomorDokumen, nomorEr);
+@Get('bc-document')
+async traceByBcDocument(
+  @Query('nomorDokumen') nomorDokumen: string,
+  @Query('nomorEl') nomorEl?: string,
+) {
+  return this.service.traceByBcDocument(nomorDokumen, nomorEl);
+}
+
+  @Get('surat-jalan-material/:suratJalan')
+  async getSuratJalanMaterial(@Param('suratJalan') suratJalan: string) {
+    return this.service.getSuratJalanMaterialDetails(suratJalan);
   }
 }

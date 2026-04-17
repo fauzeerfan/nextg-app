@@ -47,6 +47,27 @@ model User {
   updatedAt       DateTime @updatedAt
 }
 
+// ========== NEW: Login Status Enum & Log ==========
+model UserLoginLog {
+  id           String   @id @default(uuid())
+  userId       String?
+  username     String
+  timestamp    DateTime @default(now())
+  ipAddress    String?
+  userAgent    String?
+  status       LoginStatus
+  errorMessage String?
+  station      String?
+
+  @@index([timestamp])
+  @@index([userId])
+  @@index([username])
+}
+
+enum LoginStatus {
+  SUCCESS
+  FAILED
+}
 
 //////////////////////////////////////////////////////
 // LINE MASTER
@@ -432,4 +453,17 @@ model ManpowerAttendance {
   employee   Employee @relation(fields: [nik], references: [nik], onDelete: Cascade)
 
   @@unique([nik, tanggal])
+}
+
+model TargetSetting {
+  id             String   @id @default(uuid())
+  lineCode       String
+  indexValue     Float    // pcs/MP/day
+  effectiveDate  DateTime @map("effective_date")
+  note           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([lineCode, effectiveDate])
+  @@map("target_settings")
 }

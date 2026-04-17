@@ -15,6 +15,9 @@ import { SewingView } from '../features/stations/SewingView';
 import { QualityControlView } from '../features/stations/QualityControlView';
 import { PackingView } from '../features/stations/PackingView';
 import { FinishedGoodsView } from '../features/stations/FinishedGoodsView';
+import { TargetManagementView } from '../features/system/TargetManagementView';
+import { TargetMonitoringView } from '../features/reports/TargetMonitoringView';
+import { LoginMonitoringView } from '../features/system/LoginMonitoringView';
 
 interface AppRouterProps {
   activeTab: string;
@@ -44,7 +47,10 @@ export const AppRouter: React.FC<AppRouterProps> = ({
     'user_management': <UserManagementView />,
     'employee_management': <EmployeeManagementView />,
     'manpower_control': <ManpowerControlView />,
-    'manpower_monitoring': <ManpowerMonitoringView />
+    'manpower_monitoring': <ManpowerMonitoringView />,
+    'target_management': <TargetManagementView />,
+    'target_monitoring': <TargetMonitoringView />,
+    'login_monitoring': <LoginMonitoringView />
   };
 
   return (
@@ -63,6 +69,7 @@ export const AppRouter: React.FC<AppRouterProps> = ({
 
       <Route path="/reports" element={tabComponents['reports']} />
       <Route path="/traceability" element={tabComponents['traceability']} />
+      <Route path="/target-monitoring" element={tabComponents['target_monitoring']} />
 
       {/* Master Data */}
       <Route path="/line-master" element={tabComponents['line_master']} />
@@ -71,6 +78,8 @@ export const AppRouter: React.FC<AppRouterProps> = ({
       <Route path="/employee-management" element={tabComponents['employee_management']} />
       <Route path="/manpower-control" element={tabComponents['manpower_control']} />
       <Route path="/manpower-monitoring" element={tabComponents['manpower_monitoring']} />
+      <Route path="/target-management" element={tabComponents['target_management']} />
+      <Route path="/login-monitoring" element={tabComponents['login_monitoring']} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -1,10 +1,29 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { timeout } from 'rxjs/operators';
+
+export interface ExternalMaterialItem {
+  material: {
+    set_artnr_u: string;
+    Art_name: string;
+    total: number;
+    Art_einheit: string;
+    Art_ekletzt: number;
+  };
+  list_batch: string[];
+  list_dokumen_bc: BcDocument[];
+}
+
+export interface ExternalTraceabilityResponse {
+  itemFinishgood: string;
+  list_op_number: string[];
+  list_material: ExternalMaterialItem[];
+}
 
 export interface BcDocument {
-  nomor_er: number;
+  nomor_el: number;      // ganti dari nomor_er
   kode_bc: string;
   nomor_dokumen_bc: string;
   tanggal_dokumen_bc: string;
@@ -164,25 +183,63 @@ export interface ShipmentSummary {
 
 export interface BcTraceResult {
   bcDocument: string;
-  bcEr: string | null;
+  bcEl: string | null;   // ganti dari bcEr
   relatedShipments: ShipmentSummary[];
 }
+
+// ===== TAMBAHAN INTERFACE BARU =====
+export interface MaterialConsumptionDetail {
+  material: {
+    set_artnr_u: string;
+    Art_name: string;
+    consumptionPerUnit: number; // konsumsi untuk 1 pcs FG (dari external API)
+    unit: string;
+  };
+  totalConsumption: number; // consumptionPerUnit * totalQtyFG
+  totalQtyFG: number;
+}
+
+export interface FgMaterialSummary {
+  fgNumber: string;
+  totalQtyShipped: number;
+  materials: MaterialConsumptionDetail[];
+}
+// ===== AKHIR TAMBAHAN =====
 
 @Injectable()
 export class TraceabilityExtendedService {
   private readonly externalApiUrl = 'http://202.52.15.30:998/miniapps/admin/api/traceability';
+  private readonly logger = new Logger(TraceabilityExtendedService.name);
 
   constructor(
     private prisma: PrismaService,
     private httpService: HttpService,
   ) {}
 
+  /**
+   * Normalize BC document number by removing leading zeros
+   * Example: "018463" -> "18463"
+   */
+  private normalizeDocNumber(docNumber: string): string {
+    if (!docNumber) return '';
+    return docNumber.replace(/^0+/, '');
+  }
+
   async getBcDocumentsForOp(op_number: string, item_fg: string): Promise<BcDocument[]> {
     try {
       const response = await firstValueFrom(
-        this.httpService.post(this.externalApiUrl, [{ op_number, item_fg }]),
+        this.httpService.post(this.externalApiUrl, [{ op_number, item_fg }]).pipe(timeout(10000))
       );
-      return response.data || [];
+      const data = response.data;
+      if (Array.isArray(data) && data.length > 0 && data[0].list_dokumen_bc) {
+        return data[0].list_dokumen_bc.map((doc: any) => ({
+          nomor_el: doc.nomor_el,
+          kode_bc: doc.kode_bc,
+          nomor_dokumen_bc: doc.nomor_dokumen_bc,
+          tanggal_dokumen_bc: doc.tanggal_dokumen_bc
+        }));
+      }
+      return [];
     } catch (error) {
       console.error(`Error fetching BC for OP ${op_number}:`, error instanceof Error ? error.message : String(error));
       return [];
@@ -507,6 +564,118 @@ export class TraceabilityExtendedService {
     };
   }
 
+  // ===== METHOD BARU =====
+  /**
+   * Mendapatkan detail material untuk surat jalan, dengan perhitungan total konsumsi per FG.
+   * @param suratJalan Nomor surat jalan
+   * @returns Array summary per FG beserta material dan total konsumsi
+   */
+  async getSuratJalanMaterialDetailsWithTotals(suratJalan: string): Promise<FgMaterialSummary[]> {
+    // 1. Cari shipment dan items
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { suratJalan },
+      include: {
+        items: {
+          include: {
+            op: {
+              select: {
+                opNumber: true,
+                itemNumberFG: true,
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!shipment) {
+      throw new NotFoundException(`Surat Jalan ${suratJalan} tidak ditemukan`);
+    }
+
+    // 2. Kelompokkan OP per FG dan hitung total qty per FG
+    const fgMap = new Map<string, { totalQty: number; opNumbers: string[] }>();
+    for (const item of shipment.items) {
+      const fgNumber = item.op.itemNumberFG;
+      if (!fgMap.has(fgNumber)) {
+        fgMap.set(fgNumber, { totalQty: 0, opNumbers: [] });
+      }
+      const entry = fgMap.get(fgNumber)!;
+      entry.totalQty += item.qty;
+      entry.opNumbers.push(item.op.opNumber);
+    }
+
+    // 3. Ambil data material dari external API (per OP unik)
+    const uniqueOpNumbers = [...new Set(shipment.items.map(item => item.op.opNumber))];
+
+    // Rebuild requestBody dengan item_fg yang sesuai (itemNumberFG dari OP)
+    const requestBodyFixed = uniqueOpNumbers.map(opNumber => {
+      const op = shipment.items.find(i => i.op.opNumber === opNumber)?.op;
+      return {
+        op_number: opNumber,
+        item_fg: op?.itemNumberFG || shipment.fgNumber,
+      };
+    });
+
+    let externalData: any[] = [];
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post('http://202.52.15.30:998/miniapps/admin/api/traceability', requestBodyFixed).pipe(timeout(10000))
+      );
+      externalData = response.data;
+    } catch (error) {
+      this.logger.warn(`Gagal mengambil data material dari external untuk surat jalan ${suratJalan}`);
+      externalData = [];
+    }
+
+    // 4. Kelompokkan material per FG berdasarkan external data
+    const fgMaterialMap = new Map<string, Map<string, { consumptionPerUnit: number; unit: string; name: string }>>();
+
+    for (const fgEntry of externalData) {
+      const fgNumber = fgEntry.itemFinishgood;
+      if (!fgMaterialMap.has(fgNumber)) {
+        fgMaterialMap.set(fgNumber, new Map());
+      }
+      const materialMap = fgMaterialMap.get(fgNumber)!;
+      for (const materialItem of fgEntry.list_material) {
+        const partNumber = materialItem.material.set_artnr_u;
+        const consumption = materialItem.material.total; // konsumsi per unit FG
+        const unit = materialItem.material.Art_einheit;
+        const name = materialItem.material.Art_name;
+        if (!materialMap.has(partNumber)) {
+          materialMap.set(partNumber, { consumptionPerUnit: consumption, unit, name });
+        }
+      }
+    }
+
+    // 5. Buat summary per FG dengan total konsumsi
+    const result: FgMaterialSummary[] = [];
+    for (const [fgNumber, { totalQty }] of fgMap.entries()) {
+      const materialMap = fgMaterialMap.get(fgNumber) || new Map();
+      const materials: MaterialConsumptionDetail[] = [];
+      for (const [partNumber, detail] of materialMap.entries()) {
+        materials.push({
+          material: {
+            set_artnr_u: partNumber,
+            Art_name: detail.name,
+            consumptionPerUnit: detail.consumptionPerUnit,
+            unit: detail.unit,
+          },
+          totalConsumption: detail.consumptionPerUnit * totalQty,
+          totalQtyFG: totalQty,
+        });
+      }
+      result.push({
+        fgNumber,
+        totalQtyShipped: totalQty,
+        materials,
+      });
+    }
+
+    return result;
+  }
+  // ===== AKHIR METHOD BARU =====
+
+  // ===== METHOD traceBySuratJalanFull YANG DIPERBARUI =====
   async traceBySuratJalanFull(suratJalan: string): Promise<TraceResult> {
     const shipment = await this.prisma.shipment.findFirst({
       where: { suratJalan },
@@ -522,6 +691,9 @@ export class TraceabilityExtendedService {
     if (!shipment) {
       throw new NotFoundException(`Surat Jalan ${suratJalan} tidak ditemukan di database. Pastikan sudah dilakukan proses shipping.`);
     }
+
+    // Ambil material summary per FG
+    const materialSummaries = await this.getSuratJalanMaterialDetailsWithTotals(suratJalan);
 
     const fgMap = new Map<string, { fgNumber: string; totalQty: number; ops: OpTraceFullResult[] }>();
 
@@ -540,58 +712,183 @@ export class TraceabilityExtendedService {
       fgEntry.ops.push(opTrace);
     }
 
+    // Gabungkan materialSummaries ke dalam response
+    const fgItems = Array.from(fgMap.values()).map(fg => {
+      const materialSummary = materialSummaries.find(m => m.fgNumber === fg.fgNumber);
+      return {
+        ...fg,
+        materials: materialSummary?.materials || [],
+      };
+    });
+
     return {
       suratJalan: shipment.suratJalan,
       shipmentDate: shipment.createdAt,
       totalQty: shipment.totalQty,
-      fgItems: Array.from(fgMap.values()),
+      fgItems,
     };
   }
+  // ===== AKHIR PERUBAHAN =====
 
-  async traceByBcDocument(bcNomorDokumen: string, bcNomorEr?: string): Promise<BcTraceResult> {
-    const allShipments = await this.prisma.shipment.findMany({
-      include: {
-        items: {
-          include: {
-            op: true,
-          },
-        },
+  async traceByBcDocument(bcNomorDokumen: string, bcNomorEl?: string): Promise<any> {
+    // Validasi input
+    if (!bcNomorDokumen && !bcNomorEl) {
+      throw new BadRequestException('Harap isi nomor dokumen BC atau nomor EL');
+    }
+
+    this.logger.log(`🔍 Searching BC document: doc=${bcNomorDokumen}, el=${bcNomorEl}`);
+
+    // Normalisasi input (hilangkan leading zero)
+    const searchDoc = bcNomorDokumen ? this.normalizeDocNumber(bcNomorDokumen) : null;
+    const searchEl = bcNomorEl ? bcNomorEl.toString() : null;
+
+    // 1. Ambil semua surat jalan (shipment) dari database
+    const shipments = await this.prisma.shipment.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        suratJalan: true,
+        createdAt: true,
+        totalQty: true,
       },
     });
 
-    const matchedShipments: ShipmentSummary[] = [];
+    this.logger.log(`📦 Total shipments: ${shipments.length}`);
 
-    for (const shipment of allShipments) {
-      let found = false;
-      for (const item of shipment.items) {
-        const bcDocs = await this.getBcDocumentsForOp(item.op.opNumber, item.op.itemNumberFG);
-        const matched = bcDocs.some(doc =>
-          doc.nomor_dokumen_bc === bcNomorDokumen ||
-          (bcNomorEr && doc.nomor_er.toString() === bcNomorEr)
-        );
-        if (matched) {
-          found = true;
-          break;
+    const matchedShipments: {
+      suratJalan: string;
+      shipmentDate: Date;
+      totalQty: number;
+      ops: { opNumber: string; qty: number }[];
+      matchedMaterials: {
+        materialName: string;
+        bcDocuments: BcDocument[];
+      }[];
+    }[] = [];
+
+    // 2. Untuk setiap shipment, cek material & dokumen BC dari external API
+    for (const shipment of shipments) {
+      try {
+        // Ambil detail material dari external API
+        const externalData = await this.getSuratJalanMaterialDetails(shipment.suratJalan);
+        
+        if (!externalData || !externalData.list_material) continue;
+
+        // Cari material yang memiliki dokumen BC cocok
+        const matchedMaterials: any[] = [];
+        for (const materialItem of externalData.list_material) {
+          const matchedDocs = materialItem.list_dokumen_bc.filter(doc => {
+            const docNum = this.normalizeDocNumber(doc.nomor_dokumen_bc);
+            const docEl = doc.nomor_el.toString();
+            return (searchDoc && docNum === searchDoc) || (searchEl && docEl === searchEl);
+          });
+          if (matchedDocs.length > 0) {
+            matchedMaterials.push({
+              materialName: materialItem.material.Art_name,
+              bcDocuments: matchedDocs,
+            });
+          }
         }
-      }
-      if (found) {
-        matchedShipments.push({
-          suratJalan: shipment.suratJalan,
-          shipmentDate: shipment.createdAt,
-          totalQty: shipment.totalQty,
-          ops: shipment.items.map(i => ({ opNumber: i.op.opNumber, qty: i.qty })),
-        });
+
+        if (matchedMaterials.length > 0) {
+          // Ambil OP list dari externalData
+          const opsList = externalData.list_op_number.map(op => ({ opNumber: op, qty: 0 })); // qty tidak tersedia, bisa diisi 0 atau diambil dari shipment items jika perlu
+          matchedShipments.push({
+            suratJalan: shipment.suratJalan,
+            shipmentDate: shipment.createdAt,
+            totalQty: shipment.totalQty,
+            ops: opsList,
+            matchedMaterials,
+          });
+          this.logger.log(`✅ Match found in shipment: ${shipment.suratJalan}`);
+        }
+  } catch (error) {
+    // ✅ Perbaikan: gunakan type guard atau konversi ke string
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    this.logger.warn(`⚠️ Failed to get material for shipment ${shipment.suratJalan}: ${errorMessage}`);
+        // Lanjutkan ke shipment berikutnya
       }
     }
 
     if (matchedShipments.length === 0) {
-      throw new NotFoundException(`Tidak ditemukan surat jalan yang menggunakan dokumen BC ${bcNomorDokumen}`);
+      throw new NotFoundException(
+        `Tidak ditemukan surat jalan yang menggunakan dokumen BC ${bcNomorDokumen || bcNomorEl}. ` +
+        `Pastikan nomor dokumen BC atau EL benar.`
+      );
     }
+
+    // Format response sesuai dengan yang diharapkan frontend
+    const relatedShipments = matchedShipments.map(s => ({
+      suratJalan: s.suratJalan,
+      shipmentDate: s.shipmentDate,
+      totalQty: s.totalQty,
+      ops: s.ops,
+      matchedMaterials: s.matchedMaterials, // tambahan info material yang match
+    }));
 
     return {
       bcDocument: bcNomorDokumen,
-      bcEr: bcNomorEr || null,
-      relatedShipments: matchedShipments,
+      bcEl: bcNomorEl || null,
+      relatedShipments,
     };
   }
+
+  /**
+   * Mengambil detail material dari external API berdasarkan Surat Jalan.
+   * @param suratJalan Nomor Surat Jalan
+   * @returns Data dari external API atau fallback jika gagal
+   */
+async getSuratJalanMaterialDetails(suratJalan: string): Promise<any> {
+  // 1. Cari shipment berdasarkan surat jalan
+  const shipment = await this.prisma.shipment.findFirst({
+    where: { suratJalan },
+    include: {
+      items: {
+        include: { op: true }
+      }
+    }
+  });
+
+  if (!shipment) {
+    throw new NotFoundException(`Surat Jalan ${suratJalan} tidak ditemukan`);
+  }
+
+  // 2. Kumpulkan semua OP number dan FG number unik
+  const opNumbers = [...new Set(shipment.items.map(item => item.op.opNumber))];
+  const fgNumber = shipment.fgNumber;
+
+  // 3. Hitung total quantity per FG (jumlah semua OP untuk FG ini)
+  const totalQtyFG = shipment.items.reduce((sum, item) => sum + item.qty, 0);
+
+  // 4. Panggil external API untuk setiap OP
+  const requestBody = opNumbers.map(opNumber => ({
+    op_number: opNumber,
+    item_fg: fgNumber
+  }));
+
+  try {
+    const response = await firstValueFrom(
+      this.httpService.post('http://202.52.15.30:998/miniapps/admin/api/traceability', requestBody).pipe(timeout(10000))
+    );
+    
+    // 5. Enrich response dengan total konsumsi per material
+    const enrichedData = Array.isArray(response.data) ? response.data[0] : response.data;
+    if (enrichedData && enrichedData.list_material) {
+      enrichedData.list_material = enrichedData.list_material.map((materialItem: any) => ({
+        ...materialItem,
+        totalQtyShipped: totalQtyFG,
+        totalConsumption: (materialItem.material.total || 0) * totalQtyFG
+      }));
+    }
+    
+    return enrichedData;
+  } catch (error) {
+    console.error('Failed to fetch external traceability data:', error);
+    return {
+      itemFinishgood: fgNumber,
+      list_op_number: opNumbers,
+      list_material: []
+    };
+  }
+}
 }

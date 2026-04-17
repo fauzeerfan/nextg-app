@@ -61,6 +61,9 @@ const AppContent = () => {
       'employee_management': '/employee-management',
       'manpower_control': '/manpower-control',
       'manpower_monitoring': '/manpower-monitoring',
+      'target_management': '/target-management',
+      'target_monitoring': '/target-monitoring',
+      'login_monitoring': '/login-monitoring', 
     };
     const path = tabToPath[activeTab] || '/dashboard';
     if (location.pathname !== path) navigate(path);
@@ -83,6 +86,9 @@ const pathToTab: Record<string, string> = {
   '/employee-management': 'employee_management',
   '/manpower-control': 'manpower_control',
   '/manpower-monitoring': 'manpower_monitoring',
+  '/target-management': 'target_management',
+  '/target-monitoring': 'target_monitoring',
+  '/login-monitoring': 'login_monitoring', 
 };
     const tab = pathToTab[location.pathname];
     if (tab && tab !== activeTab) setActiveTab(tab);

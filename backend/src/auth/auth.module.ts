@@ -5,6 +5,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './jwt.strategy';
 import { PrismaModule } from '../prisma/prisma.module'; // Sesuaikan path
+import { LoginLogService } from './login-log.service';
+import { LoginLogController } from './login-log.controller';
 
 @Module({
   imports: [
@@ -15,8 +17,8 @@ import { PrismaModule } from '../prisma/prisma.module'; // Sesuaikan path
       signOptions: { expiresIn: '8h' }, // Token valid 8 jam (jam kerja shift)
     }),
   ],
-  providers: [AuthService, JwtStrategy],
-  controllers: [AuthController],
+  providers: [AuthService, JwtStrategy, LoginLogService],
+  controllers: [AuthController, LoginLogController],
   exports: [AuthService], // Export biar bisa dipake module lain
 })
 export class AuthModule {}
