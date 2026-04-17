@@ -6,6 +6,7 @@ import {
   Shield, Info
 } from 'lucide-react';
 import type { ProductionOrder } from '../../types/production';
+import { TargetSummaryCard } from '../../components/ui/TargetSummaryCard';
 
 const API_BASE_URL = 'http://localhost:3000';
 const STORAGE_KEY_OP = 'nextg_qc_active_op';
@@ -410,6 +411,9 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
               {totalGood + totalNg} / {totalInput} Inspected
             </div>
           </div>
+        </div>
+        <div className="px-5 pb-5">
+          <TargetSummaryCard lineCode="K1YH" station="QC" />
         </div>
       </div>
 

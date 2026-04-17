@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import type { ProductionOrder, PatternPart } from '../../types/production';
 import { NG_REASONS as FALLBACK_NG_REASONS } from '../../lib/data';
+import { TargetSummaryCard } from '../../components/ui/TargetSummaryCard';
 
 const API_BASE_URL = 'http://localhost:3000';
 const STORAGE_KEY_OP = 'nextg_cp_active_op';
@@ -524,6 +525,9 @@ export const CheckPanelView = ({
               {tg + tng} / {tin} inspected
             </div>
           </div>
+        </div>
+        <div className="px-5 pb-5">
+          <TargetSummaryCard lineCode="K1YH" station="CP" />
         </div>
       </div>
 

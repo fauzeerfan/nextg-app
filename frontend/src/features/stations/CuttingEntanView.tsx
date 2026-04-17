@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { TargetSummaryCard } from '../../components/ui/TargetSummaryCard';
 import {
   Scissors, Printer, CheckCircle, Loader2, RefreshCw, Package,
   ClipboardCheck, ArrowRight, Database, Target, AlertTriangle, History, X,
@@ -489,6 +490,7 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 md:px-8 pb-6 md:pb-8">
+            
             <MetricCard title="Total OPs Loaded" value={ops.length} icon={Package} color="orange" subtitle="From external API" />
             <MetricCard title="Pending Cut" value={totalPending} icon={Scissors} color="blue" subtitle="Ready to generate" />
             <MetricCard title="Sent to Pond" value={totalSent} icon={Database} color="emerald" subtitle="Total all batches" />
@@ -506,6 +508,9 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
                 <div className="h-full bg-blue-500 rounded-full transition-all duration-1000" style={{ width: `${overallProgress}%` }} />
               </div>
             </div>
+          </div>
+          <div className="px-6 md:px-8 pb-6">
+            <TargetSummaryCard lineCode="K1YH" station="CUTTING_ENTAN" />
           </div>
         </div>
 

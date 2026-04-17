@@ -19,6 +19,15 @@ export class TargetManagementController {
     return this.service.findAll();
   }
 
+  @Get(':lineCode/:station/:date')
+  findByLineStationAndDate(
+    @Param('lineCode') lineCode: string,
+    @Param('station') station: string,
+    @Param('date') date: string
+  ) {
+    return this.service.findByLineStationAndDate(lineCode, station, new Date(date));
+  }
+
   @Get(':lineCode/:date')
   findByLineAndDate(@Param('lineCode') lineCode: string, @Param('date') date: string) {
     return this.service.findByLineAndDate(lineCode, new Date(date));

@@ -1,8 +1,11 @@
-import { IsString, IsNumber, IsOptional, IsDateString } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsDateString, IsBoolean } from 'class-validator';
 
 export class CreateTargetDto {
   @IsString()
   lineCode!: string;
+
+  @IsString()
+  station!: string;
 
   @IsNumber()
   indexValue!: number;
@@ -13,4 +16,8 @@ export class CreateTargetDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;   // <-- tambahkan
 }

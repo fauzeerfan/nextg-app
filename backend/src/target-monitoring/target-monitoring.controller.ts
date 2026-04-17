@@ -8,10 +8,14 @@ export class TargetMonitoringController {
   constructor(private readonly service: TargetMonitoringService) {}
 
   @Get()
-  async getMonitoring(@Query('lineCode') lineCode: string, @Query('date') date: string) {
-    if (!lineCode || !date) {
-      throw new Error('lineCode and date are required');
+  async getMonitoring(
+    @Query('lineCode') lineCode: string,
+    @Query('station') station: string,
+    @Query('date') date: string
+  ) {
+    if (!lineCode || !station || !date) {
+      throw new Error('lineCode, station, and date are required');
     }
-    return this.service.getMonitoringData(lineCode, date);
+    return this.service.getMonitoringData(lineCode, station, date);
   }
 }

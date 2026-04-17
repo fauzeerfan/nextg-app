@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Shirt, Activity, RefreshCw, Target, Package, Layers, ArrowRight, CheckCircle, Clock, TrendingUp } from 'lucide-react';
+import { Shirt, Activity, RefreshCw, Target, Package, Layers, ArrowRight, CheckCircle, Clock } from 'lucide-react';
 import type { ProductionOrder } from '../../types/production';
+import { TargetSummaryCard } from '../../components/ui/TargetSummaryCard';
 
 const API_BASE_URL = 'http://localhost:3000';
 
@@ -183,9 +184,6 @@ export const SewingView = () => {
   const [selectedOp, setSelectedOp] = useState<SewingOp | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState('');
-  
-  // New state for target monitoring
-  const [targetData, setTargetData] = useState<any>(null);
 
   const fetchOps = useCallback(async () => {
     setLoading(true);
@@ -214,42 +212,23 @@ export const SewingView = () => {
     }
   }, []);
 
-  // Helper to get auth headers (adjust according to your auth implementation)
-const getAuthHeaders = (): HeadersInit => {
-  const token = localStorage.getItem('nextg_token');
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  return headers;
-};
-
-  // Fetch daily target data
-  const fetchTarget = useCallback(async () => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const res = await fetch(`${API_BASE_URL}/target-monitoring?lineCode=K1YH&date=${today}`, {
-        headers: getAuthHeaders()
-      });
-      if (res.ok) {
-        setTargetData(await res.json());
-      }
-    } catch (error) {
-      console.error(error);
+  // Helper to get auth headers
+  const getAuthHeaders = (): HeadersInit => {
+    const token = localStorage.getItem('nextg_token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
-  }, []);
+    return headers;
+  };
 
   useEffect(() => {
     fetchOps();
     const interval = setInterval(fetchOps, 5000);
     return () => clearInterval(interval);
   }, [fetchOps]);
-
-  useEffect(() => {
-    fetchTarget();
-  }, [fetchTarget]);
 
   const totalOps = ops.length;
   const totalOutput = ops.reduce((sum, op) => sum + (op.qtySewingOut || 0), 0);
@@ -332,34 +311,13 @@ const getAuthHeaders = (): HeadersInit => {
           </div>
         </div>
 
-        {/* Target Summary Card (added as per instruction) */}
-        {targetData && (
-          <div className="px-6 pb-6">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border-l-4 border-amber-500 p-4 shadow-sm">
-              <div className="flex flex-wrap justify-between items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <Target size={20} className="text-amber-500" />
-                  <span className="font-black">Target Today: {targetData.dailyTarget.toLocaleString()} sets</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Clock size={20} className="text-blue-500" />
-                  <span className="font-black">Hourly Target: {targetData.hourlyTarget} sets</span>
-                </div>
-                <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${
-                  targetData.dailyAchievement >= 100 
-                    ? 'bg-emerald-100 text-emerald-700' 
-                    : 'bg-amber-100 text-amber-700'
-                }`}>
-                  <TrendingUp size={16} />
-                  <span className="font-bold">{targetData.dailyAchievement}% achieved</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Target Summary Card - Baru */}
+        <div className="px-6 pb-6">
+          <TargetSummaryCard lineCode="K1YH" station="SEWING" />
+        </div>
       </div>
 
-      {/* Grid OP Cards - Diubah dari lg:grid-cols-3 menjadi lg:grid-cols-4 agar card lebih proporsional */}
+      {/* Grid OP Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {ops.map(op => (
           <SewingOpCard

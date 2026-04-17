@@ -4,6 +4,15 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 
 const API_BASE_URL = 'http://localhost:3000';
 
+const stationOptions = [
+  'CUTTING_ENTAN',
+  'CUTTING_POND',
+  'CP',
+  'SEWING',
+  'QC',
+  'PACKING'
+];
+
 const getAuthHeaders = () => {
   const token = localStorage.getItem('nextg_token');
   return {
@@ -14,6 +23,7 @@ const getAuthHeaders = () => {
 
 export const TargetMonitoringView = () => {
   const [lineCode, setLineCode] = useState('K1YH');
+  const [station, setStation] = useState('SEWING');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -23,7 +33,7 @@ export const TargetMonitoringView = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_BASE_URL}/target-monitoring?lineCode=${lineCode}&date=${date}`, { headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/target-monitoring?lineCode=${lineCode}&station=${station}&date=${date}`, { headers: getAuthHeaders() });
       if (res.ok) {
         setData(await res.json());
       } else {
@@ -37,7 +47,7 @@ export const TargetMonitoringView = () => {
     }
   };
 
-  useEffect(() => { fetchData(); }, [lineCode, date]);
+  useEffect(() => { fetchData(); }, [lineCode, station, date]);
 
   const getAchievementColor = (ach: number) => {
     if (ach >= 100) return 'text-emerald-600 bg-emerald-100';
@@ -54,7 +64,7 @@ export const TargetMonitoringView = () => {
           </div>
           <div>
             <h1 className="text-2xl font-black text-slate-900 dark:text-white">Target Monitoring</h1>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Real-time production target vs actual for Sewing station</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Real-time production target vs actual for all stations</p>
           </div>
         </div>
 
@@ -67,6 +77,12 @@ export const TargetMonitoringView = () => {
             </select>
           </div>
           <div>
+            <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Station</label>
+            <select value={station} onChange={e => setStation(e.target.value)} className="px-4 py-2 border-2 rounded-xl">
+              {stationOptions.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
             <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Date</label>
             <input type="date" value={date} onChange={e => setDate(e.target.value)} className="px-4 py-2 border-2 rounded-xl" />
           </div>
@@ -75,6 +91,15 @@ export const TargetMonitoringView = () => {
 
         {loading && <div className="text-center py-10">Loading...</div>}
         {error && <div className="bg-rose-100 p-4 rounded-xl text-rose-700">{error}</div>}
+
+        {data && !data.isActive && (
+          <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-xl mb-4">
+            <div className="flex items-center gap-2 text-amber-700">
+              <AlertCircle size={20} />
+              Target is disabled for this line/station/date
+            </div>
+          </div>
+        )}
 
         {data && (
           <>

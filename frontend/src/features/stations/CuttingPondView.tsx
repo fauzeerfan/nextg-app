@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Activity, Wifi, RefreshCw, Scissors, Layers, Target, TrendingUp, Package, AlertCircle, CheckSquare, XSquare, CheckCircle } from 'lucide-react';
 import type { ProductionOrder } from '../../types/production';
+import { TargetSummaryCard } from '../../components/ui/TargetSummaryCard';
 
 const API_BASE_URL = 'http://localhost:3000';
 
@@ -366,6 +367,9 @@ export const CuttingPondView = () => {
               Company Efficiency
             </div>
           </div>
+        </div>
+        <div className="px-6 pb-6">
+          <TargetSummaryCard lineCode="K1YH" station="CUTTING_POND" />
         </div>
       </div>
 

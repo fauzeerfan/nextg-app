@@ -458,12 +458,14 @@ model ManpowerAttendance {
 model TargetSetting {
   id             String   @id @default(uuid())
   lineCode       String
-  indexValue     Float    // pcs/MP/day
+  station        String   @default("SEWING")
+  indexValue     Float
   effectiveDate  DateTime @map("effective_date")
   note           String?
+  isActive       Boolean  @default(true)   // <-- tambahkan baris ini
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@unique([lineCode, effectiveDate])
+  @@unique([lineCode, station, effectiveDate])
   @@map("target_settings")
 }

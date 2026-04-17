@@ -3,6 +3,7 @@ import {
   Package, Box, RefreshCw, Search, Plus, Printer, X, CheckCircle,
   Layers, Save, Loader2, QrCode, History, Delete, Activity
 } from 'lucide-react';
+import { TargetSummaryCard } from '../../components/ui/TargetSummaryCard';
 
 const API_BASE_URL = 'http://localhost:3000';
 
@@ -890,6 +891,9 @@ export const PackingView = () => {
                 <div className="h-full bg-blue-500 rounded-full transition-all duration-1000" style={{ width: `${overallProgress}%` }} />
               </div>
             </div>
+          </div>
+          <div className="px-6 md:px-8 pb-6">
+            <TargetSummaryCard lineCode="K1YH" station="PACKING" />
           </div>
         </div>
 

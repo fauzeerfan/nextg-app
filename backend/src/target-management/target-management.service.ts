@@ -11,20 +11,22 @@ export class TargetManagementService {
     return this.prisma.targetSetting.create({
       data: {
         lineCode: dto.lineCode,
+        station: dto.station,
         indexValue: dto.indexValue,
         effectiveDate: new Date(dto.effectiveDate),
         note: dto.note,
+        isActive: dto.isActive ?? true,   // <-- tambahkan
       },
     });
   }
 
   async findAll() {
     return this.prisma.targetSetting.findMany({
-      orderBy: [{ lineCode: 'asc' }, { effectiveDate: 'desc' }],
+      orderBy: [{ lineCode: 'asc' }, { station: 'asc' }, { effectiveDate: 'desc' }],
     });
   }
 
-  async findByLineAndDate(lineCode: string, date: Date) {
+  async findByLineStationAndDate(lineCode: string, station: string, date: Date) {
     const start = new Date(date);
     start.setHours(0, 0, 0, 0);
     const end = new Date(date);
@@ -32,9 +34,15 @@ export class TargetManagementService {
     return this.prisma.targetSetting.findFirst({
       where: {
         lineCode,
+        station,
         effectiveDate: { gte: start, lte: end },
       },
     });
+  }
+
+  // Untuk kompatibilitas lama, tetap sediakan method findByLineAndDate (default station SEWING)
+  async findByLineAndDate(lineCode: string, date: Date) {
+    return this.findByLineStationAndDate(lineCode, 'SEWING', date);
   }
 
   async update(id: string, dto: UpdateTargetDto) {
@@ -44,8 +52,10 @@ export class TargetManagementService {
       where: { id },
       data: {
         indexValue: dto.indexValue,
+        station: dto.station,
         effectiveDate: dto.effectiveDate ? new Date(dto.effectiveDate) : undefined,
         note: dto.note,
+        isActive: dto.isActive,   // <-- tambahkan
       },
     });
   }
