@@ -81,7 +81,7 @@ export const AiChatWidget: React.FC = () => {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-[700px] h-[850px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700 animate-in slide-in-from-bottom-5 duration-300">
+    <div className="fixed bottom-6 right-6 z-50 w-[500px] h-[650px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700 animate-in slide-in-from-bottom-5 duration-300">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3 flex justify-between items-center">
         <div className="flex items-center gap-2">
