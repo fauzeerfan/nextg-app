@@ -440,6 +440,33 @@ model Employee {
   updatedAt   DateTime @updatedAt
 
   attendances ManpowerAttendance[]
+  mutations   EmployeeMutationHistory[]
+}
+
+model EmployeeMutationHistory {
+  id             String   @id @default(uuid())
+  employeeId     String
+  nik            String
+  fullName       String   // snapshot nama saat mutasi
+  oldLineCode    String
+  newLineCode    String
+  oldStation     String
+  newStation     String
+  oldSection     String
+  newSection     String
+  oldDepartment  String
+  newDepartment  String
+  oldJobTitle    String
+  newJobTitle    String
+  mutationDate   DateTime @default(now())
+  note           String?  // keterangan mutasi
+  mutatedBy      String?  // username user yang melakukan mutasi
+
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([nik])
+  @@map("employee_mutation_history")
 }
 
 // ========== NEW: Manpower Attendance ==========
