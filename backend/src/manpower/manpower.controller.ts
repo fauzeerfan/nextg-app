@@ -89,4 +89,15 @@ export class ManpowerController {
       offset ? parseInt(offset) : 0,
     );
   }
+
+  @Get('employee-flow-history')
+  async getEmployeeFlowHistory(
+    @Query('start') start?: string,
+    @Query('end') end?: string,
+    @Query('lineCode') lineCode?: string,
+    @Query('station') station?: string,
+    @Query('nik') nik?: string,
+  ) {
+    return this.manpowerService.getEmployeeFlowHistory(start, end, lineCode, station, nik);
+  }
 }

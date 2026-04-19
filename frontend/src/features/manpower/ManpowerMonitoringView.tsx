@@ -74,7 +74,7 @@ export const ManpowerMonitoringView = () => {
       .catch(console.error);
   }, []);
 
-  // Fungsi untuk mengambil data attendance dan memproses menjadi flow Karyawan → Line per Tanggal
+  // Fungsi untuk mengambil data flow dari endpoint employee-flow-history
   const fetchFlowData = useCallback(async () => {
     setFlowLoading(true);
     setError(null);
@@ -84,17 +84,15 @@ export const ManpowerMonitoringView = () => {
       if (endDate) params.append('end', new Date(endDate).toISOString());
       if (filterLine) params.append('lineCode', filterLine);
       if (searchNik) params.append('nik', searchNik);
-      params.append('limit', '10000'); // ambil semua data untuk flow
+      params.append('limit', '10000');
       params.append('offset', '0');
 
       const url = `${API_BASE_URL}/manpower/attendance-list?${params}`;
       const res = await fetch(url, { headers: getAuthHeaders() });
-      
       if (!res.ok) {
         const text = await res.text();
         throw new Error(`Server error: ${res.status} - ${text.substring(0, 100)}`);
       }
-      
       const data = await res.json();
       const records = data.data;
 
@@ -113,90 +111,79 @@ export const ManpowerMonitoringView = () => {
         empMap.get(rec.nik)!.attendances.push(rec);
       });
 
-      // Persiapan node dan link
       const nodeMap = new Map<string, any>();
-      const linkMap = new Map<string, number>(); // key: "sourceId->targetId"
+      const linkMap = new Map<string, number>();
 
-      for (const [nik, empData] of empMap.entries()) {
-        // Urutkan berdasarkan tanggal ascending
-        const attendances = empData.attendances.sort((a, b) => 
-          new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime()
-        );
-        
-        // Tambahkan node karyawan
-        const empNodeId = `emp-${nik}`;
-        if (!nodeMap.has(empNodeId)) {
-          nodeMap.set(empNodeId, {
-            id: empNodeId,
-            name: `${empData.fullName} (${nik})`,
-            type: 'employee'
-          });
-        }
+for (const [nik, empData] of empMap.entries()) {
+  const attendances = empData.attendances.sort((a, b) => 
+    new Date(a.scanTime).getTime() - new Date(b.scanTime).getTime()
+  );
 
-        if (attendances.length === 0) continue;
+  const empNodeId = `emp-${nik}`;
+  if (!nodeMap.has(empNodeId)) {
+    nodeMap.set(empNodeId, {
+      id: empNodeId,
+      name: `${empData.fullName} (${nik})`,
+      type: 'employee'
+    });
+  }
 
-        // Node line pertama
-        const first = attendances[0];
-        const firstDate = new Date(first.tanggal).toISOString().split('T')[0];
-        const firstNodeId = `line-${first.lineCode}-${firstDate}`;
-        if (!nodeMap.has(firstNodeId)) {
-          nodeMap.set(firstNodeId, {
-            id: firstNodeId,
-            name: `${first.lineCode} (${firstDate})`,
-            type: 'line-date',
-            employees: [] // <-- tambah properti employees
-          });
-        }
-        // Tambahkan karyawan ke node line pertama
-        const firstNode = nodeMap.get(firstNodeId);
-        firstNode.employees.push(empData.fullName);
+  if (attendances.length === 0) continue;
 
-        // Link employee -> line pertama
-        const linkKeyFirst = `${empNodeId}->${firstNodeId}`;
-        linkMap.set(linkKeyFirst, (linkMap.get(linkKeyFirst) || 0) + 1);
+  // Kelompokkan attendances per tanggal
+  const perDate = new Map<string, typeof attendances>();
+  for (const att of attendances) {
+    const dateKey = new Date(att.tanggal).toISOString().split('T')[0];
+    if (!perDate.has(dateKey)) perDate.set(dateKey, []);
+    perDate.get(dateKey)!.push(att);
+  }
 
-        // Link antar line-date berikutnya
-        for (let i = 0; i < attendances.length - 1; i++) {
-          const current = attendances[i];
-          const next = attendances[i+1];
-          const currDate = new Date(current.tanggal).toISOString().split('T')[0];
-          const nextDate = new Date(next.tanggal).toISOString().split('T')[0];
-          const currNodeId = `line-${current.lineCode}-${currDate}`;
-          const nextNodeId = `line-${next.lineCode}-${nextDate}`;
-          
-          if (!nodeMap.has(currNodeId)) {
-            nodeMap.set(currNodeId, {
-              id: currNodeId,
-              name: `${current.lineCode} (${currDate})`,
-              type: 'line-date',
-              employees: [] // <-- tambah properti employees
-            });
-          }
-          if (!nodeMap.has(nextNodeId)) {
-            nodeMap.set(nextNodeId, {
-              id: nextNodeId,
-              name: `${next.lineCode} (${nextDate})`,
-              type: 'line-date',
-              employees: [] // <-- tambah properti employees
-            });
-          }
+  // Proses setiap tanggal
+  for (const [dateKey, dateAtts] of perDate.entries()) {
+    // Urutkan berdasarkan scanTime untuk menentukan line terakhir
+    dateAtts.sort((a, b) => new Date(a.scanTime).getTime() - new Date(b.scanTime).getTime());
+    
+    // Ambil semua lineCode unik dalam urutan kemunculan
+    const allLines: string[] = [];
+    for (const att of dateAtts) {
+      if (!allLines.includes(att.lineCode)) allLines.push(att.lineCode);
+    }
+    const finalLine = allLines[allLines.length - 1];
+    const exLines = allLines.slice(0, -1); // semua line sebelum finalLine
+    
+    // Buat teks exLine untuk tooltip
+    const exLineText = exLines.length > 0 ? `Ex: ${exLines.join(', ')}` : null;
+    
+    // Node line-date hanya untuk line terakhir
+    const nodeId = `line-${finalLine}-${dateKey}`;
+    if (!nodeMap.has(nodeId)) {
+      nodeMap.set(nodeId, {
+        id: nodeId,
+        name: `${finalLine} (${dateKey})`,
+        type: 'line-date',
+        employees: []
+      });
+    }
+    const node = nodeMap.get(nodeId);
+    if (!node.employees.some((e: any) => e.nik === nik)) {
+      node.employees.push({ 
+        nik, 
+        name: empData.fullName, 
+        exLine: exLineText,
+        exLinesList: exLines  // opsional untuk debug
+      });
+    }
+    
+    // Hanya satu link dari employee ke node line-date terakhir
+    const linkKey = `${empNodeId}->${nodeId}`;
+    linkMap.set(linkKey, (linkMap.get(linkKey) || 0) + 1);
+  }
+}
 
-          // Tambahkan karyawan ke node current dan next (jika belum ada)
-          const currNode = nodeMap.get(currNodeId);
-          const nextNode = nodeMap.get(nextNodeId);
-          if (!currNode.employees.includes(empData.fullName)) currNode.employees.push(empData.fullName);
-          if (!nextNode.employees.includes(empData.fullName)) nextNode.employees.push(empData.fullName);
-
-          const linkKey = `${currNodeId}->${nextNodeId}`;
-          linkMap.set(linkKey, (linkMap.get(linkKey) || 0) + 1);
-        }
-      }
-
-      // Konversi ke array untuk SankeyChart
       const nodes = Array.from(nodeMap.values());
       const nodeIndexMap = new Map<string, number>();
       nodes.forEach((node, idx) => nodeIndexMap.set(node.id, idx));
-      
+
       const links = Array.from(linkMap.entries()).map(([key, value]) => {
         const [sourceId, targetId] = key.split('->');
         return {

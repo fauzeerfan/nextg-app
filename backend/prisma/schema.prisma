@@ -430,10 +430,10 @@ model Employee {
   id          String   @id @default(uuid())
   nik         String   @unique
   fullName    String
-  gender      String   // "Laki-laki", "Perempuan"
+  gender      String
   jobTitle    String
-  lineCode    String   // e.g., "K1YH"
-  station     String   // station code from StationCode enum
+  lineCode    String
+  station     String
   section     String
   department  String
   createdAt   DateTime @default(now())
@@ -441,6 +441,7 @@ model Employee {
 
   attendances ManpowerAttendance[]
   mutations   EmployeeMutationHistory[]
+  lineChanges EmployeeLineChange[]  // <-- tambahkan baris ini
 }
 
 model EmployeeMutationHistory {
@@ -473,13 +474,32 @@ model EmployeeMutationHistory {
 model ManpowerAttendance {
   id         String   @id @default(uuid())
   nik        String
-  tanggal    DateTime @map("date") // only date part (use date only)
+  tanggal    DateTime @map("date")
   lineCode   String
   station    String
   scanTime   DateTime @default(now())
   employee   Employee @relation(fields: [nik], references: [nik], onDelete: Cascade)
 
-  @@unique([nik, tanggal])
+  // Unique constraint dihapus agar satu karyawan bisa check-in multiple kali di hari yang sama
+  // @@unique([nik, tanggal])
+}
+
+model EmployeeLineChange {
+  id           String   @id @default(uuid())
+  nik          String
+  fullName     String   // snapshot nama
+  oldLineCode  String
+  newLineCode  String
+  oldStation   String
+  newStation   String
+  changeDate   DateTime @map("change_date") // tanggal perubahan (tanpa jam)
+  changeTime   DateTime @default(now())     // timestamp lengkap
+  note         String?
+  employee     Employee @relation(fields: [nik], references: [nik], onDelete: Cascade)
+
+  @@index([nik])
+  @@index([changeDate])
+  @@map("employee_line_changes")
 }
 
 model TargetSetting {

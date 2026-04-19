@@ -6,7 +6,7 @@ interface SankeyNode {
   id: string;
   name: string;
   type: string;
-  employees?: string[]; // tambahan untuk daftar karyawan pada node line-date
+  employees?: Array<{ nik: string; name: string; exLine?: string }>; // updated: array of objects
 }
 
 interface SankeyLink {
@@ -312,13 +312,14 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
         // Bangun HTML tambahan jika node adalah line-date dan memiliki employees
         let additionalHtml = '';
         if (d.type === 'line-date' && d.employees && d.employees.length > 0) {
-          const uniqueEmployees = [...new Set(d.employees)];
-          const employeeList = uniqueEmployees.map(emp => 
-            `<div style="padding: 4px 8px; background: #f1f5f9; border-radius: 8px; margin: 4px 0; font-size: 12px; font-weight: 500;">${emp}</div>`
-          ).join('');
+          // d.employees sekarang berupa array objek { nik, name, exLine }
+          const employeeList = d.employees.map((emp: any) => {
+            const displayName = emp.exLine ? `${emp.name} (ex line ${emp.exLine})` : emp.name;
+            return `<div style="padding: 4px 8px; background: #f1f5f9; border-radius: 8px; margin: 4px 0; font-size: 12px; font-weight: 500;">${displayName}</div>`;
+          }).join('');
           additionalHtml = `
             <div style="margin-top: 12px; border-top: 1px solid #e2e8f0; padding-top: 8px;">
-              <div style="font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 6px;">👥 Manpower (${uniqueEmployees.length}):</div>
+              <div style="font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 6px;">👥 Manpower (${d.employees.length}):</div>
               <div style="max-height: 200px; overflow-y: auto;">${employeeList}</div>
             </div>
           `;

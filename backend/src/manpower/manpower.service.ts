@@ -21,26 +21,44 @@ export class ManpowerService {
     return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0));
   }
 
-  async checkIn(dto: CreateAttendanceDto) {
-    const { nik, lineCode, station } = dto;
-    this.logger.log(`Check-in attempt for NIK: ${nik}`);
-    const employee = await this.prisma.employee.findUnique({ where: { nik } });
-    if (!employee) throw new NotFoundException('Employee not found');
+async checkIn(dto: CreateAttendanceDto) {
+  const { nik, lineCode, station } = dto;
+  this.logger.log(`Check-in attempt for NIK: ${nik}`);
+  const employee = await this.prisma.employee.findUnique({ where: { nik } });
+  if (!employee) throw new NotFoundException('Employee not found');
 
-    const todayUTC = new Date();
-    todayUTC.setUTCHours(0, 0, 0, 0);
+  const todayUTC = new Date();
+  todayUTC.setUTCHours(0, 0, 0, 0);
 
-    const existing = await this.prisma.manpowerAttendance.findFirst({
-      where: { nik, tanggal: todayUTC },
+  // Cari attendance terakhir hari ini
+  const lastAttendance = await this.prisma.manpowerAttendance.findFirst({
+    where: { nik, tanggal: todayUTC },
+    orderBy: { scanTime: 'desc' },
+  });
+
+  // Catat perubahan line jika ada
+  if (lastAttendance && (lastAttendance.lineCode !== lineCode || lastAttendance.station !== station)) {
+    await this.prisma.employeeLineChange.create({
+      data: {
+        nik: employee.nik,
+        fullName: employee.fullName,
+        oldLineCode: lastAttendance.lineCode,
+        newLineCode: lineCode,
+        oldStation: lastAttendance.station,
+        newStation: station,
+        changeDate: todayUTC,
+        note: `Line change from ${lastAttendance.lineCode} to ${lineCode}`,
+      },
     });
-    if (existing) throw new BadRequestException('Employee already checked in today');
-
-    const attendance = await this.prisma.manpowerAttendance.create({
-      data: { nik, tanggal: todayUTC, lineCode, station },
-      include: { employee: true },
-    });
-    return attendance;
   }
+
+  // Selalu buat record baru (multiple attendance per hari)
+  const attendance = await this.prisma.manpowerAttendance.create({
+    data: { nik, tanggal: todayUTC, lineCode, station },
+    include: { employee: true },
+  });
+  return attendance;
+}
 
   async getTodayAttendance() {
     const todayUTC = new Date();
@@ -413,6 +431,154 @@ export class ManpowerService {
     } catch (error: any) {
       this.logger.error(`Error in getAttendanceList: ${error.message}`);
       throw new BadRequestException(`Failed to get attendance list: ${error.message}`);
+    }
+  }
+
+  async getEmployeeFlowHistory(
+    startDate?: string,
+    endDate?: string,
+    lineCode?: string,
+    station?: string,
+    employeeNik?: string,
+  ) {
+    try {
+      const filters: any = {};
+      if (startDate) {
+        const start = this.parseDateToUTC(startDate);
+        if (start) filters.changeDate = { gte: start };
+      }
+      if (endDate) {
+        let end = this.parseDateToUTC(endDate);
+        if (end) {
+          end.setUTCHours(23, 59, 59, 999);
+          if (!filters.changeDate) filters.changeDate = {};
+          filters.changeDate.lte = end;
+        }
+      }
+      if (lineCode) {
+        filters.OR = [
+          { oldLineCode: lineCode },
+          { newLineCode: lineCode },
+        ];
+      }
+      if (station) {
+        filters.OR = filters.OR || [];
+        filters.OR.push(
+          { oldStation: station },
+          { newStation: station },
+        );
+      }
+      if (employeeNik) filters.nik = employeeNik;
+
+      const changes = await this.prisma.employeeLineChange.findMany({
+        where: filters,
+        orderBy: { changeTime: 'asc' },
+        include: { employee: true },
+      });
+
+      // Bangun nodes dan links untuk sankey
+      const nodeMap = new Map<string, { id: string; name: string; type: string; employees?: any[] }>();
+      const linkMap = new Map<string, number>();
+
+      // Kelompokkan perubahan per karyawan
+      const changesByNik = new Map<string, typeof changes>();
+      for (const ch of changes) {
+        if (!changesByNik.has(ch.nik)) changesByNik.set(ch.nik, []);
+        changesByNik.get(ch.nik)!.push(ch);
+      }
+
+      for (const [nik, chList] of changesByNik.entries()) {
+        // Urutkan berdasarkan waktu
+        chList.sort((a, b) => a.changeTime.getTime() - b.changeTime.getTime());
+
+        // Node karyawan
+        const empNodeId = `emp-${nik}`;
+        if (!nodeMap.has(empNodeId)) {
+          nodeMap.set(empNodeId, {
+            id: empNodeId,
+            name: `${chList[0].fullName} (${nik})`,
+            type: 'employee',
+          });
+        }
+
+        // Buat link dari karyawan ke line pertama
+        const first = chList[0];
+        const firstDate = new Date(first.changeDate).toISOString().split('T')[0];
+        const firstNodeId = `line-${first.newLineCode}-${firstDate}`;
+        if (!nodeMap.has(firstNodeId)) {
+          nodeMap.set(firstNodeId, {
+            id: firstNodeId,
+            name: `${first.newLineCode} (${firstDate})`,
+            type: 'line-date',
+            employees: [],
+          });
+        }
+        const firstNode = nodeMap.get(firstNodeId)!;
+        if (!firstNode.employees!.some(e => e.nik === nik)) {
+          firstNode.employees!.push({ nik, name: chList[0].fullName, exLine: null });
+        }
+
+        const linkKeyFirst = `${empNodeId}->${firstNodeId}`;
+        linkMap.set(linkKeyFirst, (linkMap.get(linkKeyFirst) || 0) + 1);
+
+        // Buat link antar perubahan
+        for (let i = 0; i < chList.length - 1; i++) {
+          const curr = chList[i];
+          const next = chList[i+1];
+          const currDate = new Date(curr.changeDate).toISOString().split('T')[0];
+          const nextDate = new Date(next.changeDate).toISOString().split('T')[0];
+          const currNodeId = `line-${curr.newLineCode}-${currDate}`;
+          const nextNodeId = `line-${next.newLineCode}-${nextDate}`;
+
+          if (!nodeMap.has(currNodeId)) {
+            nodeMap.set(currNodeId, {
+              id: currNodeId,
+              name: `${curr.newLineCode} (${currDate})`,
+              type: 'line-date',
+              employees: [],
+            });
+          }
+          if (!nodeMap.has(nextNodeId)) {
+            nodeMap.set(nextNodeId, {
+              id: nextNodeId,
+              name: `${next.newLineCode} (${nextDate})`,
+              type: 'line-date',
+              employees: [],
+            });
+          }
+          // Tambahkan karyawan ke node curr dan next (dengan exLine jika pernah pindah)
+          const currNode = nodeMap.get(currNodeId)!;
+          const nextNode = nodeMap.get(nextNodeId)!;
+          if (!currNode.employees!.some(e => e.nik === nik)) {
+            currNode.employees!.push({ nik, name: chList[0].fullName, exLine: curr.oldLineCode });
+          }
+          if (!nextNode.employees!.some(e => e.nik === nik)) {
+            nextNode.employees!.push({ nik, name: chList[0].fullName, exLine: next.oldLineCode });
+          }
+
+          const linkKey = `${currNodeId}->${nextNodeId}`;
+          linkMap.set(linkKey, (linkMap.get(linkKey) || 0) + 1);
+        }
+      }
+
+      // Konversi ke array untuk SankeyChart
+      const nodes = Array.from(nodeMap.values());
+      const nodeIndexMap = new Map<string, number>();
+      nodes.forEach((node, idx) => nodeIndexMap.set(node.id, idx));
+
+      const links = Array.from(linkMap.entries()).map(([key, value]) => {
+        const [sourceId, targetId] = key.split('->');
+        return {
+          source: nodeIndexMap.get(sourceId)!,
+          target: nodeIndexMap.get(targetId)!,
+          value,
+        };
+      });
+
+      return { nodes, links };
+    } catch (error: any) {
+      this.logger.error(`Error in getEmployeeFlowHistory: ${error.message}`, error.stack);
+      throw new BadRequestException(`Failed to get employee flow history: ${error.message}`);
     }
   }
 }
