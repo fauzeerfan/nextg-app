@@ -78,16 +78,16 @@ const menuGroups = [
     ]
   },
   {
+    title: "MANPOWER MANAGEMENT",
+    items: [
+      { id: 'manpower_control', label: 'Manpower Control', icon: Scan, color: 'text-green-500' },
+    ]
+  },
+  {
     title: "REPORTS AND ANALYTICS",
     items: [
       { id: 'reports', label: 'Reports', icon: BarChart3, color: 'text-cyan-500' },
       { id: 'traceability', label: 'Traceability', icon: History, color: 'text-violet-500' },
-    ]
-  },
-  {
-    title: "MANPOWER MANAGEMENT",
-    items: [
-      { id: 'manpower_control', label: 'Manpower Control', icon: Scan, color: 'text-green-500' },
     ]
   },
   {
