@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -79,5 +79,56 @@ export class IotService {
       where: { deviceId },
       data,
     });
+  }
+
+  // ========== NEW CRUD METHODS ==========
+  async getDeviceById(id: string) {
+    const device = await this.prisma.iotDevice.findUnique({
+      where: { id },
+    });
+    if (!device) throw new NotFoundException('Device not found');
+    return device;
+  }
+
+  async createDevice(data: any) {
+    // data: { deviceId, name, mode, station, lineCode, config, isActive }
+    const existing = await this.prisma.iotDevice.findUnique({
+      where: { deviceId: data.deviceId },
+    });
+    if (existing) throw new ConflictException('Device ID already exists');
+    return this.prisma.iotDevice.create({
+      data: {
+        deviceId: data.deviceId,
+        name: data.name || data.deviceId,
+        mode: data.mode,
+        station: data.station,
+        lineCode: data.lineCode,
+        config: data.config || null,
+        isActive: data.isActive ?? true,
+      },
+    });
+  }
+
+  async updateDeviceById(id: string, data: any) {
+    const existing = await this.prisma.iotDevice.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Device not found');
+    // Prevent changing deviceId? Boleh diubah, tapi hati-hati. Biarkan.
+    return this.prisma.iotDevice.update({
+      where: { id },
+      data: {
+        name: data.name,
+        mode: data.mode,
+        station: data.station,
+        lineCode: data.lineCode,
+        config: data.config,
+        isActive: data.isActive,
+      },
+    });
+  }
+
+  async deleteDeviceById(id: string) {
+    const existing = await this.prisma.iotDevice.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Device not found');
+    return this.prisma.iotDevice.delete({ where: { id } });
   }
 }

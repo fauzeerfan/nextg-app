@@ -63,7 +63,8 @@ const AppContent = () => {
       'manpower_monitoring': '/manpower-monitoring',
       'target_management': '/target-management',
       'target_monitoring': '/target-monitoring',
-      'login_monitoring': '/login-monitoring', 
+      'login_monitoring': '/login-monitoring',
+      'device_management': '/device-management',
     };
     const path = tabToPath[activeTab] || '/dashboard';
     if (location.pathname !== path) navigate(path);
@@ -88,7 +89,8 @@ const pathToTab: Record<string, string> = {
   '/manpower-monitoring': 'manpower_monitoring',
   '/target-management': 'target_management',
   '/target-monitoring': 'target_monitoring',
-  '/login-monitoring': 'login_monitoring', 
+  '/login-monitoring': 'login_monitoring',
+  '/device-management': 'device_management',
 };
     const tab = pathToTab[location.pathname];
     if (tab && tab !== activeTab) setActiveTab(tab);

@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Scissors, Grid, ClipboardCheck, Shirt,
   CheckCircle, Package, Truck, Factory, Users,
   PanelLeftClose, PanelLeftOpen, LogOut, Sun, Moon,
-  BarChart3, History, Scan, Calendar, Target, LogIn
+  BarChart3, History, Scan, Calendar, Target, LogIn, Cpu
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { NextGLogo } from '../ui/Logo';
@@ -97,6 +97,7 @@ const menuGroups = [
       { id: 'user_management', label: 'User Management', icon: Users, color: 'text-red-500' },
       { id: 'employee_management', label: 'Employee Management', icon: Users, color: 'text-green-500' },
       { id: 'target_management', label: 'Target Management', icon: Target, color: 'text-amber-500' },
+      { id: 'device_management', label: 'Device Management', icon: Cpu, color: 'text-cyan-500' },
     ]
   }
 ];
@@ -151,7 +152,8 @@ const menuGroups = [
       'manpower_monitoring': '/manpower-monitoring',
       'target_management': '/target-management',
       'target_monitoring': '/target-monitoring',
-      'login_monitoring': '/login-monitoring',   // ✅ mapping sudah benar
+      'login_monitoring': '/login-monitoring',
+      'device_management': '/device-management',
     };
     const path = tabToPath[tabId];
     if (path) {
@@ -180,7 +182,8 @@ const menuGroups = [
       '/manpower-monitoring': 'manpower_monitoring',
       '/target-management': 'target_management',
       '/target-monitoring': 'target_monitoring',
-      '/login-monitoring': 'login_monitoring',   // ✅ mapping sudah benar
+      '/login-monitoring': 'login_monitoring',
+      '/device-management': 'device_management',
     };
     const tab = pathToTab[location.pathname];
     if (tab && tab !== activeTab) setActiveTab(tab);

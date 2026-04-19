@@ -517,7 +517,7 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
-        {/* Left Column - Line List */}
+        {/* Left Column - Line List (TABLE VIEW) */}
         <div className="lg:col-span-1">
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden sticky top-6 h-[calc(100vh-140px)] flex flex-col">
             <div className="p-4 border-b border-slate-100 dark:border-slate-700">
@@ -545,57 +545,87 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
               </div>
             </div>
 
-            <div className="p-3 flex-1 overflow-y-auto custom-scrollbar">
-              <div className="space-y-2">
-                {flt.map(l => {
-                  const isSel = sel?.id === l.id;
-                  return (
-                    <div
-                      key={l.id}
-                      className={`group p-3 rounded-xl border-2 transition-all duration-300 cursor-pointer ${isSel
-                          ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30 shadow-md'
-                          : 'border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:shadow-sm bg-white dark:bg-slate-800'
-                        }`}
-                      onClick={() => selectLine(l)}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${isSel ? 'bg-blue-600 shadow-md shadow-blue-600/30' : 'bg-slate-100 dark:bg-slate-700 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50'
-                            }`}>
-                            <Factory size={16} className={isSel ? 'text-white' : 'text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400'} />
-                          </div>
-                          <div>
-                            <div className="font-black text-[13px] text-slate-900 dark:text-white">{l.code}</div>
-                            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">{l.name}</div>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-1.5">
-                          <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-600 text-[10px] font-black">
-                            {l.patternMultiplier}x
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mt-2.5 flex items-center justify-between text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                        <div className="flex items-center gap-2">
-                          <span className="flex items-center gap-1"><Users size={12} className="text-slate-400"/> {l.userCount || 0}</span>
-                          <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>
-                          <span className="flex items-center gap-1"><CpuIcon size={12} className="text-slate-400"/> {l.stations?.filter(s => s.required).length}</span>
-                        </div>
-                        <ChevronRight size={14} className={`transition-transform duration-300 ${isSel ? 'translate-x-1 text-blue-600 dark:text-blue-400' : 'opacity-0 group-hover:opacity-100 group-hover:translate-x-1'}`} />
-                      </div>
-                    </div>
-                  );
-                })}
-                {!flt.length && !load && (
-                  <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700">
-                    <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100 dark:border-slate-700">
-                      <Search size={20} className="text-slate-400" />
-                    </div>
-                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">No Lines Found</h4>
-                    <p className="text-[11px] font-medium text-slate-500">Try adjusting your search</p>
-                  </div>
-                )}
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              {/* Table View */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-800/80 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Line</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Multiplier</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Users</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Stations</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                    {flt.map(l => {
+                      const isSel = sel?.id === l.id;
+                      return (
+                        <tr
+                          key={l.id}
+                          className={`cursor-pointer transition-colors ${
+                            isSel
+                              ? 'bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-600'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                          }`}
+                          onClick={() => selectLine(l)}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                                isSel ? 'bg-blue-600 shadow-md shadow-blue-600/30' : 'bg-slate-100 dark:bg-slate-700 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50'
+                              }`}>
+                                <Factory size={14} className={isSel ? 'text-white' : 'text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400'} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-black text-slate-900 dark:text-white truncate leading-tight">{l.code}</div>
+                                <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 truncate">{l.name}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider border bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800">
+                              {l.patternMultiplier}x
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                              <Users size={12} className="text-slate-400" />
+                              <span className="text-[11px] font-bold">{l.userCount || 0}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                              <CpuIcon size={12} className="text-slate-400" />
+                              <span className="text-[11px] font-bold">{l.stations?.filter(s => s.required).length}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
+              
+              {!flt.length && !load && (
+                <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 m-4">
+                  <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100 dark:border-slate-700">
+                    <Search size={20} className="text-slate-400" />
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">No Lines Found</h4>
+                  <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-5">
+                    {search ? `No matches for "${search}"` : "Your directory is empty."}
+                  </p>
+                  {!search && (
+                    <button
+                      onClick={newLine}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold flex items-center gap-2 mx-auto hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20"
+                    >
+                      <Plus size={14} /> Add Line
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             
             <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">

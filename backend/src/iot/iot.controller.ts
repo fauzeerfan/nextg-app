@@ -7,6 +7,9 @@ import {
   Query,
   NotFoundException,
   BadRequestException,
+  Param,
+  Patch,
+  Delete,
 } from '@nestjs/common';
 import { IotService } from './iot.service';
 import { ProductionEngineService } from '../mes/production-engine.service';
@@ -94,5 +97,26 @@ export class IotController {
     } else {
       throw new NotFoundException('Unsupported station for scanner');
     }
+  }
+
+  // ========== NEW CRUD ENDPOINTS ==========
+  @Get('device/:id')
+  async getDevice(@Param('id') id: string) {
+    return this.iot.getDeviceById(id);
+  }
+
+  @Post('device')
+  async createDevice(@Body() body: any) {
+    return this.iot.createDevice(body);
+  }
+
+  @Patch('device/:id')
+  async updateDevice(@Param('id') id: string, @Body() body: any) {
+    return this.iot.updateDeviceById(id, body);
+  }
+
+  @Delete('device/:id')
+  async deleteDevice(@Param('id') id: string) {
+    return this.iot.deleteDeviceById(id);
   }
 }
