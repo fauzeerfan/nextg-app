@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Scissors, Grid, ClipboardCheck, Shirt,
   CheckCircle, Package, Truck, Factory, Users,
   PanelLeftClose, PanelLeftOpen, LogOut, Sun, Moon,
-  BarChart3, History, Scan, Calendar, Target, LogIn, Cpu
+  BarChart3, History, Scan, Calendar, Target, LogIn, Cpu, Bot
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { NextGLogo } from '../ui/Logo';
@@ -98,6 +98,7 @@ const menuGroups = [
       { id: 'employee_management', label: 'Employee Management', icon: Users, color: 'text-green-500' },
       { id: 'target_management', label: 'Target Management', icon: Target, color: 'text-amber-500' },
       { id: 'device_management', label: 'Device Management', icon: Cpu, color: 'text-cyan-500' },
+      { id: 'ai_management', label: 'AI Management', icon: Bot, color: 'text-purple-500' },
     ]
   }
 ];
@@ -154,6 +155,7 @@ const menuGroups = [
       'target_monitoring': '/target-monitoring',
       'login_monitoring': '/login-monitoring',
       'device_management': '/device-management',
+      'ai_management': '/ai-management',
     };
     const path = tabToPath[tabId];
     if (path) {
@@ -184,6 +186,7 @@ const menuGroups = [
       '/target-monitoring': 'target_monitoring',
       '/login-monitoring': 'login_monitoring',
       '/device-management': 'device_management',
+      '/ai-management': 'ai_management',
     };
     const tab = pathToTab[location.pathname];
     if (tab && tab !== activeTab) setActiveTab(tab);

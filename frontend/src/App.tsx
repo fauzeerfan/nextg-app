@@ -6,6 +6,7 @@ import { LoginView } from './features/auth/LoginView';
 import { AppRouter } from './routes/AppRouter';
 import { Sidebar } from './components/layout/Sidebar';
 import { SplashPopup } from './components/ui/SplashPopup';
+import { AiChatWidget } from './components/ui/AiChatWidget';
 
 type UserData = {
   id: number;
@@ -65,6 +66,7 @@ const AppContent = () => {
       'target_monitoring': '/target-monitoring',
       'login_monitoring': '/login-monitoring',
       'device_management': '/device-management',
+      'ai_management': '/ai-management',
     };
     const path = tabToPath[activeTab] || '/dashboard';
     if (location.pathname !== path) navigate(path);
@@ -91,6 +93,7 @@ const pathToTab: Record<string, string> = {
   '/target-monitoring': 'target_monitoring',
   '/login-monitoring': 'login_monitoring',
   '/device-management': 'device_management',
+  '/ai-management': 'ai_management',
 };
     const tab = pathToTab[location.pathname];
     if (tab && tab !== activeTab) setActiveTab(tab);
@@ -210,6 +213,7 @@ const pathToTab: Record<string, string> = {
           </main>
         </div>
       </div>
+      <AiChatWidget />
     </>
   );
 };

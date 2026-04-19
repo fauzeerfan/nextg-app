@@ -516,3 +516,26 @@ model TargetSetting {
   @@unique([lineCode, station, effectiveDate])
   @@map("target_settings")
 }
+
+// ========== AI Assistant ==========
+model AiIntent {
+  id             String   @id @default(uuid())
+  triggerKeywords String[] // array of keywords/phrases
+  responseType   String   // 'text', 'dynamic', 'report', 'navigate'
+  responseData   Json     // depends on type
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("ai_intents")
+}
+
+model AiConversation {
+  id        String   @id @default(uuid())
+  userId    String?  // optional, link to User if logged in
+  message   String
+  response  String
+  createdAt DateTime @default(now())
+
+  @@map("ai_conversations")
+}

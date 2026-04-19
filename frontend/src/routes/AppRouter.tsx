@@ -19,6 +19,7 @@ import { TargetManagementView } from '../features/system/TargetManagementView';
 import { TargetMonitoringView } from '../features/reports/TargetMonitoringView';
 import { LoginMonitoringView } from '../features/system/LoginMonitoringView';
 import { DeviceManagementView } from '../features/system/DeviceManagementView';
+import { AiManagementView } from '../features/ai/AiManagementView';
 
 interface AppRouterProps {
   activeTab: string;
@@ -53,6 +54,7 @@ export const AppRouter: React.FC<AppRouterProps> = ({
     'target_monitoring': <TargetMonitoringView />,
     'login_monitoring': <LoginMonitoringView />,
     'device_management': <DeviceManagementView />,
+    'ai_management': <AiManagementView />,
   };
 
   return (
@@ -83,6 +85,7 @@ export const AppRouter: React.FC<AppRouterProps> = ({
       <Route path="/target-management" element={tabComponents['target_management']} />
       <Route path="/login-monitoring" element={tabComponents['login_monitoring']} />
       <Route path="/device-management" element={tabComponents['device_management']} />
+      <Route path="/ai-management" element={tabComponents['ai_management']} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

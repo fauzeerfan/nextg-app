@@ -19,6 +19,7 @@ import { EmployeeModule } from './employee/employee.module';
 import { ManpowerModule } from './manpower/manpower.module';
 import { TargetManagementModule } from './target-management/target-management.module';
 import { TargetMonitoringModule } from './target-monitoring/target-monitoring.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { TargetMonitoringModule } from './target-monitoring/target-monitoring.mo
     ManpowerModule,
     TargetManagementModule,
     TargetMonitoringModule,
+    AiModule,
   ],
   controllers: [AppController],
 })

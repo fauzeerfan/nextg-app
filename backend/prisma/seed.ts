@@ -339,9 +339,6 @@ const devices = [
   // ======================================================
   // PATTERN MASTER (untuk K1YH, styleCode = K1YH)
   // ======================================================
-  // Nama file gambar default (sesuai konvensi frontend)
-  // Simpan di folder: backend/uploads/patterns/
-  // Contoh: k1yh_1_good.png, k1yh_1_ng.png, dst.
   const patternParts = [
     { name: 'Pola 1', imgGood: 'k1yh_1_good.png', imgNg: 'k1yh_1_ng.png' },
     { name: 'Pola 2', imgGood: 'k1yh_2_good.png', imgNg: 'k1yh_2_ng.png' },
@@ -361,7 +358,7 @@ const devices = [
         deleteMany: {},
         create: patternParts,
       },
-      imgSetGood: null,   // biarkan null, bisa diupload via UI
+      imgSetGood: null,
       imgSetNg: null,
     },
     create: {
@@ -442,6 +439,229 @@ const devices = [
     data: { packingConfig: { packSize: 100 } },
   });
   console.log('📦 Packing Configuration untuk K1YH diisi (packSize = 100)');
+
+  // ======================================================
+  // AI ASSISTANT INTENTS (Feby)
+  // ======================================================
+  console.log('🤖 Seeding AI Intents for Feby...');
+
+  // Hapus semua intent yang ada (bersihkan dulu)
+  await prisma.aiIntent.deleteMany({});
+
+  const aiIntents = [
+    // Greeting / General
+    {
+      triggerKeywords: ['halo', 'hai', 'hello', 'hey', 'pagi', 'siang', 'sore', 'malam'],
+      responseType: 'text',
+      responseData: { text: 'Halo! Saya Feby, asisten AI Anda. Ada yang bisa saya bantu? Coba tanyakan tentang produksi, NG, output, atau minta report.' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['terima kasih', 'thanks', 'thank you', 'makasih'],
+      responseType: 'text',
+      responseData: { text: 'Sama-sama! Senang bisa membantu. Ada lagi yang ingin ditanyakan?' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['siapa kamu', 'kamu siapa', 'perkenalan'],
+      responseType: 'text',
+      responseData: { text: 'Saya Feby, asisten AI cerdas untuk sistem produksi NextG. Saya bisa menjawab pertanyaan seputar produksi, NG, output, dan membantu navigasi laporan.' },
+      isActive: true,
+    },
+
+    // Dynamic Queries - NG
+    {
+      triggerKeywords: ['total ng hari ini', 'ng hari ini', 'jumlah ng hari ini', 'ng today'],
+      responseType: 'dynamic',
+      responseData: { query: 'total_ng_today' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['total ng minggu ini', 'ng minggu ini'],
+      responseType: 'dynamic',
+      responseData: { query: 'total_ng_this_week' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['total ng bulan ini', 'ng bulan ini'],
+      responseType: 'dynamic',
+      responseData: { query: 'total_ng_this_month' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['ng per stasiun', 'ng per station', 'ng by station'],
+      responseType: 'dynamic',
+      responseData: { query: 'ng_by_station' },
+      isActive: true,
+    },
+
+    // Dynamic Queries - Output
+    {
+      triggerKeywords: ['output hari ini', 'total output hari ini', 'produksi hari ini'],
+      responseType: 'dynamic',
+      responseData: { query: 'total_output_today' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['output minggu ini', 'produksi minggu ini'],
+      responseType: 'dynamic',
+      responseData: { query: 'total_output_this_week' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['output bulan ini', 'produksi bulan ini'],
+      responseType: 'dynamic',
+      responseData: { query: 'total_output_this_month' },
+      isActive: true,
+    },
+
+    // Defect Rate
+    {
+      triggerKeywords: ['defect rate hari ini', 'defect rate', 'tingkat cacat hari ini'],
+      responseType: 'dynamic',
+      responseData: { query: 'defect_rate_today' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['defect rate minggu ini', 'tingkat cacat minggu ini'],
+      responseType: 'dynamic',
+      responseData: { query: 'defect_rate_this_week' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['defect rate bulan ini', 'tingkat cacat bulan ini'],
+      responseType: 'dynamic',
+      responseData: { query: 'defect_rate_this_month' },
+      isActive: true,
+    },
+
+    // WIP
+    {
+      triggerKeywords: ['wip', 'jumlah wip', 'work in progress', 'berapa wip'],
+      responseType: 'dynamic',
+      responseData: { query: 'wip_ops_count' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['wip per stasiun', 'wip per station'],
+      responseType: 'dynamic',
+      responseData: { query: 'wip_by_station' },
+      isActive: true,
+    },
+
+    // Report Navigation
+    {
+      triggerKeywords: ['buatkan report ng', 'report ng', 'tampilkan report ng', 'laporan ng'],
+      responseType: 'report',
+      responseData: { reportType: 'ng-pond-cp', text: 'Membuka laporan NG (Pond & CP)...' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['report ng quality control', 'report ng qc', 'laporan ng qc'],
+      responseType: 'report',
+      responseData: { reportType: 'ng-quality-control', text: 'Membuka laporan NG Quality Control...' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['report cutting pond', 'laporan cutting pond'],
+      responseType: 'report',
+      responseData: { reportType: 'ng-cutting-pond', text: 'Membuka laporan Cutting Pond...' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['report check panel', 'laporan check panel'],
+      responseType: 'report',
+      responseData: { reportType: 'ng-check-panel', text: 'Membuka laporan Check Panel...' },
+      isActive: true,
+    },
+
+    // Navigation to pages
+    {
+      triggerKeywords: ['buka dashboard', 'tampilkan dashboard', 'ke dashboard'],
+      responseType: 'navigate',
+      responseData: { path: '/dashboard', text: 'Mengalihkan ke Dashboard...' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['buka reports', 'tampilkan reports', 'ke halaman report'],
+      responseType: 'navigate',
+      responseData: { path: '/reports', text: 'Mengalihkan ke halaman Reports...' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['buka traceability', 'tampilkan traceability', 'lacak produksi'],
+      responseType: 'navigate',
+      responseData: { path: '/traceability', text: 'Mengalihkan ke halaman Traceability...' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['buka target monitoring', 'target monitoring'],
+      responseType: 'navigate',
+      responseData: { path: '/target-monitoring', text: 'Mengalihkan ke Target Monitoring...' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['buka manpower monitoring', 'manpower monitoring'],
+      responseType: 'navigate',
+      responseData: { path: '/manpower-monitoring', text: 'Mengalihkan ke Manpower Monitoring...' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['buka login monitoring', 'login monitoring'],
+      responseType: 'navigate',
+      responseData: { path: '/login-monitoring', text: 'Mengalihkan ke Login Monitoring...' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['buka line master', 'line master'],
+      responseType: 'navigate',
+      responseData: { path: '/line-master', text: 'Mengalihkan ke Line Master...' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['buka user management', 'user management'],
+      responseType: 'navigate',
+      responseData: { path: '/user-management', text: 'Mengalihkan ke User Management...' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['buka employee management', 'employee management'],
+      responseType: 'navigate',
+      responseData: { path: '/employee-management', text: 'Mengalihkan ke Employee Management...' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['buka target management', 'target management'],
+      responseType: 'navigate',
+      responseData: { path: '/target-management', text: 'Mengalihkan ke Target Management...' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['buka device management', 'device management'],
+      responseType: 'navigate',
+      responseData: { path: '/device-management', text: 'Mengalihkan ke Device Management...' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['buka ai management', 'ai management'],
+      responseType: 'navigate',
+      responseData: { path: '/ai-management', text: 'Mengalihkan ke AI Management...' },
+      isActive: true,
+    },
+  ];
+
+  // Insert intents
+  for (const intent of aiIntents) {
+    await prisma.aiIntent.create({
+      data: {
+        triggerKeywords: intent.triggerKeywords,
+        responseType: intent.responseType,
+        responseData: intent.responseData,
+        isActive: intent.isActive,
+      },
+    });
+  }
+  console.log(`🤖 ${aiIntents.length} AI Intents seeded for Feby`);
 
   console.log('✅ INDUSTRIAL SEED DONE')
 }
