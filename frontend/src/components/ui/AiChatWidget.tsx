@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Minimize2, Maximize2 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext'; // <-- import
 
 const API_BASE_URL = 'http://localhost:3000';
 
@@ -12,6 +13,14 @@ interface ChatMessage {
 }
 
 export const AiChatWidget: React.FC = () => {
+  const { user } = useAuth(); // <-- ambil user
+  const allowedMenus = (user as any)?.allowedMenus || [];
+
+  // Jika user tidak memiliki akses AI Chat, jangan render widget
+  if (!allowedMenus.includes('ai_chat')) {
+    return null;
+  }
+
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([

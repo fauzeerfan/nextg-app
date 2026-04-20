@@ -137,6 +137,7 @@ export class AuthService {
         role: user.role,
         lineCode: user.lineCode,
         allowedStations: user.allowedStations || [],
+        allowedMenus: user.allowedMenus || [], // ✅ TAMBAHKAN BARIS INI
         permissions: user.permissions || [],
         isActive: user.isActive,
       },

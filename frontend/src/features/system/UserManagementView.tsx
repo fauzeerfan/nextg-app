@@ -33,6 +33,7 @@ const stationOpts = [
 // --- MENU OPTIONS ---
 const menuOptions = [
   { id: 'dashboard', label: 'Dashboard', category: 'Core' },
+  { id: 'ai_chat', label: 'AI Assistant Chat', category: 'Core' },
   { id: 'cutting_entan', label: 'Cutting Entan', category: 'Production' },
   { id: 'cutting_pond', label: 'Cutting Pond', category: 'Production' },
   { id: 'cp', label: 'Check Panel', category: 'Production' },
