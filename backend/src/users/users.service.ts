@@ -10,24 +10,25 @@ export class UsersService {
   // CREATE USER (ADMIN)
   // ===============================
   async create(dto: any) {
-  const hashedPassword = await bcrypt.hash(dto.password || '123456', 10);
-  try {
-    return await this.prisma.user.create({
-      data: {
-        username: dto.username,
-        password: hashedPassword,
-        fullName: dto.fullName,
-        role: dto.role || 'OPERATOR',
-        allowedStations: dto.allowedStations || [], // added
-      },
-    });
-  } catch (error) {
-    if (error.code === 'P2002') {
-      throw new ConflictException('Username already exists');
+    const hashedPassword = await bcrypt.hash(dto.password || '123456', 10);
+    try {
+      return await this.prisma.user.create({
+        data: {
+          username: dto.username,
+          password: hashedPassword,
+          fullName: dto.fullName,
+          role: dto.role || 'OPERATOR',
+          allowedStations: dto.allowedStations || [],
+          allowedMenus: dto.allowedMenus || [], // <-- tambah
+        },
+      });
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        throw new ConflictException('Username already exists');
+      }
+      throw error;
     }
-    throw error;
   }
-}
 
   // ===============================
   // GET ALL USERS
@@ -58,6 +59,8 @@ export class UsersService {
       username: dto.username ?? existing.username,
       fullName: dto.fullName ?? existing.fullName,
       role: dto.role ?? existing.role,
+      allowedStations: dto.allowedStations ?? existing.allowedStations,
+      allowedMenus: dto.allowedMenus ?? existing.allowedMenus, // <-- tambah
     };
 
     // 🔥 reset password optional

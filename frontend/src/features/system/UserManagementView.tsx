@@ -3,7 +3,7 @@ import {
   Users, UserPlus, Edit, Save, Shield, Lock, Unlock, Mail, Building,
   CheckCircle, Eye, EyeOff, Key, Trash2, XCircle, Search,
   Calendar, Loader2, UserCheck, Target, TrendingUp, Star, AlertCircle,
-  ArrowRight, UserCog, Hash
+  ArrowRight, UserCog, Hash, Layers
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:3000';
@@ -28,6 +28,30 @@ const stationOpts = [
   { value: 'CUTTING_ENTAN', label: 'Cutting Entan' }, { value: 'CUTTING_POND', label: 'Cutting Pond' },
   { value: 'CP', label: 'Check Panel' }, { value: 'SEWING', label: 'Sewing' }, { value: 'QC', label: 'Quality Control' },
   { value: 'PACKING', label: 'Packing' }, { value: 'FG', label: 'Finished Goods' }
+];
+
+// --- MENU OPTIONS ---
+const menuOptions = [
+  { id: 'dashboard', label: 'Dashboard', category: 'Core' },
+  { id: 'cutting_entan', label: 'Cutting Entan', category: 'Production' },
+  { id: 'cutting_pond', label: 'Cutting Pond', category: 'Production' },
+  { id: 'cp', label: 'Check Panel', category: 'Production' },
+  { id: 'sewing', label: 'Sewing', category: 'Production' },
+  { id: 'qc', label: 'Quality Control', category: 'Production' },
+  { id: 'packing', label: 'Packing', category: 'Production' },
+  { id: 'fg', label: 'Finished Goods', category: 'Production' },
+  { id: 'target_monitoring', label: 'Target Monitoring', category: 'Monitoring' },
+  { id: 'manpower_monitoring', label: 'Manpower Monitoring', category: 'Monitoring' },
+  { id: 'login_monitoring', label: 'Login Monitoring', category: 'Monitoring' },
+  { id: 'manpower_control', label: 'Manpower Control', category: 'Manpower' },
+  { id: 'reports', label: 'Reports', category: 'Reports' },
+  { id: 'traceability', label: 'Traceability', category: 'Reports' },
+  { id: 'line_master', label: 'Line Master', category: 'Master Data' },
+  { id: 'user_management', label: 'User Management', category: 'Master Data' },
+  { id: 'employee_management', label: 'Employee Management', category: 'Master Data' },
+  { id: 'target_management', label: 'Target Management', category: 'Master Data' },
+  { id: 'device_management', label: 'Device Management', category: 'Master Data' },
+  { id: 'ai_management', label: 'AI Management', category: 'Master Data' },
 ];
 
 interface MetricCardProps {
@@ -87,22 +111,22 @@ export const UserManagementView = () => {
   const [lineOpts, setLineOpts] = useState<string[]>([]);
   const [f, setF] = useState({
     username: '', fullName: '', email: '', role: 'OPERATOR' as SystemUser['role'],
-    department: '', jobTitle: '', lineCode: '', isActive: true, allowedStations: [] as string[], password: ''
+    department: '', jobTitle: '', lineCode: '', isActive: true,
+    allowedStations: [] as string[],
+    allowedMenus: [] as string[],
+    password: ''
   });
 
   useEffect(() => { fetchUsers(); fetchLines(); }, []);
   const fetchLines = async () => { try { const res = await fetch(`${API_BASE_URL}/line-masters`); if (res.ok) setLineOpts((await res.json()).map((l: any) => l.code)); } catch { console.error('Failed to fetch lines'); } };
   const fetchUsers = async () => { setLoad(true); try { const res = await fetch(`${API_BASE_URL}/users`); setUs(await res.json()); } catch { alert('Gagal load user'); } finally { setLoad(false); } };
 
-  // Fungsi untuk mendapatkan URL avatar dari DiceBear (gaya identicon)
   const getAvatarUrl = (seed: string) => {
     return `https://api.dicebear.com/9.x/identicon/svg?seed=${encodeURIComponent(seed)}&backgroundColor=f8fafc`;
   };
 
-  // Filter berdasarkan pencarian
   const filtered = us.filter(u => u?.username?.toLowerCase().includes(q.toLowerCase()) || u?.fullName?.toLowerCase().includes(q.toLowerCase()) || u?.email?.toLowerCase().includes(q.toLowerCase()) || u?.role?.toLowerCase().includes(q.toLowerCase()));
 
-  // Perhitungan metrik terpisah
   const total = us.length;
   const active = us.filter(u => u?.isActive).length;
   const opCnt = us.filter(u => u?.role === 'OPERATOR').length;
@@ -111,14 +135,17 @@ export const UserManagementView = () => {
 
   const select = (u: SystemUser) => { setSel(u); setEdit(false); setCreate(false); };
   const newUser = () => {
-    setF({ username: '', fullName: '', email: '', role: 'OPERATOR', department: '', jobTitle: '', lineCode: '', isActive: true, allowedStations: [], password: 'password123' });
+    setF({ username: '', fullName: '', email: '', role: 'OPERATOR', department: '', jobTitle: '', lineCode: '', isActive: true, allowedStations: [], allowedMenus: [], password: 'password123' });
     setChPw(false); setSel(null); setCreate(true); setEdit(true);
   };
   const editUser = () => {
     if (sel) setF({
       username: sel.username, fullName: sel.fullName, email: sel.email || '', role: sel.role,
       department: sel.department || '', jobTitle: sel.jobTitle || '', lineCode: sel.lineCode || '',
-      isActive: sel.isActive ?? true, allowedStations: sel.allowedStations || [], password: ''
+      isActive: sel.isActive ?? true,
+      allowedStations: sel.allowedStations || [],
+      allowedMenus: (sel as any).allowedMenus || [],
+      password: ''
     });
     setChPw(false); setEdit(true); setCreate(false);
   };
@@ -129,7 +156,7 @@ export const UserManagementView = () => {
       const payload: any = {
         username: f.username, fullName: f.fullName, email: f.email, role: f.role,
         department: f.department, jobTitle: f.jobTitle, lineCode: f.lineCode,
-        allowedStations: f.allowedStations, isActive: f.isActive
+        allowedStations: f.allowedStations, allowedMenus: f.allowedMenus, isActive: f.isActive
       };
       if (create) payload.password = f.password || '123456';
       else if (chPw && f.password) payload.password = f.password;
@@ -140,7 +167,6 @@ export const UserManagementView = () => {
   };
   const delUser = async (id: string) => { if (!confirm('Hapus user?')) return; try { await fetch(`${API_BASE_URL}/users/${id}`, { method: 'DELETE' }); await fetchUsers(); setSel(null); } catch { alert('Gagal hapus'); } };
   const toggleStatus = async (id: string) => setUs(prev => prev.map(u => u.id === id ? { ...u, isActive: !u.isActive } : u));
-  const toggleStation = (st: string) => setF(p => ({ ...p, allowedStations: p.allowedStations.includes(st) ? p.allowedStations.filter(s => s !== st) : [...p.allowedStations, st] }));
 
   const roleBg = (r: string) => r === 'ADMINISTRATOR' ? 'bg-purple-100 dark:bg-purple-900/40' : r === 'MANAGER' ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-emerald-100 dark:bg-emerald-900/40';
   const roleTxt = (r: string) => r === 'ADMINISTRATOR' ? 'text-purple-700 dark:text-purple-400' : r === 'MANAGER' ? 'text-blue-700 dark:text-blue-400' : 'text-emerald-700 dark:text-emerald-400';
@@ -172,7 +198,7 @@ export const UserManagementView = () => {
         `}
       </style>
 
-      {/* HEADER - Solid Style */}
+      {/* HEADER */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
         <div className="p-5 border-b border-slate-100 dark:border-slate-700">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5">
@@ -421,7 +447,6 @@ export const UserManagementView = () => {
               <div className="flex-1 overflow-y-auto custom-scrollbar p-5 md:p-6">
                 {/* Profile Grid Information */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  {/* Card 1 */}
                   <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-4 shadow-sm">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-xl text-blue-600 dark:text-blue-400 font-bold">
@@ -431,8 +456,6 @@ export const UserManagementView = () => {
                     </div>
                     <p className="font-black text-sm text-slate-900 dark:text-white mt-1 truncate pl-11">{sel.role}</p>
                   </div>
-
-                  {/* Card 2 */}
                   <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-4 shadow-sm">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="p-2 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl text-emerald-600 dark:text-emerald-400 font-bold">
@@ -444,8 +467,6 @@ export const UserManagementView = () => {
                       {sel.department ? deptName(sel.department) : 'Not assigned'}
                     </p>
                   </div>
-
-                  {/* Card 3 */}
                   <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-4 shadow-sm">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="p-2 bg-purple-100 dark:bg-purple-900/40 rounded-xl text-purple-600 dark:text-purple-400 font-bold">
@@ -457,8 +478,6 @@ export const UserManagementView = () => {
                       {sel.jobTitle ? jobName(sel.jobTitle) : 'Unspecified'}
                     </p>
                   </div>
-
-                  {/* Card 4 */}
                   <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-4 shadow-sm">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-xl text-amber-600 dark:text-amber-400 font-bold">
@@ -525,6 +544,44 @@ export const UserManagementView = () => {
                   </div>
                 </div>
 
+                {/* Menu Access Rights */}
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 mt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Menu Access Rights</h3>
+                      <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-1">User has access to {((sel as any).allowedMenus?.length || 0)} menus.</p>
+                    </div>
+                    <div className="p-2 bg-emerald-600 rounded-xl text-white shadow-md shadow-emerald-600/30">
+                      <Layers size={16} />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+                    {menuOptions.map(menu => {
+                      const has = ((sel as any).allowedMenus || []).includes(menu.id);
+                      return (
+                        <div
+                          key={menu.id}
+                          className={`p-3 rounded-xl border-2 transition-all ${has
+                              ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-sm'
+                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 opacity-60'
+                            }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className={`p-1.5 rounded-lg ${has ? 'bg-emerald-200 dark:bg-emerald-800/50 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
+                              <Layers size={14} />
+                            </div>
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center ${has ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-400'}`}>
+                                {has ? <CheckCircle size={12} /> : <XCircle size={12} />}
+                            </div>
+                          </div>
+                          <div className={`font-black text-[11px] leading-tight ${has ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>{menu.label}</div>
+                          <div className={`text-[9px] font-bold mt-1 uppercase ${has ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>{menu.category}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           ) : edit ? (
@@ -547,7 +604,7 @@ export const UserManagementView = () => {
                   </div>
                   <div className="flex flex-wrap gap-3 w-full lg:w-auto">
                     <button
-                      onClick={() => { setEdit(false); setCreate(false); if (sel) setF({ username: sel.username, fullName: sel.fullName, email: sel.email || '', role: sel.role, department: sel.department || '', jobTitle: sel.jobTitle || '', lineCode: sel.lineCode || '', isActive: sel.isActive ?? true, allowedStations: sel.allowedStations || [], password: '' }); }}
+                      onClick={() => { setEdit(false); setCreate(false); if (sel) setF({ username: sel.username, fullName: sel.fullName, email: sel.email || '', role: sel.role, department: sel.department || '', jobTitle: sel.jobTitle || '', lineCode: sel.lineCode || '', isActive: sel.isActive ?? true, allowedStations: sel.allowedStations || [], allowedMenus: (sel as any).allowedMenus || [], password: '' }); }}
                       className="flex-1 lg:flex-none px-5 py-2.5 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:border-slate-400 transition-all text-sm shadow-sm active:scale-95"
                     >
                       Cancel
@@ -767,25 +824,30 @@ export const UserManagementView = () => {
                     </div>
                   </div>
 
+                  {/* --- MENU ACCESS (EDIT MODE) --- */}
                   <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-700">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
                         <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">4</div>
-                        Station Access
+                        Menu Access
                       </h3>
                       <span className="px-2 py-1 bg-emerald-600 text-white text-[10px] font-black rounded-lg">
-                        {(f.allowedStations?.length || 0)} Selected
+                        {(f.allowedMenus?.length || 0)} Selected
                       </span>
                     </div>
                     
                     <div className="grid grid-cols-1 gap-2 pl-10 h-64 overflow-y-auto custom-scrollbar pr-2">
-                      {stationOpts.map(o => {
-                        const has = (f.allowedStations || []).includes(o.value);
+                      {menuOptions.map(menu => {
+                        const has = (f.allowedMenus || []).includes(menu.id);
                         return (
                           <button
-                            key={o.value}
+                            key={menu.id}
                             type="button"
-                            onClick={() => toggleStation(o.value)}
+                            onClick={() => {
+                              const current = f.allowedMenus || [];
+                              const newMenus = has ? current.filter(m => m !== menu.id) : [...current, menu.id];
+                              setF({ ...f, allowedMenus: newMenus });
+                            }}
                             className={`group p-3 rounded-xl border-2 transition-all text-left flex items-center gap-3 ${has
                                 ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-sm'
                                 : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-emerald-400'
@@ -795,8 +857,8 @@ export const UserManagementView = () => {
                               {has && <CheckCircle size={14} />}
                             </div>
                             <div>
-                              <div className={`font-black text-sm ${has ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'}`}>{o.label}</div>
-                              <div className={`text-[10px] font-bold mt-0.5 uppercase ${has ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}`}>{o.value}</div>
+                              <div className={`font-black text-sm ${has ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'}`}>{menu.label}</div>
+                              <div className={`text-[10px] font-bold mt-0.5 uppercase ${has ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}`}>{menu.category}</div>
                             </div>
                           </button>
                         );

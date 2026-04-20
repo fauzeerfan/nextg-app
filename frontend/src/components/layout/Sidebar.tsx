@@ -17,6 +17,7 @@ interface UserData {
   email?: string;
   lineCode?: string;
   allowedStations?: string[];
+  allowedMenus?: string[]; // <-- tambah untuk mendukung filter menu baru
 }
 
 interface SidebarProps {
@@ -105,16 +106,25 @@ const menuGroups = [
 
   const isCollapsed = !isMobile && !isOpen;
 
+  // --- FILTER MENU BERDASARKAN allowedMenus (dengan fallback ke logika lama) ---
+  const allowedMenus = currentUser?.allowedMenus || [];
+  const hasMenuAccess = allowedMenus.length > 0;
+
   const filteredGroups = menuGroups.map(group => ({
     ...group,
     items: group.items.filter(item => {
       if (!currentUser) return false;
       const role = currentUser.role?.toUpperCase();
+      
+      // Administrator selalu bisa semua menu
       if (role === 'ADMINISTRATOR' || role === 'SUPER_ADMIN' || role === 'ADMIN') return true;
-      if (role === 'MANAGER') {
-        if (group.title === 'SYSTEM ADMIN') return false;
-        return true;
+      
+      // Jika user memiliki allowedMenus (mode baru), gunakan itu
+      if (hasMenuAccess) {
+        return allowedMenus.includes(item.id);
       }
+      
+      // Fallback untuk user lama (tanpa allowedMenus) – gunakan allowedStations dan role
       const stationMap: Record<string, string> = {
         cutting_entan: 'CUTTING_ENTAN',
         cutting_pond: 'CUTTING_POND',

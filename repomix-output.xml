@@ -54,6 +54,7 @@ backend/prisma/migrations/20260417074123_add_is_active_to_target_settings/migrat
 backend/prisma/migrations/20260419023257_add_employee_mutation_history/migration.sql
 backend/prisma/migrations/20260419035512_allow_multiple_attendance_per_day_and_track_line_changes/migration.sql
 backend/prisma/migrations/20260419092249_add_ai_assistant/migration.sql
+backend/prisma/migrations/20260419123646_add_allowed_menus/migration.sql
 backend/prisma/migrations/migration_lock.toml
 backend/prisma/schema.prisma
 backend/prisma/seed.ts
@@ -225,6 +226,11 @@ package.json
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="backend/prisma/migrations/20260419123646_add_allowed_menus/migration.sql">
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "allowedMenus" JSONB;
+</file>
 
 <file path="frontend/src/features/stations/CheckPanelView.tsx">
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -2108,6 +2114,7 @@ Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
 </file>
 
 <file path="backend/src/ai/ai.controller.ts">
+// backend/src/ai/ai.controller.ts
 import { Controller, Post, Body, UseGuards, Get, Param, Put, Delete } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -2119,6 +2126,13 @@ export class AiController {
   @Post('chat')
   async chat(@Body() body: { message: string; userId?: string }) {
     return this.aiService.processMessage(body.message, body.userId);
+  }
+
+  // ========== ENDPOINT BARU UNTUK MENU ==========
+  @Get('menu')
+  @UseGuards(JwtAuthGuard)
+  async getMenu() {
+    return this.aiService.getMenuTree();
   }
 
   // Admin endpoints (protected by JWT, you can add RolesGuard)
@@ -2165,6 +2179,7 @@ export class AiModule {}
 </file>
 
 <file path="backend/src/ai/ai.service.ts">
+// backend/src/ai/ai.service.ts
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReportsService } from '../reports/reports.service';
@@ -2176,70 +2191,47 @@ export class AiService {
     private reportsService: ReportsService,
   ) {}
 
-  async processMessage(message: string, userId?: string) {
-    const lowerMsg = message.toLowerCase().trim();
-
-    const intents = await this.prisma.aiIntent.findMany({
-      where: { isActive: true },
-    });
-
-    let matchedIntent: any = null; // ✅ fix
-
-    for (const intent of intents) {
-      const keywords = intent.triggerKeywords as string[];
-      if (keywords.some(kw => lowerMsg.includes(kw.toLowerCase()))) {
-        matchedIntent = intent;
-        break;
-      }
-    }
-
-    let responseText = '';
-    let action: any = null; // ✅ fix
-
-    if (!matchedIntent) {
-      responseText = "Maaf, saya tidak mengerti pertanyaan Anda. Coba tanyakan tentang produksi, NG, atau minta report.";
-    } else {
-      const type = matchedIntent.responseType;
-      const data = matchedIntent.responseData as any;
-
-      switch (type) {
-        case 'text':
-          responseText = data.text;
-          break;
-        case 'dynamic':
-          responseText = await this.handleDynamicQuery(data.query);
-          break;
-        case 'report':
-          action = {
-            type: 'navigate',
-            path: '/reports',
-            params: data.reportParams || {},
-          };
-          responseText = data.text || `Saya akan membawa Anda ke halaman report ${data.reportType || ''}.`;
-          break;
-        case 'navigate':
-          action = {
-            type: 'navigate',
-            path: data.path,
-          };
-          responseText = data.text || 'Mengalihkan Anda ke halaman yang diminta.';
-          break;
-        default:
-          responseText = 'Permintaan tidak dikenali.';
-      }
-    }
-
-    await this.prisma.aiConversation.create({
-      data: {
-        userId: userId || null,
-        message,
-        response: responseText,
+  // ========== MENU TREE ==========
+  async getMenuTree() {
+    return {
+      main: [
+        { label: '📊 Data NG', value: 'ng' },
+        { label: '📈 Data Output', value: 'output' },
+        { label: '📋 Status WIP', value: 'wip' },
+        { label: '📑 Laporan', value: 'report' },
+        { label: '🔍 Navigasi', value: 'navigate' },
+      ],
+      sub: {
+        ng: [
+          { label: 'Cutting Pond', query: 'ng_cutting_pond' },
+          { label: 'Check Panel', query: 'ng_check_panel' },
+          { label: 'Quality Control', query: 'ng_qc' },
+          { label: 'Semua NG', query: 'total_ng_today' },
+        ],
+        output: [
+          { label: 'Output Packing (sets)', query: 'total_output_today' },
+          { label: 'Output Sewing (sets)', query: 'total_output_sewing_today' },
+          { label: 'Output Cutting Entan (sets)', query: 'total_output_cutting_entan_today' },
+        ],
+        wip: [
+          { label: 'Jumlah OP WIP', query: 'wip_ops_count' },
+          { label: 'WIP per Station', query: 'wip_by_station' },
+        ],
+        report: [
+          { label: 'Laporan NG (Pond & CP)', path: '/reports?type=ng-pond-cp' },
+          { label: 'Laporan NG QC', path: '/reports?type=ng-quality-control' },
+          { label: 'Traceability OP', path: '/traceability' },
+        ],
+        navigate: [
+          { label: 'Dashboard', path: '/dashboard' },
+          { label: 'Target Monitoring', path: '/target-monitoring' },
+          { label: 'Manpower Monitoring', path: '/manpower-monitoring' },
+        ],
       },
-    });
-
-    return { response: responseText, action };
+    };
   }
 
+  // ========== HANDLE DYNAMIC QUERY (DIPERLENGKAP) ==========
   private async handleDynamicQuery(query: string): Promise<string> {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -2255,49 +2247,187 @@ export class AiService {
           where: { createdAt: { gte: startOfDay, lte: endOfDay } },
           _sum: { ng: true },
         });
-        const total = (cpNg._sum.ng || 0) + (qcNg._sum.ng || 0);
-        return `Total NG hari ini: ${total} pcs.`;
+        const pondNg = await this.prisma.productionLog.aggregate({
+          where: { station: 'CUTTING_POND', type: 'NG', createdAt: { gte: startOfDay, lte: endOfDay } },
+          _sum: { qty: true },
+        });
+        const total = (cpNg._sum.ng || 0) + (qcNg._sum.ng || 0) + (pondNg._sum.qty || 0);
+        return `Total NG hari ini: ${total} pcs.\nDetail:\n- Cutting Pond: ${pondNg._sum.qty || 0}\n- Check Panel: ${cpNg._sum.ng || 0}\n- QC: ${qcNg._sum.ng || 0}`;
+      }
+      case 'ng_cutting_pond': {
+        const pondNg = await this.prisma.productionLog.aggregate({
+          where: { station: 'CUTTING_POND', type: 'NG', createdAt: { gte: startOfDay, lte: endOfDay } },
+          _sum: { qty: true },
+        });
+        return `NG Cutting Pond hari ini: ${pondNg._sum.qty || 0} pcs.`;
+      }
+      case 'ng_check_panel': {
+        const cpNg = await this.prisma.checkPanelInspection.aggregate({
+          where: { createdAt: { gte: startOfDay, lte: endOfDay } },
+          _sum: { ng: true },
+        });
+        return `NG Check Panel hari ini: ${cpNg._sum.ng || 0} pcs.`;
+      }
+      case 'ng_qc': {
+        const qcNg = await this.prisma.qcInspection.aggregate({
+          where: { createdAt: { gte: startOfDay, lte: endOfDay } },
+          _sum: { ng: true },
+        });
+        return `NG Quality Control hari ini: ${qcNg._sum.ng || 0} pcs.`;
       }
       case 'total_output_today': {
         const sessions = await this.prisma.packingSession.aggregate({
           where: { status: 'CLOSED', createdAt: { gte: startOfDay, lte: endOfDay } },
           _sum: { totalQty: true },
         });
-        const output = sessions._sum.totalQty || 0;
-        return `Total output hari ini (packed sets): ${output} sets.`;
+        return `Total output hari ini (packed sets): ${sessions._sum.totalQty || 0} sets.`;
+      }
+      case 'total_output_sewing_today': {
+        const sewingFinish = await this.prisma.productionLog.aggregate({
+          where: { station: 'SEWING', type: 'SEWING_FINISH', createdAt: { gte: startOfDay, lte: endOfDay } },
+          _sum: { qty: true },
+        });
+        return `Total output Sewing hari ini: ${sewingFinish._sum.qty || 0} sets.`;
+      }
+      case 'total_output_cutting_entan_today': {
+        const cuttingBatches = await this.prisma.cuttingBatch.aggregate({
+          where: { createdAt: { gte: startOfDay, lte: endOfDay } },
+          _sum: { qty: true },
+        });
+        return `Total output Cutting Entan hari ini: ${cuttingBatches._sum.qty || 0} sets.`;
       }
       case 'defect_rate_today': {
-        const cpGood = await this.prisma.checkPanelInspection.aggregate({
-          where: { createdAt: { gte: startOfDay, lte: endOfDay } },
-          _sum: { good: true },
-        });
-        const cpNg = await this.prisma.checkPanelInspection.aggregate({
-          where: { createdAt: { gte: startOfDay, lte: endOfDay } },
-          _sum: { ng: true },
-        });
-        const qcGood = await this.prisma.qcInspection.aggregate({
-          where: { createdAt: { gte: startOfDay, lte: endOfDay } },
-          _sum: { good: true },
-        });
-        const qcNg = await this.prisma.qcInspection.aggregate({
-          where: { createdAt: { gte: startOfDay, lte: endOfDay } },
-          _sum: { ng: true },
-        });
+        const cpGood = await this.prisma.checkPanelInspection.aggregate({ where: { createdAt: { gte: startOfDay, lte: endOfDay } }, _sum: { good: true } });
+        const cpNg = await this.prisma.checkPanelInspection.aggregate({ where: { createdAt: { gte: startOfDay, lte: endOfDay } }, _sum: { ng: true } });
+        const qcGood = await this.prisma.qcInspection.aggregate({ where: { createdAt: { gte: startOfDay, lte: endOfDay } }, _sum: { good: true } });
+        const qcNg = await this.prisma.qcInspection.aggregate({ where: { createdAt: { gte: startOfDay, lte: endOfDay } }, _sum: { ng: true } });
+        const pondNg = await this.prisma.productionLog.aggregate({ where: { station: 'CUTTING_POND', type: 'NG', createdAt: { gte: startOfDay, lte: endOfDay } }, _sum: { qty: true } });
         const totalGood = (cpGood._sum.good || 0) + (qcGood._sum.good || 0);
-        const totalNg = (cpNg._sum.ng || 0) + (qcNg._sum.ng || 0);
+        const totalNg = (cpNg._sum.ng || 0) + (qcNg._sum.ng || 0) + (pondNg._sum.qty || 0);
         const total = totalGood + totalNg;
         const rate = total > 0 ? ((totalNg / total) * 100).toFixed(1) : '0';
-        return `Defect rate hari ini: ${rate}% (${totalNg} NG dari ${total} total).`;
+        return `Defect rate hari ini: ${rate}% (${totalNg} NG dari ${total} total).\nDetail:\n- Cutting Pond NG: ${pondNg._sum.qty || 0}\n- Check Panel NG: ${cpNg._sum.ng || 0}\n- QC NG: ${qcNg._sum.ng || 0}`;
       }
       case 'wip_ops_count': {
-        const count = await this.prisma.productionOrder.count({
-          where: { status: 'WIP' },
-        });
+        const count = await this.prisma.productionOrder.count({ where: { status: 'WIP' } });
         return `Saat ini ada ${count} production orders dalam status WIP.`;
+      }
+      case 'wip_by_station': {
+        const wipOps = await this.prisma.productionOrder.findMany({
+          where: { status: 'WIP' },
+          select: { currentStation: true },
+        });
+        const stationCount: Record<string, number> = {};
+        wipOps.forEach(op => {
+          const station = op.currentStation || 'UNKNOWN';
+          stationCount[station] = (stationCount[station] || 0) + 1;
+        });
+        let response = 'Distribusi WIP per stasiun:\n';
+        for (const [station, count] of Object.entries(stationCount)) {
+          response += `- ${station}: ${count} OP\n`;
+        }
+        return response;
       }
       default:
         return 'Maaf, saya belum bisa menjawab pertanyaan itu.';
     }
+  }
+
+  // ========== PROCESS MESSAGE (MODIFIKASI) ==========
+  async processMessage(message: string, userId?: string) {
+    const lowerMsg = message.toLowerCase().trim();
+
+    // Deteksi pilihan menu dari quick reply
+    let responseText = '';
+    let action: any = null;
+    let options: any[] = [];
+
+    // Menu navigation commands
+    if (lowerMsg === 'menu_main') {
+      const menu = await this.getMenuTree();
+      responseText = 'Pilih menu:';
+      options = menu.main.map(item => ({ label: item.label, value: item.value }));
+    } 
+    else if (lowerMsg === 'ng') {
+      const menu = await this.getMenuTree();
+      responseText = 'Pilih jenis NG:';
+      options = menu.sub.ng.map(item => ({ label: item.label, value: item.query }));
+    }
+    else if (lowerMsg === 'output') {
+      const menu = await this.getMenuTree();
+      responseText = 'Pilih jenis output:';
+      options = menu.sub.output.map(item => ({ label: item.label, value: item.query }));
+    }
+    else if (lowerMsg === 'wip') {
+      const menu = await this.getMenuTree();
+      responseText = 'Pilih informasi WIP:';
+      options = menu.sub.wip.map(item => ({ label: item.label, value: item.query }));
+    }
+    else if (lowerMsg === 'report') {
+      const menu = await this.getMenuTree();
+      responseText = 'Pilih laporan:';
+      options = menu.sub.report.map(item => ({ label: item.label, value: item.path, type: 'navigate' }));
+    }
+    else if (lowerMsg === 'navigate') {
+      const menu = await this.getMenuTree();
+      responseText = 'Pilih halaman:';
+      options = menu.sub.navigate.map(item => ({ label: item.label, value: item.path, type: 'navigate' }));
+    }
+    else if (['ng_cutting_pond', 'ng_check_panel', 'ng_qc', 'total_output_sewing_today', 'total_output_cutting_entan_today', 'wip_by_station'].includes(lowerMsg)) {
+      responseText = await this.handleDynamicQuery(lowerMsg);
+      options = [{ label: '🏠 Kembali ke Menu Utama', value: 'menu_main' }];
+    }
+    else {
+      // Intent matching biasa (existing code)
+      const intents = await this.prisma.aiIntent.findMany({ where: { isActive: true } });
+      let matchedIntent: any = null;
+      for (const intent of intents) {
+        const keywords = intent.triggerKeywords as string[];
+        if (keywords.some(kw => lowerMsg.includes(kw.toLowerCase()))) {
+          matchedIntent = intent;
+          break;
+        }
+      }
+      if (!matchedIntent) {
+        responseText = "Maaf, saya tidak mengerti pertanyaan Anda. Coba tanyakan tentang produksi, NG, atau minta report.";
+        options = [{ label: '🏠 Menu Utama', value: 'menu_main' }];
+      } else {
+        const type = matchedIntent.responseType;
+        const data = matchedIntent.responseData as any;
+        switch (type) {
+          case 'text':
+            responseText = data.text;
+            break;
+          case 'dynamic':
+            responseText = await this.handleDynamicQuery(data.query);
+            break;
+          case 'report':
+            action = { type: 'navigate', path: '/reports', params: data.reportParams || {} };
+            responseText = data.text || `Saya akan membawa Anda ke halaman report ${data.reportType || ''}.`;
+            break;
+          case 'navigate':
+            action = { type: 'navigate', path: data.path };
+            responseText = data.text || 'Mengalihkan Anda ke halaman yang diminta.';
+            break;
+          default:
+            responseText = 'Permintaan tidak dikenali.';
+        }
+        if (responseText && !action) {
+          options = [{ label: '🏠 Menu Utama', value: 'menu_main' }];
+        }
+      }
+    }
+
+    // Simpan percakapan
+    await this.prisma.aiConversation.create({
+      data: {
+        userId: userId || null,
+        message,
+        response: responseText,
+      },
+    });
+
+    return { response: responseText, action, options };
   }
 
   async getAllIntents() {
@@ -4178,172 +4308,6 @@ export default defineConfig([
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--logos" width="35.93" height="32" preserveAspectRatio="xMidYMid meet" viewBox="0 0 256 228"><path fill="#00D8FF" d="M210.483 73.824a171.49 171.49 0 0 0-8.24-2.597c.465-1.9.893-3.777 1.273-5.621c6.238-30.281 2.16-54.676-11.769-62.708c-13.355-7.7-35.196.329-57.254 19.526a171.23 171.23 0 0 0-6.375 5.848a155.866 155.866 0 0 0-4.241-3.917C100.759 3.829 77.587-4.822 63.673 3.233C50.33 10.957 46.379 33.89 51.995 62.588a170.974 170.974 0 0 0 1.892 8.48c-3.28.932-6.445 1.924-9.474 2.98C17.309 83.498 0 98.307 0 113.668c0 15.865 18.582 31.778 46.812 41.427a145.52 145.52 0 0 0 6.921 2.165a167.467 167.467 0 0 0-2.01 9.138c-5.354 28.2-1.173 50.591 12.134 58.266c13.744 7.926 36.812-.22 59.273-19.855a145.567 145.567 0 0 0 5.342-4.923a168.064 168.064 0 0 0 6.92 6.314c21.758 18.722 43.246 26.282 56.54 18.586c13.731-7.949 18.194-32.003 12.4-61.268a145.016 145.016 0 0 0-1.535-6.842c1.62-.48 3.21-.974 4.76-1.488c29.348-9.723 48.443-25.443 48.443-41.52c0-15.417-17.868-30.326-45.517-39.844Zm-6.365 70.984c-1.4.463-2.836.91-4.3 1.345c-3.24-10.257-7.612-21.163-12.963-32.432c5.106-11 9.31-21.767 12.459-31.957c2.619.758 5.16 1.557 7.61 2.4c23.69 8.156 38.14 20.213 38.14 29.504c0 9.896-15.606 22.743-40.946 31.14Zm-10.514 20.834c2.562 12.94 2.927 24.64 1.23 33.787c-1.524 8.219-4.59 13.698-8.382 15.893c-8.067 4.67-25.32-1.4-43.927-17.412a156.726 156.726 0 0 1-6.437-5.87c7.214-7.889 14.423-17.06 21.459-27.246c12.376-1.098 24.068-2.894 34.671-5.345a134.17 134.17 0 0 1 1.386 6.193ZM87.276 214.515c-7.882 2.783-14.16 2.863-17.955.675c-8.075-4.657-11.432-22.636-6.853-46.752a156.923 156.923 0 0 1 1.869-8.499c10.486 2.32 22.093 3.988 34.498 4.994c7.084 9.967 14.501 19.128 21.976 27.15a134.668 134.668 0 0 1-4.877 4.492c-9.933 8.682-19.886 14.842-28.658 17.94ZM50.35 144.747c-12.483-4.267-22.792-9.812-29.858-15.863c-6.35-5.437-9.555-10.836-9.555-15.216c0-9.322 13.897-21.212 37.076-29.293c2.813-.98 5.757-1.905 8.812-2.773c3.204 10.42 7.406 21.315 12.477 32.332c-5.137 11.18-9.399 22.249-12.634 32.792a134.718 134.718 0 0 1-6.318-1.979Zm12.378-84.26c-4.811-24.587-1.616-43.134 6.425-47.789c8.564-4.958 27.502 2.111 47.463 19.835a144.318 144.318 0 0 1 3.841 3.545c-7.438 7.987-14.787 17.08-21.808 26.988c-12.04 1.116-23.565 2.908-34.161 5.309a160.342 160.342 0 0 1-1.76-7.887Zm110.427 27.268a347.8 347.8 0 0 0-7.785-12.803c8.168 1.033 15.994 2.404 23.343 4.08c-2.206 7.072-4.956 14.465-8.193 22.045a381.151 381.151 0 0 0-7.365-13.322Zm-45.032-43.861c5.044 5.465 10.096 11.566 15.065 18.186a322.04 322.04 0 0 0-30.257-.006c4.974-6.559 10.069-12.652 15.192-18.18ZM82.802 87.83a323.167 323.167 0 0 0-7.227 13.238c-3.184-7.553-5.909-14.98-8.134-22.152c7.304-1.634 15.093-2.97 23.209-3.984a321.524 321.524 0 0 0-7.848 12.897Zm8.081 65.352c-8.385-.936-16.291-2.203-23.593-3.793c2.26-7.3 5.045-14.885 8.298-22.6a321.187 321.187 0 0 0 7.257 13.246c2.594 4.48 5.28 8.868 8.038 13.147Zm37.542 31.03c-5.184-5.592-10.354-11.779-15.403-18.433c4.902.192 9.899.29 14.978.29c5.218 0 10.376-.117 15.453-.343c-4.985 6.774-10.018 12.97-15.028 18.486Zm52.198-57.817c3.422 7.8 6.306 15.345 8.596 22.52c-7.422 1.694-15.436 3.058-23.88 4.071a382.417 382.417 0 0 0 7.859-13.026a347.403 347.403 0 0 0 7.425-13.565Zm-16.898 8.101a358.557 358.557 0 0 1-12.281 19.815a329.4 329.4 0 0 1-23.444.823c-7.967 0-15.716-.248-23.178-.732a310.202 310.202 0 0 1-12.513-19.846h.001a307.41 307.41 0 0 1-10.923-20.627a310.278 310.278 0 0 1 10.89-20.637l-.001.001a307.318 307.318 0 0 1 12.413-19.761c7.613-.576 15.42-.876 23.31-.876H128c7.926 0 15.743.303 23.354.883a329.357 329.357 0 0 1 12.335 19.695a358.489 358.489 0 0 1 11.036 20.54a329.472 329.472 0 0 1-11 20.722Zm22.56-122.124c8.572 4.944 11.906 24.881 6.52 51.026c-.344 1.668-.73 3.367-1.15 5.09c-10.622-2.452-22.155-4.275-34.23-5.408c-7.034-10.017-14.323-19.124-21.64-27.008a160.789 160.789 0 0 1 5.888-5.4c18.9-16.447 36.564-22.941 44.612-18.3ZM128 90.808c12.625 0 22.86 10.235 22.86 22.86s-10.235 22.86-22.86 22.86s-22.86-10.235-22.86-22.86s10.235-22.86 22.86-22.86Z"></path></svg>
 </file>
 
-<file path="frontend/src/components/ui/AiChatWidget.tsx">
-import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Minimize2, Maximize2 } from 'lucide-react';
-
-const API_BASE_URL = 'http://localhost:3000';
-
-interface ChatMessage {
-  id: string;
-  text: string;
-  isUser: boolean;
-  action?: any;
-}
-
-export const AiChatWidget: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: '1', text: 'Halo! Saya Feby, asisten AI Anda. Ada yang bisa saya bantu?', isUser: false },
-  ]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
-
-  const sendMessage = async () => {
-    if (!input.trim()) return;
-    const userMsg: ChatMessage = { id: Date.now().toString(), text: input, isUser: true };
-    setMessages(prev => [...prev, userMsg]);
-    setInput('');
-    setLoading(true);
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/ai/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input }),
-      });
-      const data = await res.json();
-      const botMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        text: data.response,
-        isUser: false,
-        action: data.action,
-      };
-      setMessages(prev => [...prev, botMsg]);
-
-      if (data.action?.type === 'navigate') {
-        setTimeout(() => {
-          window.location.href = data.action.path;
-        }, 1500);
-      }
-    } catch (error) {
-      setMessages(prev => [...prev, { id: Date.now().toString(), text: 'Maaf, terjadi kesalahan.', isUser: false }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleChat = () => {
-    setIsOpen(!isOpen);
-    setIsMinimized(false);
-  };
-
-  const minimize = () => setIsMinimized(true);
-  const restore = () => setIsMinimized(false);
-
-  if (!isOpen) {
-    return (
-        <button
-        onClick={toggleChat}
-        className="fixed bottom-6 right-6 z-50 w-40 h-40 rounded-3xl shadow-xl flex items-center justify-center hover:scale-105 transition-transform duration-300 group bg-transparent"
-        >
-        <img src="/feby.png" alt="Feby" className="w-40 h-40 object-contain drop-shadow-xl" />
-        <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full animate-pulse"></div>
-        </button>
-    );
-  }
-
-  return (
-    <div className="fixed bottom-6 right-6 z-50 w-[500px] h-[650px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700 animate-in slide-in-from-bottom-5 duration-300">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <img src="/feby.png" alt="Feby" className="w-12 h-12 object-contain" />
-          <span className="font-bold text-white">Feby - AI Assistant</span>
-        </div>
-        <div className="flex gap-2">
-          {isMinimized ? (
-            <button onClick={restore} className="text-white hover:bg-white/20 rounded p-1">
-              <Maximize2 size={16} />
-            </button>
-          ) : (
-            <button onClick={minimize} className="text-white hover:bg-white/20 rounded p-1">
-              <Minimize2 size={16} />
-            </button>
-          )}
-          <button onClick={toggleChat} className="text-white hover:bg-white/20 rounded p-1">
-            <X size={16} />
-          </button>
-        </div>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50 dark:bg-slate-900">
-        {messages.map(msg => (
-          <div key={msg.id} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.isUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white rounded-bl-none shadow-sm border border-slate-200 dark:border-slate-700'}`}>
-              {msg.text}
-              {msg.action?.type === 'navigate' && (
-                <div className="mt-2 text-xs text-blue-500 animate-pulse">
-                  Mengalihkan...
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-bl-none shadow-sm">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></span>
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-100"></span>
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-200"></span>
-              </div>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input */}
-      <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-            placeholder="Tanyakan sesuatu..."
-            className="flex-1 px-4 py-2 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-slate-50 dark:bg-slate-900"
-          />
-          <button
-            onClick={sendMessage}
-            disabled={loading}
-            className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
-          >
-            <Send size={18} />
-          </button>
-        </div>
-        <div className="mt-2 flex gap-2 overflow-x-auto text-xs">
-          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => setInput('Total NG hari ini')}>Total NG hari ini</span>
-          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => setInput('Output hari ini')}>Output hari ini</span>
-          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => setInput('Defect rate')}>Defect rate</span>
-          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => setInput('Buatkan report NG')}>Buatkan report NG</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-</file>
-
 <file path="frontend/src/components/ui/Logo.tsx">
 export const NextGLogo = ({ className }: { className?: string }) => (
   <svg
@@ -4418,14 +4382,14 @@ export const SplashPopup = ({ show, onClose }: SplashPopupProps) => {
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300 animate-in fade-in"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 backdrop-blur-sm transition-all duration-300 animate-in fade-in"
       onClick={handleClose}
     >
       <div
-        className="relative max-w-5xl w-full mx-4 animate-bounce-in"
+        className="relative max-w-5xl w-full mx-4 animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Tombol Close */}
+        {/* Close button */}
         <button
           onClick={handleClose}
           className="absolute -top-3 -right-3 z-10 p-2 bg-white dark:bg-slate-800 rounded-full shadow-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-200 border border-slate-200 dark:border-slate-700"
@@ -4434,36 +4398,47 @@ export const SplashPopup = ({ show, onClose }: SplashPopupProps) => {
           <X size={20} className="text-slate-600 dark:text-slate-300" />
         </button>
 
-        {/* Gambar */}
-        <img
-          src="/splash-image.jpg"
-          alt="Promotion"
-          className="w-full h-auto rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700"
-          style={{ maxHeight: '85vh', objectFit: 'contain' }}
-        />
+        {/* Image container with smooth shine effect */}
+        <div className="relative rounded-2xl overflow-hidden shadow-2xl">
+          <img
+            src="/splash-image.jpg"
+            alt="Company Motto"
+            className="w-full h-auto"
+            style={{ maxHeight: '85vh', objectFit: 'contain' }}
+          />
+          {/* Smoother moving shine overlay - less opaque, slower, gentler skew */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/8 to-transparent translate-x-[-100%] animate-shine-smooth pointer-events-none"></div>
+        </div>
       </div>
 
-      {/* Animasi Bounce */}
       <style>{`
-        @keyframes bounce-in {
+        @keyframes scale-in {
           0% {
             opacity: 0;
-            transform: scale(0.3) translateY(100px);
-          }
-          50% {
-            opacity: 1;
-            transform: scale(1.05) translateY(-10px);
-          }
-          70% {
-            transform: scale(0.95) translateY(5px);
+            transform: scale(0.9) translateY(20px);
           }
           100% {
             opacity: 1;
             transform: scale(1) translateY(0);
           }
         }
-        .animate-bounce-in {
-          animation: bounce-in 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+        .animate-scale-in {
+          animation: scale-in 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1) forwards;
+        }
+
+        @keyframes shine-smooth {
+          0% {
+            transform: translateX(-100%) skewX(-10deg);
+          }
+          30% {
+            transform: translateX(100%) skewX(-10deg);
+          }
+          100% {
+            transform: translateX(200%) skewX(-10deg);
+          }
+        }
+        .animate-shine-smooth {
+          animation: shine-smooth 4s ease-in-out infinite;
         }
       `}</style>
     </div>
@@ -9327,24 +9302,25 @@ export class UsersService {
   // CREATE USER (ADMIN)
   // ===============================
   async create(dto: any) {
-  const hashedPassword = await bcrypt.hash(dto.password || '123456', 10);
-  try {
-    return await this.prisma.user.create({
-      data: {
-        username: dto.username,
-        password: hashedPassword,
-        fullName: dto.fullName,
-        role: dto.role || 'OPERATOR',
-        allowedStations: dto.allowedStations || [], // added
-      },
-    });
-  } catch (error) {
-    if (error.code === 'P2002') {
-      throw new ConflictException('Username already exists');
+    const hashedPassword = await bcrypt.hash(dto.password || '123456', 10);
+    try {
+      return await this.prisma.user.create({
+        data: {
+          username: dto.username,
+          password: hashedPassword,
+          fullName: dto.fullName,
+          role: dto.role || 'OPERATOR',
+          allowedStations: dto.allowedStations || [],
+          allowedMenus: dto.allowedMenus || [], // <-- tambah
+        },
+      });
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        throw new ConflictException('Username already exists');
+      }
+      throw error;
     }
-    throw error;
   }
-}
 
   // ===============================
   // GET ALL USERS
@@ -9375,6 +9351,8 @@ export class UsersService {
       username: dto.username ?? existing.username,
       fullName: dto.fullName ?? existing.fullName,
       role: dto.role ?? existing.role,
+      allowedStations: dto.allowedStations ?? existing.allowedStations,
+      allowedMenus: dto.allowedMenus ?? existing.allowedMenus, // <-- tambah
     };
 
     // 🔥 reset password optional
@@ -9442,6 +9420,211 @@ export class UsersService {
 </html>
 </file>
 
+<file path="frontend/src/components/ui/AiChatWidget.tsx">
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Send, Minimize2, Maximize2 } from 'lucide-react';
+
+const API_BASE_URL = 'http://localhost:3000';
+
+interface ChatMessage {
+  id: string;
+  text: string;
+  isUser: boolean;
+  action?: any;
+  options?: any[];
+}
+
+export const AiChatWidget: React.FC = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    { id: '1', text: 'Halo! Saya Feby, asisten AI Anda. Ada yang bisa saya bantu?', isUser: false },
+  ]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [menuTree, setMenuTree] = useState<any>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetchMenu();
+  }, []);
+
+  const fetchMenu = async () => {
+    try {
+      const token = localStorage.getItem('nextg_token');
+      const res = await fetch(`${API_BASE_URL}/ai/menu`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMenuTree(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch menu', error);
+    }
+  };
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  const sendMessage = async (text: string) => {
+    if (!text.trim()) return;
+    const userMsg: ChatMessage = { id: Date.now().toString(), text, isUser: true };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setLoading(true);
+
+    try {
+      const token = localStorage.getItem('nextg_token');
+      const res = await fetch(`${API_BASE_URL}/ai/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: text }),
+      });
+      const data = await res.json();
+      const botMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        text: data.response,
+        isUser: false,
+        action: data.action,
+        options: data.options,
+      };
+      setMessages(prev => [...prev, botMsg]);
+
+      if (data.action?.type === 'navigate') {
+        setTimeout(() => {
+          window.location.href = data.action.path;
+        }, 1500);
+      }
+    } catch (error) {
+      setMessages(prev => [...prev, { id: Date.now().toString(), text: 'Maaf, terjadi kesalahan.', isUser: false }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOptionClick = (option: any) => {
+    if (option.type === 'navigate') {
+      window.location.href = option.value;
+    } else {
+      sendMessage(option.value);
+    }
+  };
+
+  const toggleChat = () => {
+    setIsOpen(!isOpen);
+    setIsMinimized(false);
+  };
+
+  const minimize = () => setIsMinimized(true);
+  const restore = () => setIsMinimized(false);
+
+  if (!isOpen) {
+    return (
+      <button
+        onClick={toggleChat}
+        className="fixed bottom-6 right-6 z-50 w-40 h-40 rounded-3xl shadow-xl flex items-center justify-center hover:scale-105 transition-transform duration-300 group bg-transparent"
+      >
+        <img src="/feby.png" alt="Feby" className="w-40 h-40 object-contain drop-shadow-xl" />
+        <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full animate-pulse"></div>
+      </button>
+    );
+  }
+
+  return (
+    <div className="fixed bottom-6 right-6 z-50 w-[500px] h-[650px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700 animate-in slide-in-from-bottom-5 duration-300">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <img src="/feby.png" alt="Feby" className="w-12 h-12 object-contain" />
+          <span className="font-bold text-white">Feby - AI Assistant</span>
+        </div>
+        <div className="flex gap-2">
+          {isMinimized ? (
+            <button onClick={restore} className="text-white hover:bg-white/20 rounded p-1">
+              <Maximize2 size={16} />
+            </button>
+          ) : (
+            <button onClick={minimize} className="text-white hover:bg-white/20 rounded p-1">
+              <Minimize2 size={16} />
+            </button>
+          )}
+          <button onClick={toggleChat} className="text-white hover:bg-white/20 rounded p-1">
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50 dark:bg-slate-900">
+        {messages.map(msg => (
+          <div key={msg.id} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.isUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white rounded-bl-none shadow-sm border border-slate-200 dark:border-slate-700'}`}>
+              <div className="whitespace-pre-wrap">{msg.text}</div>
+              {msg.options && msg.options.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {msg.options.map((opt, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleOptionClick(opt)}
+                      className="px-3 py-1.5 text-xs font-bold rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 hover:bg-blue-200 transition-colors"
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div className="flex justify-start">
+            <div className="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-bl-none shadow-sm">
+              <div className="flex gap-1">
+                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></span>
+                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-100"></span>
+                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-200"></span>
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input */}
+      <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && sendMessage(input)}
+            placeholder="Tanyakan sesuatu..."
+            className="flex-1 px-4 py-2 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-slate-50 dark:bg-slate-900"
+          />
+          <button
+            onClick={() => sendMessage(input)}
+            disabled={loading}
+            className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
+          >
+            <Send size={18} />
+          </button>
+        </div>
+        <div className="mt-2 flex gap-2 overflow-x-auto text-xs">
+          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => sendMessage('menu_main')}>🏠 Menu Utama</span>
+          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => sendMessage('ng')}>📊 Data NG</span>
+          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => sendMessage('output')}>📈 Output</span>
+          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => sendMessage('wip')}>📋 WIP</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+</file>
+
 <file path="frontend/src/context/AuthContext.tsx">
 // frontend/src/context/AuthContext.tsx
 import React, { createContext, useState, useContext, useEffect } from 'react';
@@ -9454,6 +9637,7 @@ interface User {
   role: string;
   lineCode?: string;
   allowedStations?: string[];
+  allowedMenus?: string[];   // <-- tambah
   permissions?: string[];
   department?: string;
   jobTitle?: string;
@@ -10601,7 +10785,47 @@ export class AuthService {
       return { user: null, errorMessage: 'Akun tidak aktif' };
     }
 
+    // --- GENERATE allowedMenus JIKA KOSONG ---
+    let allowedMenus = (user.allowedMenus as string[]) || [];
+    if (allowedMenus.length === 0) {
+      const stationToMenu: Record<string, string> = {
+        'CUTTING_ENTAN': 'cutting_entan',
+        'CUTTING_POND': 'cutting_pond',
+        'CP': 'cp',
+        'SEWING': 'sewing',
+        'QC': 'qc',
+        'PACKING': 'packing',
+        'FG': 'fg',
+      };
+      const stations = (user.allowedStations as string[]) || [];
+      const menuSet = new Set<string>();
+      menuSet.add('dashboard'); // semua user bisa lihat dashboard
+      stations.forEach(station => {
+        const menu = stationToMenu[station];
+        if (menu) menuSet.add(menu);
+      });
+      // ADMINISTRATOR dapat semua menu (daftar lengkap sesuai aplikasi)
+      if (user.role === 'ADMINISTRATOR') {
+        const allMenus = [
+          'dashboard',
+          'cutting_entan',
+          'cutting_pond',
+          'cp',
+          'sewing',
+          'qc',
+          'packing',
+          'fg',
+          'admin',
+          'reports',
+        ];
+        allowedMenus = allMenus;
+      } else {
+        allowedMenus = Array.from(menuSet);
+      }
+    }
+
     const { password: _, ...result } = user;
+    (result as any).allowedMenus = allowedMenus; // tempelkan ke user object
     return { user: result };
   }
 
@@ -10623,6 +10847,7 @@ export class AuthService {
       sub: user.id,
       role: user.role,
       allowedStations: user.allowedStations || [],
+      allowedMenus: user.allowedMenus || [], // <-- kirim ke frontend
     };
 
     return {
@@ -13084,11 +13309,25 @@ async function resetProduction() {
   console.log('🔄 Mereset semua data produksi...');
   try {
     await prisma.$transaction(async (tx) => {
-      // Hapus data transaksional dengan urutan dependensi (anak dulu, baru induk)
+      // 0. Log login user (transaksional)
+      console.log('  - Menghapus UserLoginLog...');
+      await tx.userLoginLog.deleteMany({});
 
-      // 0. Manpower Attendance (data absensi harian)
+      // 0a. Manpower Attendance (data absensi harian)
       console.log('  - Menghapus ManpowerAttendance...');
       await tx.manpowerAttendance.deleteMany({});
+
+      // 0b. Riwayat perpindahan karyawan (transaksional)
+      console.log('  - Menghapus EmployeeLineChange...');
+      await tx.employeeLineChange.deleteMany({});
+
+      // 0c. Riwayat mutasi karyawan (transaksional)
+      console.log('  - Menghapus EmployeeMutationHistory...');
+      await tx.employeeMutationHistory.deleteMany({});
+
+      // 0d. Riwayat percakapan AI (transaksional)
+      console.log('  - Menghapus AiConversation...');
+      await tx.aiConversation.deleteMany({});
 
       // 1. Log dan tracking detail
       console.log('  - Menghapus ProductionLog...');
@@ -13144,7 +13383,7 @@ async function resetProduction() {
     });
 
     console.log('✅ Semua data produksi berhasil direset!');
-    console.log('ℹ️  Master data (user, line, pattern, device, employee) tetap utuh.');
+    console.log('ℹ️  Master data (user, line, pattern, device, employee, target, ai_intents) tetap utuh.');
   } catch (error) {
     console.error('❌ Gagal mereset data:');
     console.error(error);
@@ -14991,10 +15230,45 @@ export const EmployeeManagementView = () => {
 </file>
 
 <file path="backend/prisma/seed.ts">
+// backend/prisma/seed.ts
 import { PrismaClient, StationCode } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 
 const prisma = new PrismaClient()
+
+// ===== MENU IDS (sesuai dengan Sidebar.tsx) =====
+const ALL_MENU_IDS = [
+  'dashboard',
+  'cutting_entan', 'cutting_pond', 'cp', 'sewing', 'qc', 'packing', 'fg',
+  'target_monitoring', 'manpower_monitoring', 'login_monitoring',
+  'manpower_control',
+  'reports', 'traceability',
+  'line_master', 'user_management', 'employee_management',
+  'target_management', 'device_management', 'ai_management'
+]
+
+const MANAGER_MENU_IDS = [
+  'dashboard',
+  'cutting_entan', 'cutting_pond', 'cp', 'sewing', 'qc', 'packing', 'fg',
+  'target_monitoring', 'manpower_monitoring', 'login_monitoring',
+  'manpower_control',
+  'reports', 'traceability'
+]
+
+// Operator menu berdasarkan station
+const getOperatorMenu = (station: string) => {
+  const stationToMenu: Record<string, string> = {
+    'CUTTING_ENTAN': 'cutting_entan',
+    'CUTTING_POND': 'cutting_pond',
+    'CP': 'cp',
+    'SEWING': 'sewing',
+    'QC': 'qc',
+    'PACKING': 'packing',
+    'FG': 'fg'
+  }
+  const menuId = stationToMenu[station]
+  return ['dashboard', menuId].filter(Boolean)
+}
 
 async function main() {
   console.log('🌱 INDUSTRIAL SEED START...')
@@ -15019,6 +15293,7 @@ async function main() {
     where: { username: 'admin' },
     update: {
       allowedStations: ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'],
+      allowedMenus: ALL_MENU_IDS,
       department: 'SDC',
       jobTitle: 'MGR',
       lineCode: 'ALL',
@@ -15030,6 +15305,7 @@ async function main() {
       fullName: 'Administrator',
       role: 'ADMINISTRATOR',
       allowedStations: ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'],
+      allowedMenus: ALL_MENU_IDS,
       department: 'SDC',
       jobTitle: 'MGR',
       lineCode: 'ALL',
@@ -15043,6 +15319,7 @@ async function main() {
     where: { username: 'manager' },
     update: {
       allowedStations: ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'],
+      allowedMenus: MANAGER_MENU_IDS,
       department: 'PROD',
       jobTitle: 'MGR',
       lineCode: 'ALL',
@@ -15054,6 +15331,7 @@ async function main() {
       fullName: 'Production Manager',
       role: 'MANAGER',
       allowedStations: ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'],
+      allowedMenus: MANAGER_MENU_IDS,
       department: 'PROD',
       jobTitle: 'MGR',
       lineCode: 'ALL',
@@ -15067,6 +15345,7 @@ async function main() {
     where: { username: 'entan' },
     update: {
       allowedStations: ['CUTTING_ENTAN'],
+      allowedMenus: getOperatorMenu('CUTTING_ENTAN'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -15078,6 +15357,7 @@ async function main() {
       fullName: 'Operator Entan',
       role: 'OPERATOR',
       allowedStations: ['CUTTING_ENTAN'],
+      allowedMenus: getOperatorMenu('CUTTING_ENTAN'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -15091,6 +15371,7 @@ async function main() {
     where: { username: 'pond' },
     update: {
       allowedStations: ['CUTTING_POND'],
+      allowedMenus: getOperatorMenu('CUTTING_POND'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -15102,6 +15383,7 @@ async function main() {
       fullName: 'Operator Pond',
       role: 'OPERATOR',
       allowedStations: ['CUTTING_POND'],
+      allowedMenus: getOperatorMenu('CUTTING_POND'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -15115,6 +15397,7 @@ async function main() {
     where: { username: 'panel' },
     update: {
       allowedStations: ['CP'],
+      allowedMenus: getOperatorMenu('CP'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -15126,6 +15409,7 @@ async function main() {
       fullName: 'Operator Check Panel',
       role: 'OPERATOR',
       allowedStations: ['CP'],
+      allowedMenus: getOperatorMenu('CP'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -15139,6 +15423,7 @@ async function main() {
     where: { username: 'sewing' },
     update: {
       allowedStations: ['SEWING'],
+      allowedMenus: getOperatorMenu('SEWING'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -15150,6 +15435,7 @@ async function main() {
       fullName: 'Operator Sewing',
       role: 'OPERATOR',
       allowedStations: ['SEWING'],
+      allowedMenus: getOperatorMenu('SEWING'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -15163,6 +15449,7 @@ async function main() {
     where: { username: 'quality' },
     update: {
       allowedStations: ['QC'],
+      allowedMenus: getOperatorMenu('QC'),
       department: 'QC',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -15174,6 +15461,7 @@ async function main() {
       fullName: 'Operator QC',
       role: 'OPERATOR',
       allowedStations: ['QC'],
+      allowedMenus: getOperatorMenu('QC'),
       department: 'QC',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -15187,6 +15475,7 @@ async function main() {
     where: { username: 'packing' },
     update: {
       allowedStations: ['PACKING'],
+      allowedMenus: getOperatorMenu('PACKING'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -15198,6 +15487,7 @@ async function main() {
       fullName: 'Operator Packing',
       role: 'OPERATOR',
       allowedStations: ['PACKING'],
+      allowedMenus: getOperatorMenu('PACKING'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -15211,6 +15501,7 @@ async function main() {
     where: { username: 'goods' },
     update: {
       allowedStations: ['FG'],
+      allowedMenus: getOperatorMenu('FG'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -15222,6 +15513,7 @@ async function main() {
       fullName: 'Operator Finished Goods',
       role: 'OPERATOR',
       allowedStations: ['FG'],
+      allowedMenus: getOperatorMenu('FG'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -15233,14 +15525,14 @@ async function main() {
   // ================================
   // IoT DEVICES
   // ================================
-const devices = [
-  { deviceId: 'sparsha_pond_k1yh_001', mode: 'COUNTER', station: StationCode.CUTTING_POND, lineCode: 'K1YH' },
-  { deviceId: 'dhristi_panel_k1yh_001', mode: 'SCANNER', station: StationCode.CP, lineCode: 'K1YH' },
-  { deviceId: 'dhristi_sewing_k1yh_001', mode: 'SCANNER', station: StationCode.SEWING, lineCode: 'K1YH' },
-  { deviceId: 'sparsha_sewingstart_k1yh_001', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
-  { deviceId: 'sparsha_sewingstart_k1yh_002', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
-  { deviceId: 'sparsha_sewingfinish_k1yh_001', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
-];
+  const devices = [
+    { deviceId: 'sparsha_pond_k1yh_001', mode: 'COUNTER', station: StationCode.CUTTING_POND, lineCode: 'K1YH' },
+    { deviceId: 'dhristi_panel_k1yh_001', mode: 'SCANNER', station: StationCode.CP, lineCode: 'K1YH' },
+    { deviceId: 'dhristi_sewing_k1yh_001', mode: 'SCANNER', station: StationCode.SEWING, lineCode: 'K1YH' },
+    { deviceId: 'sparsha_sewingstart_k1yh_001', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
+    { deviceId: 'sparsha_sewingstart_k1yh_002', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
+    { deviceId: 'sparsha_sewingfinish_k1yh_001', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
+  ];
   for (const d of devices) {
     await prisma.iotDevice.upsert({
       where: { deviceId: d.deviceId },
@@ -15639,6 +15931,44 @@ const devices = [
       triggerKeywords: ['buka ai management', 'ai management'],
       responseType: 'navigate',
       responseData: { path: '/ai-management', text: 'Mengalihkan ke AI Management...' },
+      isActive: true,
+    },
+
+    // === TAMBAHAN INTENT BARU ===
+    {
+      triggerKeywords: ['ng cutting pond', 'ng pond', 'cutting pond ng', 'ng di cutting pond'],
+      responseType: 'dynamic',
+      responseData: { query: 'ng_cutting_pond' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['ng check panel', 'ng cp', 'check panel ng', 'ng di check panel'],
+      responseType: 'dynamic',
+      responseData: { query: 'ng_check_panel' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['ng quality control', 'ng qc', 'qc ng', 'ng di quality control', 'ng di qc'],
+      responseType: 'dynamic',
+      responseData: { query: 'ng_qc' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['output sewing', 'sewing output', 'produksi sewing', 'hasil jahit'],
+      responseType: 'dynamic',
+      responseData: { query: 'total_output_sewing_today' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['output cutting entan', 'entan output', 'produksi entan', 'hasil cutting entan'],
+      responseType: 'dynamic',
+      responseData: { query: 'total_output_cutting_entan_today' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['wip per station', 'distribusi wip', 'wip per stasiun', 'sebaran wip'],
+      responseType: 'dynamic',
+      responseData: { query: 'wip_by_station' },
       isActive: true,
     },
   ];
@@ -23316,7 +23646,7 @@ import {
   Users, UserPlus, Edit, Save, Shield, Lock, Unlock, Mail, Building,
   CheckCircle, Eye, EyeOff, Key, Trash2, XCircle, Search,
   Calendar, Loader2, UserCheck, Target, TrendingUp, Star, AlertCircle,
-  ArrowRight, UserCog, Hash
+  ArrowRight, UserCog, Hash, Layers
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:3000';
@@ -23341,6 +23671,30 @@ const stationOpts = [
   { value: 'CUTTING_ENTAN', label: 'Cutting Entan' }, { value: 'CUTTING_POND', label: 'Cutting Pond' },
   { value: 'CP', label: 'Check Panel' }, { value: 'SEWING', label: 'Sewing' }, { value: 'QC', label: 'Quality Control' },
   { value: 'PACKING', label: 'Packing' }, { value: 'FG', label: 'Finished Goods' }
+];
+
+// --- MENU OPTIONS ---
+const menuOptions = [
+  { id: 'dashboard', label: 'Dashboard', category: 'Core' },
+  { id: 'cutting_entan', label: 'Cutting Entan', category: 'Production' },
+  { id: 'cutting_pond', label: 'Cutting Pond', category: 'Production' },
+  { id: 'cp', label: 'Check Panel', category: 'Production' },
+  { id: 'sewing', label: 'Sewing', category: 'Production' },
+  { id: 'qc', label: 'Quality Control', category: 'Production' },
+  { id: 'packing', label: 'Packing', category: 'Production' },
+  { id: 'fg', label: 'Finished Goods', category: 'Production' },
+  { id: 'target_monitoring', label: 'Target Monitoring', category: 'Monitoring' },
+  { id: 'manpower_monitoring', label: 'Manpower Monitoring', category: 'Monitoring' },
+  { id: 'login_monitoring', label: 'Login Monitoring', category: 'Monitoring' },
+  { id: 'manpower_control', label: 'Manpower Control', category: 'Manpower' },
+  { id: 'reports', label: 'Reports', category: 'Reports' },
+  { id: 'traceability', label: 'Traceability', category: 'Reports' },
+  { id: 'line_master', label: 'Line Master', category: 'Master Data' },
+  { id: 'user_management', label: 'User Management', category: 'Master Data' },
+  { id: 'employee_management', label: 'Employee Management', category: 'Master Data' },
+  { id: 'target_management', label: 'Target Management', category: 'Master Data' },
+  { id: 'device_management', label: 'Device Management', category: 'Master Data' },
+  { id: 'ai_management', label: 'AI Management', category: 'Master Data' },
 ];
 
 interface MetricCardProps {
@@ -23400,22 +23754,22 @@ export const UserManagementView = () => {
   const [lineOpts, setLineOpts] = useState<string[]>([]);
   const [f, setF] = useState({
     username: '', fullName: '', email: '', role: 'OPERATOR' as SystemUser['role'],
-    department: '', jobTitle: '', lineCode: '', isActive: true, allowedStations: [] as string[], password: ''
+    department: '', jobTitle: '', lineCode: '', isActive: true,
+    allowedStations: [] as string[],
+    allowedMenus: [] as string[],
+    password: ''
   });
 
   useEffect(() => { fetchUsers(); fetchLines(); }, []);
   const fetchLines = async () => { try { const res = await fetch(`${API_BASE_URL}/line-masters`); if (res.ok) setLineOpts((await res.json()).map((l: any) => l.code)); } catch { console.error('Failed to fetch lines'); } };
   const fetchUsers = async () => { setLoad(true); try { const res = await fetch(`${API_BASE_URL}/users`); setUs(await res.json()); } catch { alert('Gagal load user'); } finally { setLoad(false); } };
 
-  // Fungsi untuk mendapatkan URL avatar dari DiceBear (gaya identicon)
   const getAvatarUrl = (seed: string) => {
     return `https://api.dicebear.com/9.x/identicon/svg?seed=${encodeURIComponent(seed)}&backgroundColor=f8fafc`;
   };
 
-  // Filter berdasarkan pencarian
   const filtered = us.filter(u => u?.username?.toLowerCase().includes(q.toLowerCase()) || u?.fullName?.toLowerCase().includes(q.toLowerCase()) || u?.email?.toLowerCase().includes(q.toLowerCase()) || u?.role?.toLowerCase().includes(q.toLowerCase()));
 
-  // Perhitungan metrik terpisah
   const total = us.length;
   const active = us.filter(u => u?.isActive).length;
   const opCnt = us.filter(u => u?.role === 'OPERATOR').length;
@@ -23424,14 +23778,17 @@ export const UserManagementView = () => {
 
   const select = (u: SystemUser) => { setSel(u); setEdit(false); setCreate(false); };
   const newUser = () => {
-    setF({ username: '', fullName: '', email: '', role: 'OPERATOR', department: '', jobTitle: '', lineCode: '', isActive: true, allowedStations: [], password: 'password123' });
+    setF({ username: '', fullName: '', email: '', role: 'OPERATOR', department: '', jobTitle: '', lineCode: '', isActive: true, allowedStations: [], allowedMenus: [], password: 'password123' });
     setChPw(false); setSel(null); setCreate(true); setEdit(true);
   };
   const editUser = () => {
     if (sel) setF({
       username: sel.username, fullName: sel.fullName, email: sel.email || '', role: sel.role,
       department: sel.department || '', jobTitle: sel.jobTitle || '', lineCode: sel.lineCode || '',
-      isActive: sel.isActive ?? true, allowedStations: sel.allowedStations || [], password: ''
+      isActive: sel.isActive ?? true,
+      allowedStations: sel.allowedStations || [],
+      allowedMenus: (sel as any).allowedMenus || [],
+      password: ''
     });
     setChPw(false); setEdit(true); setCreate(false);
   };
@@ -23442,7 +23799,7 @@ export const UserManagementView = () => {
       const payload: any = {
         username: f.username, fullName: f.fullName, email: f.email, role: f.role,
         department: f.department, jobTitle: f.jobTitle, lineCode: f.lineCode,
-        allowedStations: f.allowedStations, isActive: f.isActive
+        allowedStations: f.allowedStations, allowedMenus: f.allowedMenus, isActive: f.isActive
       };
       if (create) payload.password = f.password || '123456';
       else if (chPw && f.password) payload.password = f.password;
@@ -23453,7 +23810,6 @@ export const UserManagementView = () => {
   };
   const delUser = async (id: string) => { if (!confirm('Hapus user?')) return; try { await fetch(`${API_BASE_URL}/users/${id}`, { method: 'DELETE' }); await fetchUsers(); setSel(null); } catch { alert('Gagal hapus'); } };
   const toggleStatus = async (id: string) => setUs(prev => prev.map(u => u.id === id ? { ...u, isActive: !u.isActive } : u));
-  const toggleStation = (st: string) => setF(p => ({ ...p, allowedStations: p.allowedStations.includes(st) ? p.allowedStations.filter(s => s !== st) : [...p.allowedStations, st] }));
 
   const roleBg = (r: string) => r === 'ADMINISTRATOR' ? 'bg-purple-100 dark:bg-purple-900/40' : r === 'MANAGER' ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-emerald-100 dark:bg-emerald-900/40';
   const roleTxt = (r: string) => r === 'ADMINISTRATOR' ? 'text-purple-700 dark:text-purple-400' : r === 'MANAGER' ? 'text-blue-700 dark:text-blue-400' : 'text-emerald-700 dark:text-emerald-400';
@@ -23485,7 +23841,7 @@ export const UserManagementView = () => {
         `}
       </style>
 
-      {/* HEADER - Solid Style */}
+      {/* HEADER */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
         <div className="p-5 border-b border-slate-100 dark:border-slate-700">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5">
@@ -23734,7 +24090,6 @@ export const UserManagementView = () => {
               <div className="flex-1 overflow-y-auto custom-scrollbar p-5 md:p-6">
                 {/* Profile Grid Information */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  {/* Card 1 */}
                   <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-4 shadow-sm">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-xl text-blue-600 dark:text-blue-400 font-bold">
@@ -23744,8 +24099,6 @@ export const UserManagementView = () => {
                     </div>
                     <p className="font-black text-sm text-slate-900 dark:text-white mt-1 truncate pl-11">{sel.role}</p>
                   </div>
-
-                  {/* Card 2 */}
                   <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-4 shadow-sm">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="p-2 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl text-emerald-600 dark:text-emerald-400 font-bold">
@@ -23757,8 +24110,6 @@ export const UserManagementView = () => {
                       {sel.department ? deptName(sel.department) : 'Not assigned'}
                     </p>
                   </div>
-
-                  {/* Card 3 */}
                   <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-4 shadow-sm">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="p-2 bg-purple-100 dark:bg-purple-900/40 rounded-xl text-purple-600 dark:text-purple-400 font-bold">
@@ -23770,8 +24121,6 @@ export const UserManagementView = () => {
                       {sel.jobTitle ? jobName(sel.jobTitle) : 'Unspecified'}
                     </p>
                   </div>
-
-                  {/* Card 4 */}
                   <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-4 shadow-sm">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-xl text-amber-600 dark:text-amber-400 font-bold">
@@ -23838,6 +24187,44 @@ export const UserManagementView = () => {
                   </div>
                 </div>
 
+                {/* Menu Access Rights */}
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 mt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Menu Access Rights</h3>
+                      <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-1">User has access to {((sel as any).allowedMenus?.length || 0)} menus.</p>
+                    </div>
+                    <div className="p-2 bg-emerald-600 rounded-xl text-white shadow-md shadow-emerald-600/30">
+                      <Layers size={16} />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+                    {menuOptions.map(menu => {
+                      const has = ((sel as any).allowedMenus || []).includes(menu.id);
+                      return (
+                        <div
+                          key={menu.id}
+                          className={`p-3 rounded-xl border-2 transition-all ${has
+                              ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-sm'
+                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 opacity-60'
+                            }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className={`p-1.5 rounded-lg ${has ? 'bg-emerald-200 dark:bg-emerald-800/50 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
+                              <Layers size={14} />
+                            </div>
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center ${has ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-400'}`}>
+                                {has ? <CheckCircle size={12} /> : <XCircle size={12} />}
+                            </div>
+                          </div>
+                          <div className={`font-black text-[11px] leading-tight ${has ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>{menu.label}</div>
+                          <div className={`text-[9px] font-bold mt-1 uppercase ${has ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>{menu.category}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           ) : edit ? (
@@ -23860,7 +24247,7 @@ export const UserManagementView = () => {
                   </div>
                   <div className="flex flex-wrap gap-3 w-full lg:w-auto">
                     <button
-                      onClick={() => { setEdit(false); setCreate(false); if (sel) setF({ username: sel.username, fullName: sel.fullName, email: sel.email || '', role: sel.role, department: sel.department || '', jobTitle: sel.jobTitle || '', lineCode: sel.lineCode || '', isActive: sel.isActive ?? true, allowedStations: sel.allowedStations || [], password: '' }); }}
+                      onClick={() => { setEdit(false); setCreate(false); if (sel) setF({ username: sel.username, fullName: sel.fullName, email: sel.email || '', role: sel.role, department: sel.department || '', jobTitle: sel.jobTitle || '', lineCode: sel.lineCode || '', isActive: sel.isActive ?? true, allowedStations: sel.allowedStations || [], allowedMenus: (sel as any).allowedMenus || [], password: '' }); }}
                       className="flex-1 lg:flex-none px-5 py-2.5 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:border-slate-400 transition-all text-sm shadow-sm active:scale-95"
                     >
                       Cancel
@@ -24080,25 +24467,30 @@ export const UserManagementView = () => {
                     </div>
                   </div>
 
+                  {/* --- MENU ACCESS (EDIT MODE) --- */}
                   <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-700">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
                         <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">4</div>
-                        Station Access
+                        Menu Access
                       </h3>
                       <span className="px-2 py-1 bg-emerald-600 text-white text-[10px] font-black rounded-lg">
-                        {(f.allowedStations?.length || 0)} Selected
+                        {(f.allowedMenus?.length || 0)} Selected
                       </span>
                     </div>
                     
                     <div className="grid grid-cols-1 gap-2 pl-10 h-64 overflow-y-auto custom-scrollbar pr-2">
-                      {stationOpts.map(o => {
-                        const has = (f.allowedStations || []).includes(o.value);
+                      {menuOptions.map(menu => {
+                        const has = (f.allowedMenus || []).includes(menu.id);
                         return (
                           <button
-                            key={o.value}
+                            key={menu.id}
                             type="button"
-                            onClick={() => toggleStation(o.value)}
+                            onClick={() => {
+                              const current = f.allowedMenus || [];
+                              const newMenus = has ? current.filter(m => m !== menu.id) : [...current, menu.id];
+                              setF({ ...f, allowedMenus: newMenus });
+                            }}
                             className={`group p-3 rounded-xl border-2 transition-all text-left flex items-center gap-3 ${has
                                 ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-sm'
                                 : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-emerald-400'
@@ -24108,8 +24500,8 @@ export const UserManagementView = () => {
                               {has && <CheckCircle size={14} />}
                             </div>
                             <div>
-                              <div className={`font-black text-sm ${has ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'}`}>{o.label}</div>
-                              <div className={`text-[10px] font-bold mt-0.5 uppercase ${has ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}`}>{o.value}</div>
+                              <div className={`font-black text-sm ${has ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'}`}>{menu.label}</div>
+                              <div className={`text-[10px] font-bold mt-0.5 uppercase ${has ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}`}>{menu.category}</div>
                             </div>
                           </button>
                         );
@@ -28045,6 +28437,7 @@ interface UserData {
   email?: string;
   lineCode?: string;
   allowedStations?: string[];
+  allowedMenus?: string[]; // <-- tambah untuk mendukung filter menu baru
 }
 
 interface SidebarProps {
@@ -28133,16 +28526,25 @@ const menuGroups = [
 
   const isCollapsed = !isMobile && !isOpen;
 
+  // --- FILTER MENU BERDASARKAN allowedMenus (dengan fallback ke logika lama) ---
+  const allowedMenus = currentUser?.allowedMenus || [];
+  const hasMenuAccess = allowedMenus.length > 0;
+
   const filteredGroups = menuGroups.map(group => ({
     ...group,
     items: group.items.filter(item => {
       if (!currentUser) return false;
       const role = currentUser.role?.toUpperCase();
+      
+      // Administrator selalu bisa semua menu
       if (role === 'ADMINISTRATOR' || role === 'SUPER_ADMIN' || role === 'ADMIN') return true;
-      if (role === 'MANAGER') {
-        if (group.title === 'SYSTEM ADMIN') return false;
-        return true;
+      
+      // Jika user memiliki allowedMenus (mode baru), gunakan itu
+      if (hasMenuAccess) {
+        return allowedMenus.includes(item.id);
       }
+      
+      // Fallback untuk user lama (tanpa allowedMenus) – gunakan allowedStations dan role
       const stationMap: Record<string, string> = {
         cutting_entan: 'CUTTING_ENTAN',
         cutting_pond: 'CUTTING_POND',
@@ -28785,11 +29187,12 @@ model User {
   password        String
   fullName        String
   role            String
-  station         String?                     // legacy
-  allowedStations Json?                       // JSON array
-  department      String?                     // dept code
-  jobTitle        String?                     // job title
-  lineCode        String?                     // line
+  station         String?
+  allowedStations Json?
+  allowedMenus    Json?      // <-- baru: array menu yang diizinkan
+  department      String?
+  jobTitle        String?
+  lineCode        String?
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

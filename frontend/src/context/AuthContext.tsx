@@ -9,6 +9,7 @@ interface User {
   role: string;
   lineCode?: string;
   allowedStations?: string[];
+  allowedMenus?: string[];   // <-- tambah
   permissions?: string[];
   department?: string;
   jobTitle?: string;

@@ -1,7 +1,42 @@
+// backend/prisma/seed.ts
 import { PrismaClient, StationCode } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 
 const prisma = new PrismaClient()
+
+// ===== MENU IDS (sesuai dengan Sidebar.tsx) =====
+const ALL_MENU_IDS = [
+  'dashboard',
+  'cutting_entan', 'cutting_pond', 'cp', 'sewing', 'qc', 'packing', 'fg',
+  'target_monitoring', 'manpower_monitoring', 'login_monitoring',
+  'manpower_control',
+  'reports', 'traceability',
+  'line_master', 'user_management', 'employee_management',
+  'target_management', 'device_management', 'ai_management'
+]
+
+const MANAGER_MENU_IDS = [
+  'dashboard',
+  'cutting_entan', 'cutting_pond', 'cp', 'sewing', 'qc', 'packing', 'fg',
+  'target_monitoring', 'manpower_monitoring', 'login_monitoring',
+  'manpower_control',
+  'reports', 'traceability'
+]
+
+// Operator menu berdasarkan station
+const getOperatorMenu = (station: string) => {
+  const stationToMenu: Record<string, string> = {
+    'CUTTING_ENTAN': 'cutting_entan',
+    'CUTTING_POND': 'cutting_pond',
+    'CP': 'cp',
+    'SEWING': 'sewing',
+    'QC': 'qc',
+    'PACKING': 'packing',
+    'FG': 'fg'
+  }
+  const menuId = stationToMenu[station]
+  return ['dashboard', menuId].filter(Boolean)
+}
 
 async function main() {
   console.log('🌱 INDUSTRIAL SEED START...')
@@ -26,6 +61,7 @@ async function main() {
     where: { username: 'admin' },
     update: {
       allowedStations: ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'],
+      allowedMenus: ALL_MENU_IDS,
       department: 'SDC',
       jobTitle: 'MGR',
       lineCode: 'ALL',
@@ -37,6 +73,7 @@ async function main() {
       fullName: 'Administrator',
       role: 'ADMINISTRATOR',
       allowedStations: ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'],
+      allowedMenus: ALL_MENU_IDS,
       department: 'SDC',
       jobTitle: 'MGR',
       lineCode: 'ALL',
@@ -50,6 +87,7 @@ async function main() {
     where: { username: 'manager' },
     update: {
       allowedStations: ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'],
+      allowedMenus: MANAGER_MENU_IDS,
       department: 'PROD',
       jobTitle: 'MGR',
       lineCode: 'ALL',
@@ -61,6 +99,7 @@ async function main() {
       fullName: 'Production Manager',
       role: 'MANAGER',
       allowedStations: ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'],
+      allowedMenus: MANAGER_MENU_IDS,
       department: 'PROD',
       jobTitle: 'MGR',
       lineCode: 'ALL',
@@ -74,6 +113,7 @@ async function main() {
     where: { username: 'entan' },
     update: {
       allowedStations: ['CUTTING_ENTAN'],
+      allowedMenus: getOperatorMenu('CUTTING_ENTAN'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -85,6 +125,7 @@ async function main() {
       fullName: 'Operator Entan',
       role: 'OPERATOR',
       allowedStations: ['CUTTING_ENTAN'],
+      allowedMenus: getOperatorMenu('CUTTING_ENTAN'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -98,6 +139,7 @@ async function main() {
     where: { username: 'pond' },
     update: {
       allowedStations: ['CUTTING_POND'],
+      allowedMenus: getOperatorMenu('CUTTING_POND'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -109,6 +151,7 @@ async function main() {
       fullName: 'Operator Pond',
       role: 'OPERATOR',
       allowedStations: ['CUTTING_POND'],
+      allowedMenus: getOperatorMenu('CUTTING_POND'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -122,6 +165,7 @@ async function main() {
     where: { username: 'panel' },
     update: {
       allowedStations: ['CP'],
+      allowedMenus: getOperatorMenu('CP'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -133,6 +177,7 @@ async function main() {
       fullName: 'Operator Check Panel',
       role: 'OPERATOR',
       allowedStations: ['CP'],
+      allowedMenus: getOperatorMenu('CP'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -146,6 +191,7 @@ async function main() {
     where: { username: 'sewing' },
     update: {
       allowedStations: ['SEWING'],
+      allowedMenus: getOperatorMenu('SEWING'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -157,6 +203,7 @@ async function main() {
       fullName: 'Operator Sewing',
       role: 'OPERATOR',
       allowedStations: ['SEWING'],
+      allowedMenus: getOperatorMenu('SEWING'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -170,6 +217,7 @@ async function main() {
     where: { username: 'quality' },
     update: {
       allowedStations: ['QC'],
+      allowedMenus: getOperatorMenu('QC'),
       department: 'QC',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -181,6 +229,7 @@ async function main() {
       fullName: 'Operator QC',
       role: 'OPERATOR',
       allowedStations: ['QC'],
+      allowedMenus: getOperatorMenu('QC'),
       department: 'QC',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -194,6 +243,7 @@ async function main() {
     where: { username: 'packing' },
     update: {
       allowedStations: ['PACKING'],
+      allowedMenus: getOperatorMenu('PACKING'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -205,6 +255,7 @@ async function main() {
       fullName: 'Operator Packing',
       role: 'OPERATOR',
       allowedStations: ['PACKING'],
+      allowedMenus: getOperatorMenu('PACKING'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -218,6 +269,7 @@ async function main() {
     where: { username: 'goods' },
     update: {
       allowedStations: ['FG'],
+      allowedMenus: getOperatorMenu('FG'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -229,6 +281,7 @@ async function main() {
       fullName: 'Operator Finished Goods',
       role: 'OPERATOR',
       allowedStations: ['FG'],
+      allowedMenus: getOperatorMenu('FG'),
       department: 'PROD',
       jobTitle: 'OPR',
       lineCode: 'K1YH',
@@ -240,14 +293,14 @@ async function main() {
   // ================================
   // IoT DEVICES
   // ================================
-const devices = [
-  { deviceId: 'sparsha_pond_k1yh_001', mode: 'COUNTER', station: StationCode.CUTTING_POND, lineCode: 'K1YH' },
-  { deviceId: 'dhristi_panel_k1yh_001', mode: 'SCANNER', station: StationCode.CP, lineCode: 'K1YH' },
-  { deviceId: 'dhristi_sewing_k1yh_001', mode: 'SCANNER', station: StationCode.SEWING, lineCode: 'K1YH' },
-  { deviceId: 'sparsha_sewingstart_k1yh_001', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
-  { deviceId: 'sparsha_sewingstart_k1yh_002', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
-  { deviceId: 'sparsha_sewingfinish_k1yh_001', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
-];
+  const devices = [
+    { deviceId: 'sparsha_pond_k1yh_001', mode: 'COUNTER', station: StationCode.CUTTING_POND, lineCode: 'K1YH' },
+    { deviceId: 'dhristi_panel_k1yh_001', mode: 'SCANNER', station: StationCode.CP, lineCode: 'K1YH' },
+    { deviceId: 'dhristi_sewing_k1yh_001', mode: 'SCANNER', station: StationCode.SEWING, lineCode: 'K1YH' },
+    { deviceId: 'sparsha_sewingstart_k1yh_001', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
+    { deviceId: 'sparsha_sewingstart_k1yh_002', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
+    { deviceId: 'sparsha_sewingfinish_k1yh_001', mode: 'COUNTER', station: StationCode.SEWING, lineCode: 'K1YH' },
+  ];
   for (const d of devices) {
     await prisma.iotDevice.upsert({
       where: { deviceId: d.deviceId },
@@ -646,6 +699,44 @@ const devices = [
       triggerKeywords: ['buka ai management', 'ai management'],
       responseType: 'navigate',
       responseData: { path: '/ai-management', text: 'Mengalihkan ke AI Management...' },
+      isActive: true,
+    },
+
+    // === TAMBAHAN INTENT BARU ===
+    {
+      triggerKeywords: ['ng cutting pond', 'ng pond', 'cutting pond ng', 'ng di cutting pond'],
+      responseType: 'dynamic',
+      responseData: { query: 'ng_cutting_pond' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['ng check panel', 'ng cp', 'check panel ng', 'ng di check panel'],
+      responseType: 'dynamic',
+      responseData: { query: 'ng_check_panel' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['ng quality control', 'ng qc', 'qc ng', 'ng di quality control', 'ng di qc'],
+      responseType: 'dynamic',
+      responseData: { query: 'ng_qc' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['output sewing', 'sewing output', 'produksi sewing', 'hasil jahit'],
+      responseType: 'dynamic',
+      responseData: { query: 'total_output_sewing_today' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['output cutting entan', 'entan output', 'produksi entan', 'hasil cutting entan'],
+      responseType: 'dynamic',
+      responseData: { query: 'total_output_cutting_entan_today' },
+      isActive: true,
+    },
+    {
+      triggerKeywords: ['wip per station', 'distribusi wip', 'wip per stasiun', 'sebaran wip'],
+      responseType: 'dynamic',
+      responseData: { query: 'wip_by_station' },
       isActive: true,
     },
   ];

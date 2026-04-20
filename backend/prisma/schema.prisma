@@ -37,11 +37,12 @@ model User {
   password        String
   fullName        String
   role            String
-  station         String?                     // legacy
-  allowedStations Json?                       // JSON array
-  department      String?                     // dept code
-  jobTitle        String?                     // job title
-  lineCode        String?                     // line
+  station         String?
+  allowedStations Json?
+  allowedMenus    Json?      // <-- baru: array menu yang diizinkan
+  department      String?
+  jobTitle        String?
+  lineCode        String?
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

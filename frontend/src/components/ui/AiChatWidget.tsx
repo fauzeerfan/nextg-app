@@ -8,6 +8,7 @@ interface ChatMessage {
   text: string;
   isUser: boolean;
   action?: any;
+  options?: any[];
 }
 
 export const AiChatWidget: React.FC = () => {
@@ -18,7 +19,27 @@ export const AiChatWidget: React.FC = () => {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [menuTree, setMenuTree] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetchMenu();
+  }, []);
+
+  const fetchMenu = async () => {
+    try {
+      const token = localStorage.getItem('nextg_token');
+      const res = await fetch(`${API_BASE_URL}/ai/menu`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMenuTree(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch menu', error);
+    }
+  };
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -26,18 +47,19 @@ export const AiChatWidget: React.FC = () => {
     }
   }, [messages]);
 
-  const sendMessage = async () => {
-    if (!input.trim()) return;
-    const userMsg: ChatMessage = { id: Date.now().toString(), text: input, isUser: true };
+  const sendMessage = async (text: string) => {
+    if (!text.trim()) return;
+    const userMsg: ChatMessage = { id: Date.now().toString(), text, isUser: true };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setLoading(true);
 
     try {
+      const token = localStorage.getItem('nextg_token');
       const res = await fetch(`${API_BASE_URL}/ai/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: text }),
       });
       const data = await res.json();
       const botMsg: ChatMessage = {
@@ -45,6 +67,7 @@ export const AiChatWidget: React.FC = () => {
         text: data.response,
         isUser: false,
         action: data.action,
+        options: data.options,
       };
       setMessages(prev => [...prev, botMsg]);
 
@@ -60,6 +83,14 @@ export const AiChatWidget: React.FC = () => {
     }
   };
 
+  const handleOptionClick = (option: any) => {
+    if (option.type === 'navigate') {
+      window.location.href = option.value;
+    } else {
+      sendMessage(option.value);
+    }
+  };
+
   const toggleChat = () => {
     setIsOpen(!isOpen);
     setIsMinimized(false);
@@ -70,13 +101,13 @@ export const AiChatWidget: React.FC = () => {
 
   if (!isOpen) {
     return (
-        <button
+      <button
         onClick={toggleChat}
         className="fixed bottom-6 right-6 z-50 w-40 h-40 rounded-3xl shadow-xl flex items-center justify-center hover:scale-105 transition-transform duration-300 group bg-transparent"
-        >
+      >
         <img src="/feby.png" alt="Feby" className="w-40 h-40 object-contain drop-shadow-xl" />
         <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full animate-pulse"></div>
-        </button>
+      </button>
     );
   }
 
@@ -109,10 +140,18 @@ export const AiChatWidget: React.FC = () => {
         {messages.map(msg => (
           <div key={msg.id} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.isUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white rounded-bl-none shadow-sm border border-slate-200 dark:border-slate-700'}`}>
-              {msg.text}
-              {msg.action?.type === 'navigate' && (
-                <div className="mt-2 text-xs text-blue-500 animate-pulse">
-                  Mengalihkan...
+              <div className="whitespace-pre-wrap">{msg.text}</div>
+              {msg.options && msg.options.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {msg.options.map((opt, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleOptionClick(opt)}
+                      className="px-3 py-1.5 text-xs font-bold rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 hover:bg-blue-200 transition-colors"
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
@@ -139,12 +178,12 @@ export const AiChatWidget: React.FC = () => {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+            onKeyPress={(e) => e.key === 'Enter' && sendMessage(input)}
             placeholder="Tanyakan sesuatu..."
             className="flex-1 px-4 py-2 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-slate-50 dark:bg-slate-900"
           />
           <button
-            onClick={sendMessage}
+            onClick={() => sendMessage(input)}
             disabled={loading}
             className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
           >
@@ -152,10 +191,10 @@ export const AiChatWidget: React.FC = () => {
           </button>
         </div>
         <div className="mt-2 flex gap-2 overflow-x-auto text-xs">
-          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => setInput('Total NG hari ini')}>Total NG hari ini</span>
-          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => setInput('Output hari ini')}>Output hari ini</span>
-          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => setInput('Defect rate')}>Defect rate</span>
-          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => setInput('Buatkan report NG')}>Buatkan report NG</span>
+          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => sendMessage('menu_main')}>🏠 Menu Utama</span>
+          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => sendMessage('ng')}>📊 Data NG</span>
+          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => sendMessage('output')}>📈 Output</span>
+          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full cursor-pointer hover:bg-blue-100" onClick={() => sendMessage('wip')}>📋 WIP</span>
         </div>
       </div>
     </div>

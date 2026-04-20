@@ -1,3 +1,4 @@
+// backend/src/ai/ai.controller.ts
 import { Controller, Post, Body, UseGuards, Get, Param, Put, Delete } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -9,6 +10,13 @@ export class AiController {
   @Post('chat')
   async chat(@Body() body: { message: string; userId?: string }) {
     return this.aiService.processMessage(body.message, body.userId);
+  }
+
+  // ========== ENDPOINT BARU UNTUK MENU ==========
+  @Get('menu')
+  @UseGuards(JwtAuthGuard)
+  async getMenu() {
+    return this.aiService.getMenuTree();
   }
 
   // Admin endpoints (protected by JWT, you can add RolesGuard)
