@@ -1,14 +1,26 @@
 // backend/src/ai/ai.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReportsService } from '../reports/reports.service';
+import Groq from 'groq-sdk'; // <-- import
 
 @Injectable()
 export class AiService {
+  private readonly logger = new Logger(AiService.name);
+  private groqClient: Groq | null = null;
+
   constructor(
     private prisma: PrismaService,
     private reportsService: ReportsService,
-  ) {}
+  ) {
+    // Inisialisasi Groq jika API key tersedia
+    if (process.env.GROQ_API_KEY && process.env.AI_PROVIDER === 'groq') {
+      this.groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
+      this.logger.log('Groq AI client initialized');
+    } else {
+      this.logger.warn('Groq AI not configured, using fallback responses');
+    }
+  }
 
   // ========== MENU TREE ==========
   async getMenuTree() {
@@ -152,6 +164,40 @@ export class AiService {
     }
   }
 
+  // ========== PANGGIL AI EKSTERNAL (BARU) ==========
+  private async callExternalAI(message: string): Promise<string> {
+    if (!this.groqClient) {
+      return "Maaf, saya belum bisa menjawab pertanyaan itu. Silakan coba tanyakan tentang produksi, NG, atau minta report.";
+    }
+
+    try {
+      const chatCompletion = await this.groqClient.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: `Anda adalah Feby, asisten AI untuk sistem produksi pabrik garmen (NextG App). 
+Anda membantu operator dan manajer produksi. Jawablah dengan bahasa Indonesia yang ramah, singkat, dan jelas. 
+Jika ditanya tentang data produksi (NG, output, WIP, dll), arahkan user untuk menggunakan menu yang tersedia atau bertanya dengan kata kunci spesifik seperti "total ng hari ini". 
+Jangan pernah memberikan informasi palsu. Jika tidak tahu, katakan tidak tahu.`
+          },
+          {
+            role: "user",
+            content: message
+          }
+        ],
+        model: "llama-3.3-70b-versatile", // model gratis terbaik di Groq
+        temperature: 0.7,
+        max_tokens: 300,
+      });
+
+      const reply = chatCompletion.choices[0]?.message?.content || "Maaf, saya tidak bisa menjawab saat ini.";
+      return reply;
+    } catch (error: any) {
+      this.logger.error(`Groq API error: ${error.message}`);
+      return "Maaf, terjadi gangguan teknis. Silakan coba lagi nanti.";
+    }
+  }
+
   // ========== PROCESS MESSAGE (MODIFIKASI) ==========
   async processMessage(message: string, userId?: string) {
     const lowerMsg = message.toLowerCase().trim();
@@ -208,7 +254,10 @@ export class AiService {
         }
       }
       if (!matchedIntent) {
-        responseText = "Maaf, saya tidak mengerti pertanyaan Anda. Coba tanyakan tentang produksi, NG, atau minta report.";
+        // === INI BAGIAN BARU: tidak ada intent cocok, panggil AI eksternal ===
+        responseText = await this.callExternalAI(message);
+        // Tidak menambahkan options agar user bisa lanjut ngobrol natural
+        // Tapi tetap beri tombol kembali ke menu utama
         options = [{ label: '🏠 Menu Utama', value: 'menu_main' }];
       } else {
         const type = matchedIntent.responseType;
