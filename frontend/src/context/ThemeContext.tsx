@@ -11,16 +11,13 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   // Initialize theme from localStorage or system preference
-  const [theme, setTheme] = useState<Theme>(() => {
-    const savedTheme = localStorage.getItem('nextg-theme') as Theme;
-    if (savedTheme) return savedTheme;
-    
-    // Check system preference
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
-    }
-    return 'light';
-  });
+const [theme, setTheme] = useState<Theme>(() => {
+  const savedTheme = localStorage.getItem('nextg-theme') as Theme;
+  if (savedTheme) return savedTheme;
+  
+  // Default ke light mode
+  return 'light';
+});
 
   // Apply theme to document
   useEffect(() => {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Activity, Layers, RefreshCw,
   TrendingUp, Clock,
-  Cpu, AlertOctagon,
+  Cpu,
   TrendingDown, Maximize2, Minimize2,
   Filter, Factory, AlertTriangle, 
   Scissors, CheckSquare, Truck, Package, Shirt,
@@ -550,35 +550,7 @@ export const DashboardView = () => {
         </div>
       ) : (
         <>
-          {/* ==========================================
-              ROW 1: KPI CARDS
-          ========================================== */}
-          <div className="relative grid grid-cols-1 md:grid-cols-3 gap-5 2xl:gap-6 mb-6 z-10 flex-shrink-0">
-            <CompactKpiCard
-              title="Total Production Orders"
-              value={data?.kpi?.totalOps || 0}
-              icon={Layers}
-              color="blue"
-              delay={0}
-            />
-            <CompactKpiCard
-              title="Total Work In Progress"
-              value={data?.kpi?.totalWip || 0}
-              icon={Activity}
-              color="amber"
-              suffix="pcs"
-              delay={100}
-            />
-            <CompactKpiCard
-              title="Overall Defect Rate"
-              value={`${data?.kpi?.defectRate || 0}%`}
-              icon={AlertOctagon}
-              color="rose"
-              trend={`${(data?.kpi?.defectRate || 0) > 5 ? '+2%' : '-1%'}`}
-              trendDirection={(data?.kpi?.defectRate || 0) > 5 ? 'up' : 'down'}
-              delay={200}
-            />
-          </div>
+          {/* KPI cards removed */}
 
           {/* ==========================================
               MAIN CONTENT: STATION FLOW

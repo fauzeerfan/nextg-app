@@ -26,19 +26,19 @@ export class TargetManagementService {
     });
   }
 
-  async findByLineStationAndDate(lineCode: string, station: string, date: Date) {
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(date);
-    end.setHours(23, 59, 59, 999);
-    return this.prisma.targetSetting.findFirst({
-      where: {
-        lineCode,
-        station,
-        effectiveDate: { gte: start, lte: end },
-      },
-    });
-  }
+async findByLineStationAndDate(lineCode: string, station: string, date: Date) {
+  // Cari target dengan effectiveDate <= date, aktif, dan station/line cocok
+  // Urutkan descending (terbaru), ambil satu
+  return this.prisma.targetSetting.findFirst({
+    where: {
+      lineCode,
+      station,
+      effectiveDate: { lte: date },
+      isActive: true,
+    },
+    orderBy: { effectiveDate: 'desc' },
+  });
+}
 
   // Untuk kompatibilitas lama, tetap sediakan method findByLineAndDate (default station SEWING)
   async findByLineAndDate(lineCode: string, date: Date) {

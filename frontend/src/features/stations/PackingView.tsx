@@ -291,7 +291,7 @@ export const PackingView = () => {
   const prevPackedBoxesRef = useRef<PackedBox[]>([]);
 
   // ========== PACK SIZE ==========
-  const [packSize, setPackSize] = useState<number>(50);
+  const [packSize, setPackSize] = useState<number>(100);
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('nextg_token');
@@ -450,14 +450,14 @@ export const PackingView = () => {
         fetch(`${API_BASE_URL}/line-masters/${firstOp.lineCode}/packing-config`, {
           headers: getAuthHeaders(),
         })
-          .then(res => res.ok ? res.json() : { packSize: 50 })
+          .then(res => res.ok ? res.json() : { packSize: 100 })
           .then(data => setPackSize(data.packSize))
-          .catch(() => setPackSize(50));
+          .catch(() => setPackSize(100));
       } else {
-        setPackSize(50);
+        setPackSize(100);
       }
     } else {
-      setPackSize(50);
+      setPackSize(100);
     }
   }, [activeSession]);
 

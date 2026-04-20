@@ -79,7 +79,7 @@ export class PackingService {
     const firstItem = session.items[0];
     if (!firstItem) throw new BadRequestException('Session has no items');
     const line = firstItem.op.line;
-    let packSize = 50;
+    let packSize = 100;
     if (line && line.packingConfig) {
       const config = line.packingConfig as any;
       if (config && typeof config.packSize === 'number') {
@@ -156,6 +156,36 @@ export class PackingService {
     }));
   }
 
+  // ========== NEW: Get Box by QR Code ==========
+  async getPackedBoxByQrCode(qrCode: string) {
+    // QR code format: PACK-{sessionId}
+    const sessionId = qrCode.replace('PACK-', '');
+    const session = await this.prisma.packingSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        items: {
+          include: {
+            op: { select: { opNumber: true, styleCode: true } }
+          }
+        }
+      }
+    });
+    if (!session) throw new NotFoundException('Box not found');
+    if (session.status !== 'CLOSED') throw new BadRequestException('Box is not closed yet');
+    if (session.receivedAt) throw new BadRequestException('Box already received');
+    return {
+      id: session.id,
+      fgNumber: session.fgNumber,
+      totalQty: session.totalQty,
+      items: session.items.map(item => ({
+        opNumber: item.op.opNumber,
+        qty: item.qty
+      })),
+      qrCode: session.qrCode,
+      createdAt: session.createdAt
+    };
+  }
+
   /**
    * Menandai sesi packing sebagai sudah diterima di Finished Goods.
    */
@@ -203,16 +233,26 @@ export class PackingService {
   async cancelSession(sessionId: string) {
     const session = await this.prisma.packingSession.findUnique({
       where: { id: sessionId },
+      include: { items: true }, // ← ambil semua item dalam session
     });
     if (!session) throw new NotFoundException('Session not found');
     if (session.status !== 'OPEN') {
       throw new BadRequestException('Only open sessions can be canceled');
     }
 
-    await this.prisma.packingSession.delete({
-      where: { id: sessionId },
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Kembalikan qtyPacking ke masing-masing ProductionOrder
+      for (const item of session.items) {
+        await tx.productionOrder.update({
+          where: { id: item.opId },
+          data: { qtyPacking: { decrement: item.qty } },
+        });
+      }
+      // 2. Hapus session (items otomatis terhapus karena cascade)
+      await tx.packingSession.delete({
+        where: { id: sessionId },
+      });
+      return { success: true };
     });
-
-    return { success: true };
   }
 }

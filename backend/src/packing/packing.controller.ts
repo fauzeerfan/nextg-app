@@ -47,10 +47,17 @@ export class PackingController {
     return this.service.cancelSession(sessionId);
   }
 
-  // ========== NEW ENDPOINT: packed-boxes ==========
+  // ========== ENDPOINT: packed-boxes ==========
   @Get('packed-boxes')
   @UseGuards(JwtAuthGuard)
   async getPackedBoxes() {
     return this.service.getPackedBoxes();
+  }
+
+  // ========== NEW: Get Box by QR Code ==========
+  @Get('box/:qrCode')
+  @UseGuards(JwtAuthGuard)
+  async getPackedBox(@Param('qrCode') qrCode: string) {
+    return this.service.getPackedBoxByQrCode(qrCode);
   }
 }

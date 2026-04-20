@@ -3,7 +3,7 @@ import {
   Truck, Package, BarChart, TrendingUp, History,
   Warehouse, RefreshCw, CheckCircle, AlertCircle,
   X, Loader2, ChevronDown, ChevronUp,
-  FileText
+  FileText, Search
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:3000';
@@ -115,6 +115,9 @@ export const FinishedGoodsView = () => {
   const [qrInput, setQrInput] = useState('');
   const [processingQr, setProcessingQr] = useState(false);
   const [qrMessage, setQrMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // New states for preview
+  const [previewBox, setPreviewBox] = useState<any>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Shipping documents state
   const [shippingDocs, setShippingDocs] = useState<ShippingDocument[]>([]);
@@ -207,28 +210,54 @@ export const FinishedGoodsView = () => {
     return () => clearInterval(interval);
   }, [fetchStocks, fetchShippingDocs, fetchShipments]);
 
-  // ========== QR HANDLING ==========
-  const handleConfirmQr = async () => {
+  // ========== QR HANDLING (Preview & Receive) ==========
+  // Preview box sebelum receive
+  const handlePreview = async () => {
     if (!qrInput.trim()) {
       setQrMessage({ type: 'error', text: 'QR code cannot be empty' });
       return;
     }
-    setProcessingQr(true);
+    setPreviewLoading(true);
     setQrMessage(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/packing/box/${encodeURIComponent(qrInput.trim())}`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPreviewBox(data);
+      } else {
+        const err = await res.json();
+        setQrMessage({ type: 'error', text: err.message || 'Invalid QR code or box already received' });
+        setPreviewBox(null);
+      }
+    } catch (error) {
+      setQrMessage({ type: 'error', text: 'Network error' });
+      setPreviewBox(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  // Konfirmasi receive setelah preview
+  const handleReceive = async () => {
+    if (!previewBox) return;
+    setProcessingQr(true);
     try {
       const res = await fetch(`${API_BASE_URL}/finished-goods/receive`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ qrCode: qrInput.trim() }),
+        body: JSON.stringify({ qrCode: previewBox.qrCode }),
       });
       if (res.ok) {
         const data = await res.json();
         setQrMessage({ type: 'success', text: `Successfully received ${data.totalQty} pcs` });
+        setPreviewBox(null);
         setQrInput('');
         fetchStocks();
       } else {
         const err = await res.json();
-        setQrMessage({ type: 'error', text: err.message || 'Failed to process QR' });
+        setQrMessage({ type: 'error', text: err.message || 'Failed to receive' });
       }
     } catch (error) {
       setQrMessage({ type: 'error', text: 'Network error' });
@@ -426,15 +455,15 @@ export const FinishedGoodsView = () => {
                     placeholder="Scan QR Code here..."
                     value={qrInput}
                     onChange={(e) => setQrInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleConfirmQr()}
+                    onKeyDown={(e) => e.key === 'Enter' && handlePreview()}
                   />
                   <button
-                    onClick={handleConfirmQr}
-                    disabled={processingQr}
-                    className="px-8 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black flex items-center justify-center gap-2 text-base transition-colors shadow-lg shadow-emerald-500/30 disabled:opacity-50 disabled:shadow-none uppercase tracking-wider"
+                    onClick={handlePreview}
+                    disabled={previewLoading}
+                    className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black flex items-center justify-center gap-2 text-base transition-colors shadow-lg shadow-blue-600/30 disabled:opacity-50 disabled:shadow-none uppercase tracking-wider"
                   >
-                    {processingQr ? <Loader2 className="animate-spin" size={20} /> : <CheckCircle size={20} />}
-                    Receive Box
+                    {previewLoading ? <Loader2 className="animate-spin" size={20} /> : <Search size={20} />}
+                    Preview Box
                   </button>
                 </div>
               </div>
@@ -448,6 +477,51 @@ export const FinishedGoodsView = () => {
               }`}>
                 {qrMessage.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
                 {qrMessage.text}
+              </div>
+            )}
+
+            {/* Box Preview Section */}
+            {previewBox && (
+              <div className="mt-6 p-5 bg-white dark:bg-slate-800 rounded-2xl border-2 border-blue-500 shadow-lg animate-in fade-in slide-in-from-top-2">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h4 className="font-black text-lg text-slate-900 dark:text-white">Box Preview</h4>
+                    <p className="text-xs font-semibold text-slate-500">Please verify before receiving</p>
+                  </div>
+                  <button onClick={() => setPreviewBox(null)} className="p-1 text-slate-400 hover:text-rose-500">
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                  <div className="bg-slate-50 dark:bg-slate-700/30 p-3 rounded-xl">
+                    <div className="text-[11px] font-bold text-slate-500 uppercase">FG Number</div>
+                    <div className="font-black text-lg text-slate-900 dark:text-white">{previewBox.fgNumber}</div>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-700/30 p-3 rounded-xl">
+                    <div className="text-[11px] font-bold text-slate-500 uppercase">Total Qty</div>
+                    <div className="font-black text-lg text-emerald-600 dark:text-emerald-400">{previewBox.totalQty} sets</div>
+                  </div>
+                </div>
+                <div className="mb-5">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase mb-2">Items in Box</div>
+                  <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                    {previewBox.items.map((item: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center p-2 bg-slate-50 dark:bg-slate-700/30 rounded-lg">
+                        <span className="font-mono font-bold text-sm">{item.opNumber}</span>
+                        <span className="font-black text-sm text-indigo-600 dark:text-indigo-400">{item.qty} sets</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setPreviewBox(null)} className="flex-1 py-2.5 border-2 border-slate-200 rounded-xl font-bold">
+                    Cancel
+                  </button>
+                  <button onClick={handleReceive} disabled={processingQr} className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl font-bold flex items-center justify-center gap-2">
+                    {processingQr ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
+                    Confirm Receive
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -484,7 +558,7 @@ export const FinishedGoodsView = () => {
                       <td colSpan={4} className="py-10 text-center font-bold text-slate-500 text-lg">
                         <Package size={48} className="mx-auto mb-4 opacity-30" />
                         No finished goods stock available
-                      </td>
+                       </td>
                     </tr>
                   ) : (
                     stocks.map((stock) => {
@@ -508,17 +582,17 @@ export const FinishedGoodsView = () => {
                                 </div>
                                 <span className="font-mono font-black text-base text-slate-900 dark:text-white">{stock.fgNumber}</span>
                               </div>
-                            </td>
+                             </td>
                             <td className="py-4 px-6">
                               <div className="flex items-baseline gap-1.5">
                                 <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{stock.totalQty}</span>
                                 <span className="text-xs font-bold text-slate-500 uppercase">sets</span>
                               </div>
-                            </td>
+                             </td>
                             <td className="py-4 px-6 font-bold text-slate-700 dark:text-slate-300">{stock.items.length}</td>
                             <td className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">
                               {stock.items[0]?.createdAt ? new Date(stock.items[0].createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '-'}
-                            </td>
+                             </td>
                           </tr>
                           
                           {/* Expanded Content */}
@@ -541,7 +615,7 @@ export const FinishedGoodsView = () => {
                                     ))}
                                   </div>
                                 </div>
-                              </td>
+                               </td>
                             </tr>
                           )}
                         </>
@@ -626,32 +700,55 @@ export const FinishedGoodsView = () => {
                               </div>
                             </div>
                             
-                            <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
-                              <div className="flex-1">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Ship Qty</div>
-                                <div className="relative">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max={Math.min(available, item.qty)}
-                                    className="w-full pl-3 pr-10 py-2 text-base font-black border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-lg focus:border-amber-500 outline-none transition-colors"
-                                    placeholder="0"
-                                    value={qty || ''}
-                                    onChange={(e) => setShippingQuantities({
-                                      ...shippingQuantities,
-                                      [item.kode_item]: Math.min(Number(e.target.value) || 0, available, item.qty)
-                                    })}
-                                  />
-                                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">/{item.qty}</span>
-                                </div>
-                              </div>
-                              <div className="px-3 py-2 text-center">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Available</div>
-                                <div className={`text-base font-black ${available >= item.qty ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                                  {available}
-                                </div>
-                              </div>
-                            </div>
+<div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
+  <div className="flex-1">
+    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Ship Qty</div>
+    <div className="flex gap-2 items-center">
+      <div className="relative flex-1">
+        <input
+          type="number"
+          min="0"
+          max={Math.min(available, item.qty)}
+          className="w-full pl-3 pr-10 py-2 text-base font-black border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-lg focus:border-amber-500 outline-none transition-colors"
+          placeholder="0"
+          value={qty !== undefined ? qty : ''}
+          onChange={(e) => {
+            let rawValue = e.target.value;
+            if (rawValue === '') rawValue = '0';
+            let numValue = Number(rawValue);
+            if (isNaN(numValue)) numValue = 0;
+            const maxAllowed = Math.min(available, item.qty);
+            const newValue = Math.min(numValue, maxAllowed);
+            setShippingQuantities(prev => ({
+              ...prev,
+              [item.kode_item]: newValue
+            }));
+          }}
+        />
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">/{item.qty}</span>
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          const maxQty = Math.min(available, item.qty);
+          setShippingQuantities(prev => ({
+            ...prev,
+            [item.kode_item]: maxQty
+          }));
+        }}
+        className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-colors shadow-sm"
+      >
+        Max
+      </button>
+    </div>
+  </div>
+  <div className="px-3 py-2 text-center">
+    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Available</div>
+    <div className={`text-base font-black ${available >= item.qty ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+      {available}
+    </div>
+  </div>
+</div>
                           </div>
                         );
                       })}
@@ -716,7 +813,7 @@ export const FinishedGoodsView = () => {
                         <th className="py-4 px-5">FG Item</th>
                         <th className="py-4 px-5 text-right">Qty</th>
                         <th className="py-4 px-5">Status</th>
-                      </tr>
+                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                       {shipments.map(ship => (
@@ -734,7 +831,7 @@ export const FinishedGoodsView = () => {
                             }`}>
                               {ship.status}
                             </span>
-                          </td>
+                           </td>
                         </tr>
                       ))}
                     </tbody>
