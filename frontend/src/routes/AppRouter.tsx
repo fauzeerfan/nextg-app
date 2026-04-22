@@ -20,6 +20,10 @@ import { TargetMonitoringView } from '../features/reports/TargetMonitoringView';
 import { LoginMonitoringView } from '../features/system/LoginMonitoringView';
 import { DeviceManagementView } from '../features/system/DeviceManagementView';
 import { AiManagementView } from '../features/ai/AiManagementView';
+import { DemandSimulatorView } from '../features/production-planning/DemandSimulatorView';
+import { CapacityDashboardView } from '../features/production-planning/CapacityDashboardView';
+import { GanttSimulationView } from '../features/production-planning/GanttSimulationView';
+import { PlanVsActualView } from '../features/production-planning/PlanVsActualView';
 
 interface AppRouterProps {
   activeTab: string;
@@ -55,6 +59,10 @@ export const AppRouter: React.FC<AppRouterProps> = ({
     'login_monitoring': <LoginMonitoringView />,
     'device_management': <DeviceManagementView />,
     'ai_management': <AiManagementView />,
+    'demand_simulator': <DemandSimulatorView />,
+    'capacity_dashboard': <CapacityDashboardView />,
+    'gantt_simulation': <GanttSimulationView />,
+    'plan_vs_actual': <PlanVsActualView />,
   };
 
   return (
@@ -86,6 +94,11 @@ export const AppRouter: React.FC<AppRouterProps> = ({
       <Route path="/login-monitoring" element={tabComponents['login_monitoring']} />
       <Route path="/device-management" element={tabComponents['device_management']} />
       <Route path="/ai-management" element={tabComponents['ai_management']} />
+
+      <Route path="/demand-simulator" element={tabComponents['demand_simulator']} />
+      <Route path="/capacity-dashboard" element={tabComponents['capacity_dashboard']} />
+      <Route path="/gantt-simulation" element={tabComponents['gantt_simulation']} />
+      <Route path="/plan-vs-actual" element={tabComponents['plan_vs_actual']} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

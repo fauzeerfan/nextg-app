@@ -540,3 +540,31 @@ model AiConversation {
 
   @@map("ai_conversations")
 }
+
+// ========== Production Planning (PPIC Module) ==========
+model PlannedOrder {
+  id               String   @id @default(uuid())
+  itemNumberFG     String   // soft link ke FG
+  styleCode        String?  // soft link ke line (optional)
+  quantity         Int
+  dueDate          DateTime // due date dari demand
+  priority         Int      @default(2) // 1=High,2=Medium,3=Low
+  assignedLineCode String?  // rekomendasi line
+  status           String   @default("DRAFT") // DRAFT, SIMULATED, EXPORTED
+  note             String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("planned_orders")
+}
+
+model PlanningRecommendationLog {
+  id                  String   @id @default(uuid())
+  message             String
+  recommendationType  String   // OVERLOAD, RESCHEDULE, ADD_CAPACITY, DELAY
+  relatedEntityId     String?  // PlannedOrderId atau ProductionOrderId
+  relatedEntityType   String?  // 'PlannedOrder' or 'ProductionOrder'
+  createdAt           DateTime @default(now())
+
+  @@map("planning_recommendation_logs")
+}

@@ -67,6 +67,10 @@ const AppContent = () => {
       'login_monitoring': '/login-monitoring',
       'device_management': '/device-management',
       'ai_management': '/ai-management',
+      'demand_simulator': '/demand-simulator',
+      'capacity_dashboard': '/capacity-dashboard',
+      'gantt_simulation': '/gantt-simulation',
+      'plan_vs_actual': '/plan-vs-actual',
     };
     const path = tabToPath[activeTab] || '/dashboard';
     if (location.pathname !== path) navigate(path);
@@ -94,6 +98,10 @@ const pathToTab: Record<string, string> = {
   '/login-monitoring': 'login_monitoring',
   '/device-management': 'device_management',
   '/ai-management': 'ai_management',
+  '/demand-simulator': 'demand_simulator',
+  '/capacity-dashboard': 'capacity_dashboard',
+  '/gantt-simulation': 'gantt_simulation',
+  '/plan-vs-actual': 'plan_vs_actual',
 };
     const tab = pathToTab[location.pathname];
     if (tab && tab !== activeTab) setActiveTab(tab);
