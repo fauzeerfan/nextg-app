@@ -198,9 +198,84 @@ Jangan pernah memberikan informasi palsu. Jika tidak tahu, katakan tidak tahu.`
     }
   }
 
+  /**
+   * Mencari pengetahuan yang relevan dari database berdasarkan pesan pengguna.
+   * Menggunakan pencocokan sederhana dengan keywords atau substring.
+   */
+  private async searchKnowledge(message: string): Promise<{ content: string } | null> {
+    const lowerMsg = message.toLowerCase();
+    
+    // Ambil semua knowledge entries
+    const allKnowledge = await this.prisma.aiKnowledge.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 50, // batasi untuk performa
+    });
+
+    if (allKnowledge.length === 0) return null;
+
+    // Cari yang paling relevan: cek keywords dulu
+    for (const k of allKnowledge) {
+      if (k.keywords) {
+        const keywords = k.keywords.toLowerCase().split(',').map(kw => kw.trim());
+        if (keywords.some(kw => lowerMsg.includes(kw))) {
+          return { content: k.content };
+        }
+      }
+    }
+
+    // Jika tidak ada keyword match, cek apakah pesan mengandung kata kunci dari konten (sederhana)
+    for (const k of allKnowledge) {
+      // Ambil beberapa kata pertama dari konten sebagai kata kunci
+      const contentWords = k.content.toLowerCase().split(' ').slice(0, 5);
+      if (contentWords.some(word => lowerMsg.includes(word))) {
+        return { content: k.content };
+      }
+    }
+
+    // Fallback: jika pesan user cukup pendek, coba substring match
+    if (lowerMsg.length > 10) {
+      for (const k of allKnowledge) {
+        if (k.content.toLowerCase().includes(lowerMsg) || lowerMsg.includes(k.content.toLowerCase().substring(0, 20))) {
+          return { content: k.content };
+        }
+      }
+    }
+
+    return null;
+  }
+
   // ========== PROCESS MESSAGE (MODIFIKASI) ==========
   async processMessage(message: string, userId?: string) {
     const lowerMsg = message.toLowerCase().trim();
+    
+    // ===== NEW: Check for knowledge save command =====
+    const saveKnowledgePrefix = 'tolong simpan informasi ini :';
+    if (lowerMsg.startsWith(saveKnowledgePrefix)) {
+      const knowledgeContent = message.substring(saveKnowledgePrefix.length).trim();
+      if (knowledgeContent) {
+        try {
+          // Extract possible keywords (simple: first few words)
+          const keywords = knowledgeContent.split(' ').slice(0, 5).join(',');
+          await this.prisma.aiKnowledge.create({
+            data: {
+              content: knowledgeContent,
+              keywords: keywords,
+              createdBy: userId || null,
+            },
+          });
+          const responseText = `Baik, informasi telah saya simpan. Terima kasih!`;
+          await this.prisma.aiConversation.create({
+            data: { userId: userId || null, message, response: responseText },
+          });
+          return { response: responseText, action: null, options: [{ label: '🏠 Menu Utama', value: 'menu_main' }] };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          this.logger.error(`Failed to save knowledge: ${errorMessage}`);
+          return { response: 'Maaf, terjadi kesalahan saat menyimpan informasi.', action: null, options: [{ label: '🏠 Menu Utama', value: 'menu_main' }] };
+        }
+      }
+    }
+    // ===== END NEW =====
 
     // Deteksi pilihan menu dari quick reply
     let responseText = '';
@@ -254,10 +329,14 @@ Jangan pernah memberikan informasi palsu. Jika tidak tahu, katakan tidak tahu.`
         }
       }
       if (!matchedIntent) {
-        // === INI BAGIAN BARU: tidak ada intent cocok, panggil AI eksternal ===
-        responseText = await this.callExternalAI(message);
-        // Tidak menambahkan options agar user bisa lanjut ngobrol natural
-        // Tapi tetap beri tombol kembali ke menu utama
+        // === Cari di knowledge base terlebih dahulu ===
+        const knowledge = await this.searchKnowledge(message);
+        if (knowledge) {
+          responseText = `Berdasarkan informasi yang saya simpan:\n\n${knowledge.content}`;
+        } else {
+          // === Tidak ada di knowledge base, panggil AI eksternal ===
+          responseText = await this.callExternalAI(message);
+        }
         options = [{ label: '🏠 Menu Utama', value: 'menu_main' }];
       } else {
         const type = matchedIntent.responseType;

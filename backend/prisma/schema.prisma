@@ -541,6 +541,18 @@ model AiConversation {
   @@map("ai_conversations")
 }
 
+// ========== AI Knowledge Base ==========
+model AiKnowledge {
+  id          String   @id @default(uuid())
+  content     String   @db.Text  // The knowledge/information stored
+  keywords    String?  // Optional keywords for better retrieval (comma separated)
+  createdBy   String?  // Optional user ID or username
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("ai_knowledge")
+}
+
 // ========== Production Planning (PPIC Module) ==========
 model PlannedOrder {
   id               String   @id @default(uuid())
