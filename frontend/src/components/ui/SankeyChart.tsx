@@ -6,7 +6,7 @@ interface SankeyNode {
   id: string;
   name: string;
   type: string;
-  employees?: Array<{ nik: string; name: string; exLine?: string }>; // updated: array of objects
+  employees?: Array<{ nik: string; name: string; exLine?: string }>;
 }
 
 interface SankeyLink {
@@ -79,10 +79,6 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
       limit--;
     }
 
-    const alignByDate = (node: any) => {
-      return nodeLayerMap.get(node.id) || 0;
-    };
-
     // 4. Kalkulasi Lebar Dinamis & Margin
     const maxLayer = Math.max(0, ...Array.from(nodeLayerMap.values()));
     const columnSpacing = 200;
@@ -100,10 +96,11 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
       .style('background', 'transparent')
       .style('font-family', "'Poppins', sans-serif");
 
+    // --- SANKEY GENERATOR (tanpa nodeAlign) ---
     const sankeyGenerator = d3Sankey<any, any>()
       .nodeWidth(nodeWidth)
       .nodePadding(nodePadding)
-      .nodeAlign(alignByDate as any)
+      // .nodeAlign(alignByDate as any)   // ❌ dihapus sesuai instruksi
       .extent([[margin.left, margin.top], [dynamicWidth - margin.right, height - margin.bottom]]);
 
     const sankeyData = {
@@ -112,6 +109,21 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
     };
 
     const { nodes: sankeyNodes, links: sankeyLinks } = sankeyGenerator(sankeyData);
+
+    // ===== PERBAIKAN: Atur ulang posisi X node berdasarkan kolom tanggal =====
+    const layers = Array.from(nodeLayerMap.values());
+    const maxLayerManual = Math.max(...layers, 0);
+    const columnSpacingManual = (dynamicWidth - margin.left - margin.right) / Math.max(1, maxLayerManual);
+
+    sankeyNodes.forEach((node: any) => {
+      const layer = nodeLayerMap.get(node.id) ?? 0;
+      node.x0 = margin.left + layer * columnSpacingManual;
+      node.x1 = node.x0 + nodeWidth;
+    });
+
+    // Perbarui layout dengan posisi node yang sudah diatur ulang
+    sankeyGenerator.update(sankeyData);
+    // ===== AKHIR PERBAIKAN =====
 
     // --- PALET WARNA MODERN, SOLID, & EYE-CATCHING ---
     const vibrantColors = [
