@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Minimize2, Maximize2 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext'; // <-- import
+import { useNavigation } from '../../context/NavigationContext'; // <-- Ganti import
+import { useAuth } from '../../context/AuthContext';
 
 const API_BASE_URL = 'http://localhost:3000';
 
@@ -13,10 +14,10 @@ interface ChatMessage {
 }
 
 export const AiChatWidget: React.FC = () => {
-  const { user } = useAuth(); // <-- ambil user
+  const { user } = useAuth();
+  const { navigateToPath } = useNavigation(); // <-- Gunakan navigateToPath dari context
   const allowedMenus = (user as any)?.allowedMenus || [];
 
-  // Jika user tidak memiliki akses AI Chat, jangan render widget
   if (!allowedMenus.includes('ai_chat')) {
     return null;
   }
@@ -80,10 +81,9 @@ export const AiChatWidget: React.FC = () => {
       };
       setMessages(prev => [...prev, botMsg]);
 
+      // Ganti navigate dengan navigateToPath
       if (data.action?.type === 'navigate') {
-        setTimeout(() => {
-          window.location.href = data.action.path;
-        }, 1500);
+        navigateToPath(data.action.path);
       }
     } catch (error) {
       setMessages(prev => [...prev, { id: Date.now().toString(), text: 'Maaf, terjadi kesalahan.', isUser: false }]);
@@ -94,7 +94,7 @@ export const AiChatWidget: React.FC = () => {
 
   const handleOptionClick = (option: any) => {
     if (option.type === 'navigate') {
-      window.location.href = option.value;
+      navigateToPath(option.value); // <-- Ganti navigate dengan navigateToPath
     } else {
       sendMessage(option.value);
     }

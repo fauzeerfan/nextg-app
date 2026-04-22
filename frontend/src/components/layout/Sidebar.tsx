@@ -7,6 +7,7 @@ import {
   BarChart3, History, Scan, Calendar, Target, LogIn, Cpu, Bot, TrendingUp
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { useNavigation } from '../../context/NavigationContext'; // <-- tambah import
 import { NextGLogo } from '../ui/Logo';
 
 interface UserData {
@@ -21,8 +22,8 @@ interface UserData {
 }
 
 interface SidebarProps {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
+  // activeTab: string;            // <-- dihapus
+  // setActiveTab: (tab: string) => void; // <-- dihapus
   isMobile: boolean;
   isOpen: boolean;
   toggleSidebar: () => void;
@@ -33,8 +34,8 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  activeTab,
-  setActiveTab,
+  // activeTab,       // <-- dihapus
+  // setActiveTab,    // <-- dihapus
   isMobile,
   isOpen,
   toggleSidebar,
@@ -46,6 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const { activeTab, setActiveTab, navigateToTab } = useNavigation(); // <-- gunakan context
   const [openGroup, setOpenGroup] = useState<number | null>(0); // Grup pertama (HOME) terbuka default
 
   const getAvatarUrl = (seed: string) => {
@@ -147,38 +149,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setOpenGroup(prev => prev === index ? null : index);
   };
 
+  // Gunakan navigateToTab dari context
   const handleTabClick = (tabId: string) => {
-    setActiveTab(tabId);
-    const tabToPath: Record<string, string> = {
-      'dashboard': '/dashboard',
-      'cutting_entan': '/cutting-entan',
-      'cutting_pond': '/cutting-pond',
-      'cp': '/check-panel',
-      'sewing': '/sewing',
-      'qc': '/quality-control',
-      'packing': '/packing',
-      'fg': '/finished-goods',
-      'reports': '/reports',
-      'traceability': '/traceability',
-      'line_master': '/line-master',
-      'pattern_master': '/pattern-master',
-      'user_management': '/user-management',
-      'employee_management': '/employee-management',
-      'manpower_control': '/manpower-control',
-      'manpower_monitoring': '/manpower-monitoring',
-      'target_management': '/target-management',
-      'target_monitoring': '/target-monitoring',
-      'login_monitoring': '/login-monitoring',
-      'device_management': '/device-management',
-      'ai_management': '/ai-management',
-    };
-    const path = tabToPath[tabId];
-    if (path) {
-      navigate(path);
-      if (isMobile) toggleSidebar();
-    }
+    navigateToTab(tabId);
+    if (isMobile) toggleSidebar();
   };
 
+  // Sinkronisasi path ke tab (untuk back/forward browser)
   React.useEffect(() => {
     const pathToTab: Record<string, string> = {
       '/dashboard': 'dashboard',
@@ -204,8 +181,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       '/ai-management': 'ai_management',
     };
     const tab = pathToTab[location.pathname];
-    if (tab && tab !== activeTab) setActiveTab(tab);
-  }, [location.pathname, setActiveTab]);
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab);
+      localStorage.setItem('nextg_active_tab', tab);
+    }
+  }, [location.pathname, activeTab, setActiveTab]);
 
   const renderUserInfo = () => {
     if (sessionType === 'single' && currentUser) {

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { NavigationProvider } from './context/NavigationContext'; // <-- tambah import
+import { useNavigation } from './context/NavigationContext'; // <-- tambah import
 import { LoginView } from './features/auth/LoginView';
 import { AppRouter } from './routes/AppRouter';
 import { Sidebar } from './components/layout/Sidebar';
@@ -22,11 +24,10 @@ const AppContent = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, token, isAuthenticated, login, logout, sessionType, users } = useAuth();
-  
+  const { activeTab, setActiveTab } = useNavigation(); // <-- gunakan context
+
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(() => {
-    return localStorage.getItem('nextg_active_tab') || 'dashboard';
-  });
+  // Hapus state activeTab lokal
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [showSplashPopup, setShowSplashPopup] = useState(false);
@@ -44,72 +45,44 @@ const AppContent = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Sync URL with activeTab
+  // HAPUS useEffect pertama (navigate berdasarkan activeTab)
+  
+  // Pertahankan useEffect sinkronisasi path ke tab (untuk back/forward)
   useEffect(() => {
-    const tabToPath: Record<string, string> = {
-      'dashboard': '/dashboard',
-      'cutting_entan': '/cutting-entan',
-      'cutting_pond': '/cutting-pond',
-      'cp': '/check-panel',
-      'sewing': '/sewing',
-      'qc': '/quality-control',
-      'packing': '/packing',
-      'fg': '/finished-goods',
-      'reports': '/reports',
-      'traceability': '/traceability',
-      'line_master': '/line-master',
-      'user_management': '/user-management',
-      'employee_management': '/employee-management',
-      'manpower_control': '/manpower-control',
-      'manpower_monitoring': '/manpower-monitoring',
-      'target_management': '/target-management',
-      'target_monitoring': '/target-monitoring',
-      'login_monitoring': '/login-monitoring',
-      'device_management': '/device-management',
-      'ai_management': '/ai-management',
-      'demand_simulator': '/demand-simulator',
-      'capacity_dashboard': '/capacity-dashboard',
-      'gantt_simulation': '/gantt-simulation',
-      'plan_vs_actual': '/plan-vs-actual',
+    const pathToTab: Record<string, string> = {
+      '/dashboard': 'dashboard',
+      '/cutting-entan': 'cutting_entan',
+      '/cutting-pond': 'cutting_pond',
+      '/check-panel': 'cp',
+      '/sewing': 'sewing',
+      '/quality-control': 'qc',
+      '/packing': 'packing',
+      '/finished-goods': 'fg',
+      '/reports': 'reports',
+      '/traceability': 'traceability',
+      '/line-master': 'line_master',
+      '/user-management': 'user_management',
+      '/employee-management': 'employee_management',
+      '/manpower-control': 'manpower_control',
+      '/manpower-monitoring': 'manpower_monitoring',
+      '/target-management': 'target_management',
+      '/target-monitoring': 'target_monitoring',
+      '/login-monitoring': 'login_monitoring',
+      '/device-management': 'device_management',
+      '/ai-management': 'ai_management',
+      '/demand-simulator': 'demand_simulator',
+      '/capacity-dashboard': 'capacity_dashboard',
+      '/gantt-simulation': 'gantt_simulation',
+      '/plan-vs-actual': 'plan_vs_actual',
     };
-    const path = tabToPath[activeTab] || '/dashboard';
-    if (location.pathname !== path) navigate(path);
-  }, [activeTab, navigate, location.pathname]);
-
-  useEffect(() => {
-const pathToTab: Record<string, string> = {
-  '/dashboard': 'dashboard',
-  '/cutting-entan': 'cutting_entan',
-  '/cutting-pond': 'cutting_pond',
-  '/check-panel': 'cp',
-  '/sewing': 'sewing',
-  '/quality-control': 'qc',        // perbaikan untuk QC
-  '/packing': 'packing',           // perbaikan untuk Packing
-  '/finished-goods': 'fg',
-  '/reports': 'reports',
-  '/traceability': 'traceability',
-  '/line-master': 'line_master',
-  '/user-management': 'user_management',
-  '/employee-management': 'employee_management',
-  '/manpower-control': 'manpower_control',
-  '/manpower-monitoring': 'manpower_monitoring',
-  '/target-management': 'target_management',
-  '/target-monitoring': 'target_monitoring',
-  '/login-monitoring': 'login_monitoring',
-  '/device-management': 'device_management',
-  '/ai-management': 'ai_management',
-  '/demand-simulator': 'demand_simulator',
-  '/capacity-dashboard': 'capacity_dashboard',
-  '/gantt-simulation': 'gantt_simulation',
-  '/plan-vs-actual': 'plan_vs_actual',
-};
     const tab = pathToTab[location.pathname];
-    if (tab && tab !== activeTab) setActiveTab(tab);
-  }, [location.pathname]);
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab);
+      localStorage.setItem('nextg_active_tab', tab);
+    }
+  }, [location.pathname, activeTab, setActiveTab]);
 
-  useEffect(() => {
-    if (isAuthenticated) localStorage.setItem('nextg_active_tab', activeTab);
-  }, [activeTab, isAuthenticated]);
+  // HAPUS useEffect ketiga (penyimpanan localStorage terpisah)
 
   const handleLogin = (userData: any, token: string, sessionType?: 'single' | 'multi', additionalUsers?: any[]) => {
     if (sessionType === 'multi') {
@@ -119,7 +92,7 @@ const pathToTab: Record<string, string> = {
     } else {
       login(token, { ...userData, id: Number(userData.id) }, 'single');
     }
-    setActiveTab('dashboard');
+    setActiveTab('dashboard'); // ganti dari setActiveTab lokal ke context
     setShowSplashPopup(true);
   };
 
@@ -179,8 +152,7 @@ const pathToTab: Record<string, string> = {
       <div className="flex min-h-screen font-sans transition-colors duration-300 bg-slate-100 dark:bg-slate-950 text-black dark:text-white">
         <div className="hidden md:block">
           <Sidebar 
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
+
             isMobile={isMobile}
             isOpen={isSidebarOpen}
             toggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
@@ -196,8 +168,7 @@ const pathToTab: Record<string, string> = {
         {isMobile && (
           <div className={`fixed inset-y-0 left-0 z-50 md:hidden transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <Sidebar 
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
+
               isMobile={isMobile}
               isOpen={isSidebarOpen}
               toggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
@@ -231,7 +202,9 @@ export default function NextGApp() {
     <ThemeProvider>
       <Router>
         <AuthProvider>
-          <AppContent />
+          <NavigationProvider>   {/* <-- tambahkan */}
+            <AppContent />
+          </NavigationProvider>
         </AuthProvider>
       </Router>
     </ThemeProvider>
