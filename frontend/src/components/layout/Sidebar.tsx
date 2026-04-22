@@ -61,15 +61,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'text-blue-500' },
       ]
     },
-    {
-      title: "PRODUCTION PLANNING",
-      items: [
-        { id: 'demand_simulator', label: 'Demand Simulator', icon: Calendar, color: 'text-sky-500' },
-        { id: 'capacity_dashboard', label: 'Capacity Dashboard', icon: BarChart3, color: 'text-amber-500' },
-        { id: 'gantt_simulation', label: 'Planning Gantt', icon: Calendar, color: 'text-purple-500' },
-        { id: 'plan_vs_actual', label: 'Plan vs Actual', icon: TrendingUp, color: 'text-emerald-500' },
-      ]
-    },
+  {
+    title: (
+      <>
+        <div>PRODUCTION PLANNING</div>
+        <div className="text-sm text-gray-400">(COMING SOON)</div>
+      </>
+    ),
+    items: [
+      { id: 'demand_simulator', label: 'Demand Simulator', icon: Calendar, color: 'text-sky-500' },
+      { id: 'capacity_dashboard', label: 'Capacity Dashboard', icon: BarChart3, color: 'text-amber-500' },
+      { id: 'gantt_simulation', label: 'Planning Gantt', icon: Calendar, color: 'text-purple-500' },
+      { id: 'plan_vs_actual', label: 'Plan vs Actual', icon: TrendingUp, color: 'text-emerald-500' },
+    ]
+  },
     {
       title: "PRODUCTION EXECUTION",
       items: [
