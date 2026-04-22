@@ -21,6 +21,7 @@ import { TargetManagementModule } from './target-management/target-management.mo
 import { TargetMonitoringModule } from './target-monitoring/target-monitoring.module';
 import { AiModule } from './ai/ai.module';
 import { ProductionPlanningModule } from './production-planning/production-planning.module';
+import { InboundWarehouseModule } from './inbound-warehouse/inbound-warehouse.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { ProductionPlanningModule } from './production-planning/production-plann
     TargetMonitoringModule,
     AiModule,
     ProductionPlanningModule,
+    InboundWarehouseModule,
   ],
   controllers: [AppController],
 })

@@ -568,3 +568,122 @@ model PlanningRecommendationLog {
 
   @@map("planning_recommendation_logs")
 }
+
+// ========== INBOUND MATERIAL MANAGEMENT ==========
+model Supplier {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  name          String
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  purchaseOrders   PurchaseOrder[]
+  receivingHeaders ReceivingHeader[]
+}
+
+model Material {
+  id               String   @id @default(uuid())
+  materialNumber   String   @unique
+  description      String
+  uom              String
+  category         String?
+  minStock         Int?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  poDetails        PurchaseOrderDetail[]
+  receivingDetails ReceivingDetail[]
+  inventory        MaterialInventory[]
+}
+
+model PurchaseOrder {
+  id            String   @id @default(uuid())
+  poNumber      String   @unique
+  supplierId    String
+  orderDate     DateTime
+  expectedDate  DateTime?
+  status        String   @default("OPEN")
+  note          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  supplier         Supplier          @relation(fields: [supplierId], references: [id])
+  details          PurchaseOrderDetail[]
+  receivingHeaders ReceivingHeader[]
+}
+
+model PurchaseOrderDetail {
+  id          String   @id @default(uuid())
+  poId        String
+  materialId  String
+  orderedQty  Int
+  receivedQty Int      @default(0)
+  unitPrice   Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id])
+  material      Material      @relation(fields: [materialId], references: [id])
+  receivingDetails ReceivingDetail[]
+}
+
+model ReceivingHeader {
+  id                  String   @id @default(uuid())
+  grnNumber           String   @unique
+  supplierId          String
+  poId                String?
+  deliveryNoteNumber  String
+  receivedDate        DateTime @default(now())
+  status              String   @default("RECEIVED")
+  note                String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  supplier      Supplier          @relation(fields: [supplierId], references: [id])
+  purchaseOrder PurchaseOrder?    @relation(fields: [poId], references: [id])
+  details       ReceivingDetail[]
+}
+
+model ReceivingDetail {
+  id               String   @id @default(uuid())
+  headerId         String
+  materialId       String
+  poDetailId       String?
+  receivedQty      Int
+  acceptedQty      Int
+  rejectedQty      Int
+  rejectionReason  String?
+  batchLotNumber   String?
+  expirationDate   DateTime?
+  status           String   @default("PENDING_PUTAWAY")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  receivingHeader  ReceivingHeader   @relation(fields: [headerId], references: [id])
+  material         Material          @relation(fields: [materialId], references: [id])
+  purchaseOrderDetail PurchaseOrderDetail? @relation(fields: [poDetailId], references: [id])
+  inventory        MaterialInventory[]
+}
+
+model MaterialInventory {
+  id                 String   @id @default(uuid())
+  materialId         String
+  receivingDetailId  String
+  storageLocation    String
+  batchLotNumber     String?
+  qtyOnHand          Int
+  status             String   @default("AVAILABLE")
+  lastUpdated        DateTime @updatedAt
+  createdAt          DateTime @default(now())
+
+  material         Material         @relation(fields: [materialId], references: [id])
+  receivingDetail  ReceivingDetail  @relation(fields: [receivingDetailId], references: [id])
+
+  @@unique([materialId, receivingDetailId, storageLocation, batchLotNumber])
+}

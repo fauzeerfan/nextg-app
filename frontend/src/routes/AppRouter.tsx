@@ -24,6 +24,9 @@ import { DemandSimulatorView } from '../features/production-planning/DemandSimul
 import { CapacityDashboardView } from '../features/production-planning/CapacityDashboardView';
 import { GanttSimulationView } from '../features/production-planning/GanttSimulationView';
 import { PlanVsActualView } from '../features/production-planning/PlanVsActualView';
+import { InboundReceivingView } from '../features/inventory-management/InboundReceivingView';
+import { InspectionStorageView } from '../features/inventory-management/InspectionStorageView';
+import { InventoryControlView } from '../features/inventory-management/InventoryControlView';
 
 interface AppRouterProps {
   activeTab: string;
@@ -63,6 +66,9 @@ export const AppRouter: React.FC<AppRouterProps> = ({
     'capacity_dashboard': <CapacityDashboardView />,
     'gantt_simulation': <GanttSimulationView />,
     'plan_vs_actual': <PlanVsActualView />,
+    'inbound_receiving': <InboundReceivingView />,
+    'inspection_storage': <InspectionStorageView />,
+    'inventory_control': <InventoryControlView />,
   };
 
   return (
@@ -99,6 +105,11 @@ export const AppRouter: React.FC<AppRouterProps> = ({
       <Route path="/capacity-dashboard" element={tabComponents['capacity_dashboard']} />
       <Route path="/gantt-simulation" element={tabComponents['gantt_simulation']} />
       <Route path="/plan-vs-actual" element={tabComponents['plan_vs_actual']} />
+
+      {/* Inventory Management */}
+      <Route path="/inbound-receiving" element={tabComponents['inbound_receiving']} />
+      <Route path="/inspection-storage" element={tabComponents['inspection_storage']} />
+      <Route path="/inventory-control" element={tabComponents['inventory_control']} />      
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

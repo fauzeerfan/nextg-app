@@ -28,6 +28,9 @@ const tabToPath: Record<string, string> = {
   capacity_dashboard: '/capacity-dashboard',
   gantt_simulation: '/gantt-simulation',
   plan_vs_actual: '/plan-vs-actual',
+inbound_receiving: '/inbound-receiving',
+  inspection_storage: '/inspection-storage',
+  inventory_control: '/inventory-control',
 };
 
 // Mapping dari path ke ID tab (untuk sinkronisasi satu arah)

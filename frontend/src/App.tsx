@@ -74,6 +74,9 @@ const AppContent = () => {
       '/capacity-dashboard': 'capacity_dashboard',
       '/gantt-simulation': 'gantt_simulation',
       '/plan-vs-actual': 'plan_vs_actual',
+      '/inbound-receiving': 'inbound_receiving',
+      '/inspection-storage': 'inspection_storage',
+      '/inventory-control': 'inventory_control',
     };
     const tab = pathToTab[location.pathname];
     if (tab && tab !== activeTab) {

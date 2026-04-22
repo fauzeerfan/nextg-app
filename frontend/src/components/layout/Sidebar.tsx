@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Scissors, Grid, ClipboardCheck, Shirt,
   CheckCircle, Package, Truck, Factory, Users,
   PanelLeftClose, PanelLeftOpen, LogOut, Sun, Moon,
-  BarChart3, History, Scan, Calendar, Target, LogIn, Cpu, Bot, TrendingUp
+  BarChart3, History, Scan, Calendar, Target, LogIn, Cpu, Bot, TrendingUp, Box
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigation } from '../../context/NavigationContext'; // <-- tambah import
@@ -61,20 +61,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'text-blue-500' },
       ]
     },
-  {
-    title: (
-      <>
-        <div>PRODUCTION PLANNING</div>
-        <div className="text-sm text-gray-400">(COMING SOON)</div>
-      </>
-    ),
+    {
+      title: (
+        <>
+          <div>INVENTORY MANAGEMENT</div>
+          <div className="text-sm text-red-500">(COMING SOON)</div>
+        </>
+      ),
     items: [
-      { id: 'demand_simulator', label: 'Demand Simulator', icon: Calendar, color: 'text-sky-500' },
-      { id: 'capacity_dashboard', label: 'Capacity Dashboard', icon: BarChart3, color: 'text-amber-500' },
-      { id: 'gantt_simulation', label: 'Planning Gantt', icon: Calendar, color: 'text-purple-500' },
-      { id: 'plan_vs_actual', label: 'Plan vs Actual', icon: TrendingUp, color: 'text-emerald-500' },
+      { id: 'inbound_receiving', label: 'Inbound Receiving', icon: Truck, color: 'text-amber-500' },
+      { id: 'inspection_storage', label: 'Inspection & Storage', icon: Package, color: 'text-emerald-500' },
+      { id: 'inventory_control', label: 'Inventory Control', icon: Box, color: 'text-blue-500' },
     ]
-  },
+    },
+    {
+      title: (
+        <>
+          <div>PRODUCTION PLANNING</div>
+          <div className="text-sm text-red-500">(COMING SOON)</div>
+        </>
+      ),
+      items: [
+        { id: 'demand_simulator', label: 'Demand Simulator', icon: Calendar, color: 'text-sky-500' },
+        { id: 'capacity_dashboard', label: 'Capacity Dashboard', icon: BarChart3, color: 'text-amber-500' },
+        { id: 'gantt_simulation', label: 'Planning Gantt', icon: Calendar, color: 'text-purple-500' },
+        { id: 'plan_vs_actual', label: 'Plan vs Actual', icon: TrendingUp, color: 'text-emerald-500' },
+      ]
+    },
     {
       title: "PRODUCTION EXECUTION",
       items: [
@@ -88,10 +101,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ]
     },
     {
-      title: "OPERATIONS CONTROL",
+      title: "PRODUCTION MONITORING",
       items: [
         { id: 'target_monitoring', label: 'Target Monitoring', icon: BarChart3, color: 'text-amber-500' },
-        { id: 'login_monitoring', label: 'Login Monitoring', icon: LogIn, color: 'text-blue-500' },
+        
         { id: 'manpower_monitoring', label: 'Manpower Monitoring', icon: Calendar, color: 'text-purple-500' },
         { id: 'manpower_control', label: 'Manpower Control', icon: Scan, color: 'text-green-500' },
       ]
@@ -112,6 +125,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'target_management', label: 'Target Management', icon: Target, color: 'text-amber-500' },
         { id: 'device_management', label: 'Device Management', icon: Cpu, color: 'text-cyan-500' },
         { id: 'ai_management', label: 'AI Management', icon: Bot, color: 'text-purple-500' },
+        { id: 'login_monitoring', label: 'Login Monitoring', icon: LogIn, color: 'text-blue-500' },
       ]
     },
   ];
@@ -184,6 +198,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       '/login-monitoring': 'login_monitoring',
       '/device-management': 'device_management',
       '/ai-management': 'ai_management',
+      '/inbound-receiving': 'inbound_receiving',
+      '/inspection-storage': 'inspection_storage',
+      '/inventory-control': 'inventory_control',
     };
     const tab = pathToTab[location.pathname];
     if (tab && tab !== activeTab) {
