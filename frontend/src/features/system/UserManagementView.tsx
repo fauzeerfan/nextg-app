@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Users, UserPlus, Edit, Save, Shield, Lock, Unlock, Mail, Building,
-  CheckCircle, Eye, EyeOff, Key, Trash2, XCircle, Search,
-  Calendar, Loader2, UserCheck, Target, TrendingUp, Star, AlertCircle,
+  CheckCircle, Eye, EyeOff, Trash2, XCircle, Search,
+  Calendar, Loader2, UserCheck, TrendingUp, Star, AlertCircle,
   ArrowRight, UserCog, Hash, Layers
 } from 'lucide-react';
 
@@ -113,7 +113,6 @@ export const UserManagementView = () => {
   const [f, setF] = useState({
     username: '', fullName: '', email: '', role: 'OPERATOR' as SystemUser['role'],
     department: '', jobTitle: '', lineCode: '', isActive: true,
-    allowedStations: [] as string[],
     allowedMenus: [] as string[],
     password: ''
   });
@@ -136,7 +135,7 @@ export const UserManagementView = () => {
 
   const select = (u: SystemUser) => { setSel(u); setEdit(false); setCreate(false); };
   const newUser = () => {
-    setF({ username: '', fullName: '', email: '', role: 'OPERATOR', department: '', jobTitle: '', lineCode: '', isActive: true, allowedStations: [], allowedMenus: [], password: 'password123' });
+    setF({ username: '', fullName: '', email: '', role: 'OPERATOR', department: '', jobTitle: '', lineCode: '', isActive: true, allowedMenus: [], password: 'password123' });
     setChPw(false); setSel(null); setCreate(true); setEdit(true);
   };
   const editUser = () => {
@@ -144,7 +143,6 @@ export const UserManagementView = () => {
       username: sel.username, fullName: sel.fullName, email: sel.email || '', role: sel.role,
       department: sel.department || '', jobTitle: sel.jobTitle || '', lineCode: sel.lineCode || '',
       isActive: sel.isActive ?? true,
-      allowedStations: sel.allowedStations || [],
       allowedMenus: (sel as any).allowedMenus || [],
       password: ''
     });
@@ -157,7 +155,7 @@ export const UserManagementView = () => {
       const payload: any = {
         username: f.username, fullName: f.fullName, email: f.email, role: f.role,
         department: f.department, jobTitle: f.jobTitle, lineCode: f.lineCode,
-        allowedStations: f.allowedStations, allowedMenus: f.allowedMenus, isActive: f.isActive
+        allowedMenus: f.allowedMenus, isActive: f.isActive
       };
       if (create) payload.password = f.password || '123456';
       else if (chPw && f.password) payload.password = f.password;
@@ -482,7 +480,7 @@ export const UserManagementView = () => {
                   <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-4 shadow-sm">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-xl text-amber-600 dark:text-amber-400 font-bold">
-                        <Target size={16} />
+                        <Hash size={16} />
                       </div>
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Line Code</p>
                     </div>
@@ -506,47 +504,8 @@ export const UserManagementView = () => {
                   </div>
                 </div>
 
-                {/* Stations Details */}
+                {/* Menu Access Rights (View Mode) */}
                 <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Station Access Rights</h3>
-                      <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-1">User is granted access to {(sel.allowedStations?.length || 0)} production stations.</p>
-                    </div>
-                    <div className="p-2 bg-blue-600 rounded-xl text-white shadow-md shadow-blue-600/30">
-                      <Key size={16} />
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {stationOpts.map(o => {
-                      const has = (sel.allowedStations || []).includes(o.value);
-                      return (
-                        <div
-                          key={o.value}
-                          className={`p-3 rounded-xl border-2 transition-all ${has
-                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm'
-                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 opacity-60'
-                            }`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <div className={`p-1.5 rounded-lg ${has ? 'bg-blue-200 dark:bg-blue-800/50 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
-                              <Target size={14} />
-                            </div>
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center ${has ? 'bg-blue-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-400'}`}>
-                                {has ? <CheckCircle size={12} /> : <XCircle size={12} />}
-                            </div>
-                          </div>
-                          <div className={`font-black text-[11px] leading-tight ${has ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>{o.label}</div>
-                          <div className={`text-[9px] font-bold mt-1 uppercase ${has ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>{o.value}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Menu Access Rights */}
-                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 mt-6">
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Menu Access Rights</h3>
@@ -605,7 +564,16 @@ export const UserManagementView = () => {
                   </div>
                   <div className="flex flex-wrap gap-3 w-full lg:w-auto">
                     <button
-                      onClick={() => { setEdit(false); setCreate(false); if (sel) setF({ username: sel.username, fullName: sel.fullName, email: sel.email || '', role: sel.role, department: sel.department || '', jobTitle: sel.jobTitle || '', lineCode: sel.lineCode || '', isActive: sel.isActive ?? true, allowedStations: sel.allowedStations || [], allowedMenus: (sel as any).allowedMenus || [], password: '' }); }}
+                      onClick={() => { 
+                        setEdit(false); setCreate(false); 
+                        if (sel) setF({ 
+                          username: sel.username, fullName: sel.fullName, email: sel.email || '', role: sel.role, 
+                          department: sel.department || '', jobTitle: sel.jobTitle || '', lineCode: sel.lineCode || '', 
+                          isActive: sel.isActive ?? true, 
+                          allowedMenus: (sel as any).allowedMenus || [], 
+                          password: '' 
+                        }); 
+                      }}
                       className="flex-1 lg:flex-none px-5 py-2.5 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:border-slate-400 transition-all text-sm shadow-sm active:scale-95"
                     >
                       Cancel

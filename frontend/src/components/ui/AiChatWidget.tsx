@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Minimize2, Maximize2 } from 'lucide-react';
-import { useNavigation } from '../../context/NavigationContext'; // <-- Ganti import
+import { useNavigation } from '../../context/NavigationContext';
 import { useAuth } from '../../context/AuthContext';
 
 const API_BASE_URL = 'http://localhost:3000';
@@ -15,7 +15,7 @@ interface ChatMessage {
 
 export const AiChatWidget: React.FC = () => {
   const { user } = useAuth();
-  const { navigateToPath } = useNavigation(); // <-- Gunakan navigateToPath dari context
+  const { navigateToPath } = useNavigation();
   const allowedMenus = (user as any)?.allowedMenus || [];
 
   if (!allowedMenus.includes('ai_chat')) {
@@ -23,7 +23,7 @@ export const AiChatWidget: React.FC = () => {
   }
 
   const [isOpen, setIsOpen] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: '1', text: 'Halo! Saya Feby, asisten AI Anda. Ada yang bisa saya bantu?', isUser: false },
   ]);
@@ -81,7 +81,6 @@ export const AiChatWidget: React.FC = () => {
       };
       setMessages(prev => [...prev, botMsg]);
 
-      // Ganti navigate dengan navigateToPath
       if (data.action?.type === 'navigate') {
         navigateToPath(data.action.path);
       }
@@ -94,7 +93,7 @@ export const AiChatWidget: React.FC = () => {
 
   const handleOptionClick = (option: any) => {
     if (option.type === 'navigate') {
-      navigateToPath(option.value); // <-- Ganti navigate dengan navigateToPath
+      navigateToPath(option.value);
     } else {
       sendMessage(option.value);
     }
@@ -102,11 +101,17 @@ export const AiChatWidget: React.FC = () => {
 
   const toggleChat = () => {
     setIsOpen(!isOpen);
-    setIsMinimized(false);
+    setIsMaximized(false);
   };
 
-  const minimize = () => setIsMinimized(true);
-  const restore = () => setIsMinimized(false);
+  const closeChat = () => {
+    setIsOpen(false);
+    setIsMaximized(false);
+  };
+
+  const toggleMaximize = () => {
+    setIsMaximized(!isMaximized);
+  };
 
   if (!isOpen) {
     return (
@@ -121,7 +126,11 @@ export const AiChatWidget: React.FC = () => {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-[500px] h-[650px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700 animate-in slide-in-from-bottom-5 duration-300">
+    <div
+      className={`fixed bottom-6 right-6 z-50 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700 transition-all ${
+        isMaximized ? 'inset-0 w-auto h-auto' : 'w-[500px] h-[650px]'
+      }`}
+    >
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3 flex justify-between items-center">
         <div className="flex items-center gap-2">
@@ -129,16 +138,18 @@ export const AiChatWidget: React.FC = () => {
           <span className="font-bold text-white">Feby - AI Assistant</span>
         </div>
         <div className="flex gap-2">
-          {isMinimized ? (
-            <button onClick={restore} className="text-white hover:bg-white/20 rounded p-1">
-              <Maximize2 size={16} />
-            </button>
-          ) : (
-            <button onClick={minimize} className="text-white hover:bg-white/20 rounded p-1">
-              <Minimize2 size={16} />
-            </button>
-          )}
-          <button onClick={toggleChat} className="text-white hover:bg-white/20 rounded p-1">
+          <button
+            onClick={toggleMaximize}
+            className="text-white hover:bg-white/20 rounded p-1"
+            title={isMaximized ? 'Minimize' : 'Maximize'}
+          >
+            {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+          <button
+            onClick={closeChat}
+            className="text-white hover:bg-white/20 rounded p-1"
+            title="Close"
+          >
             <X size={16} />
           </button>
         </div>

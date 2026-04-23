@@ -75,137 +75,160 @@ export const ManpowerMonitoringView = () => {
   }, []);
 
   // Fungsi untuk mengambil data flow dari endpoint employee-flow-history
-  const fetchFlowData = useCallback(async () => {
-    setFlowLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (startDate) params.append('start', new Date(startDate).toISOString());
-      if (endDate) params.append('end', new Date(endDate).toISOString());
-      if (filterLine) params.append('lineCode', filterLine);
-      if (searchNik) params.append('nik', searchNik);
-      params.append('limit', '10000');
-      params.append('offset', '0');
+// ========== FETCH FLOW DATA (Sankey) ==========
+const fetchFlowData = useCallback(async () => {
+  setFlowLoading(true);
+  setError(null);
+  try {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start', new Date(startDate).toISOString());
+    if (endDate) params.append('end', new Date(endDate).toISOString());
+    if (filterLine) params.append('lineCode', filterLine);
+    if (searchNik) params.append('nik', searchNik);
+    params.append('limit', '10000');
+    params.append('offset', '0');
 
-      const url = `${API_BASE_URL}/manpower/attendance-list?${params}`;
-      const res = await fetch(url, { headers: getAuthHeaders() });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Server error: ${res.status} - ${text.substring(0, 100)}`);
-      }
-      const data = await res.json();
-      const records = data.data;
-
-      if (!records || records.length === 0) {
-        setProcessedFlow({ nodes: [], links: [] });
-        setError('Tidak ada data check-in untuk periode ini.');
-        return;
-      }
-
-      // Kelompokkan per karyawan
-      const empMap = new Map<string, { nik: string; fullName: string; attendances: any[] }>();
-      records.forEach((rec: any) => {
-        if (!empMap.has(rec.nik)) {
-          empMap.set(rec.nik, { nik: rec.nik, fullName: rec.fullName, attendances: [] });
-        }
-        empMap.get(rec.nik)!.attendances.push(rec);
-      });
-
-      const nodeMap = new Map<string, any>();
-      const linkMap = new Map<string, number>();
-
-for (const [nik, empData] of empMap.entries()) {
-  const attendances = empData.attendances.sort((a, b) => 
-    new Date(a.scanTime).getTime() - new Date(b.scanTime).getTime()
-  );
-
-  const empNodeId = `emp-${nik}`;
-  if (!nodeMap.has(empNodeId)) {
-    nodeMap.set(empNodeId, {
-      id: empNodeId,
-      name: `${empData.fullName} (${nik})`,
-      type: 'employee'
-    });
-  }
-
-  if (attendances.length === 0) continue;
-
-  // Kelompokkan attendances per tanggal
-  const perDate = new Map<string, typeof attendances>();
-  for (const att of attendances) {
-    const dateKey = new Date(att.tanggal).toISOString().split('T')[0];
-    if (!perDate.has(dateKey)) perDate.set(dateKey, []);
-    perDate.get(dateKey)!.push(att);
-  }
-
-  // Proses setiap tanggal
-  for (const [dateKey, dateAtts] of perDate.entries()) {
-    // Urutkan berdasarkan scanTime untuk menentukan line terakhir
-    dateAtts.sort((a, b) => new Date(a.scanTime).getTime() - new Date(b.scanTime).getTime());
-    
-    // Ambil semua lineCode unik dalam urutan kemunculan
-    const allLines: string[] = [];
-    for (const att of dateAtts) {
-      if (!allLines.includes(att.lineCode)) allLines.push(att.lineCode);
+    const url = `${API_BASE_URL}/manpower/attendance-list?${params}`;
+    const res = await fetch(url, { headers: getAuthHeaders() });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Server error: ${res.status} - ${text.substring(0, 100)}`);
     }
-    const finalLine = allLines[allLines.length - 1];
-    const exLines = allLines.slice(0, -1); // semua line sebelum finalLine
-    
-    // Buat teks exLine untuk tooltip
-    const exLineText = exLines.length > 0 ? `Ex: ${exLines.join(', ')}` : null;
-    
-    // Node line-date hanya untuk line terakhir
-    const nodeId = `line-${finalLine}-${dateKey}`;
-    if (!nodeMap.has(nodeId)) {
-      nodeMap.set(nodeId, {
-        id: nodeId,
-        name: `${finalLine} (${dateKey})`,
-        type: 'line-date',
-        employees: []
-      });
-    }
-    const node = nodeMap.get(nodeId);
-    if (!node.employees.some((e: any) => e.nik === nik)) {
-      node.employees.push({ 
-        nik, 
-        name: empData.fullName, 
-        exLine: exLineText,
-        exLinesList: exLines  // opsional untuk debug
-      });
-    }
-    
-    // Hanya satu link dari employee ke node line-date terakhir
-    const linkKey = `${empNodeId}->${nodeId}`;
-    linkMap.set(linkKey, (linkMap.get(linkKey) || 0) + 1);
-  }
-}
+    const data = await res.json();
+    const records = data.data;
 
-      const nodes = Array.from(nodeMap.values());
-      const nodeIndexMap = new Map<string, number>();
-      nodes.forEach((node, idx) => nodeIndexMap.set(node.id, idx));
-
-      const links = Array.from(linkMap.entries()).map(([key, value]) => {
-        const [sourceId, targetId] = key.split('->');
-        return {
-          source: nodeIndexMap.get(sourceId)!,
-          target: nodeIndexMap.get(targetId)!,
-          value
-        };
-      });
-
-      setProcessedFlow({ nodes, links });
-    } catch (err: any) {
-      console.error('Fetch error:', err);
-      if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-        setError('Tidak dapat terhubung ke server. Pastikan backend berjalan di http://localhost:3000');
-      } else {
-        setError(err.message || 'Gagal mengambil data');
-      }
+    if (!records || records.length === 0) {
       setProcessedFlow({ nodes: [], links: [] });
-    } finally {
-      setFlowLoading(false);
+      setError('Tidak ada data check-in untuk periode ini.');
+      return;
     }
-  }, [startDate, endDate, filterLine, searchNik]);
+
+    // Kelompokkan per karyawan
+    const empMap = new Map<string, { nik: string; fullName: string; attendances: any[] }>();
+    records.forEach((rec: any) => {
+      if (!empMap.has(rec.nik)) {
+        empMap.set(rec.nik, { nik: rec.nik, fullName: rec.fullName, attendances: [] });
+      }
+      empMap.get(rec.nik)!.attendances.push(rec);
+    });
+
+    const nodeMap = new Map<string, any>();
+    const linkMap = new Map<string, number>();
+
+    for (const [nik, empData] of empMap.entries()) {
+      const attendances = empData.attendances.sort((a, b) => 
+        new Date(a.scanTime).getTime() - new Date(b.scanTime).getTime()
+      );
+
+      // Buat node karyawan
+      const empNodeId = `emp-${nik}`;
+      if (!nodeMap.has(empNodeId)) {
+        nodeMap.set(empNodeId, {
+          id: empNodeId,
+          name: `${empData.fullName} (${nik})`,
+          type: 'employee'
+        });
+      }
+
+      if (attendances.length === 0) continue;
+
+      // Bangun urutan kronologis: array dari { dateKey, lineCode, station, exLines? }
+      const flowSequence: Array<{ dateKey: string; lineCode: string; station: string; exLines?: string[] }> = [];
+      
+      // Kelompokkan per tanggal, lalu ambil line terakhir di hari itu
+      const perDate = new Map<string, typeof attendances>();
+      for (const att of attendances) {
+        const dateKey = new Date(att.tanggal).toISOString().split('T')[0];
+        if (!perDate.has(dateKey)) perDate.set(dateKey, []);
+        perDate.get(dateKey)!.push(att);
+      }
+
+      // Urutkan tanggal
+      const sortedDates = Array.from(perDate.keys()).sort();
+      for (const dateKey of sortedDates) {
+        const dateAtts = perDate.get(dateKey)!;
+        dateAtts.sort((a, b) => new Date(a.scanTime).getTime() - new Date(b.scanTime).getTime());
+        
+        // Ambil semua line unik dalam urutan kemunculan
+        const allLines: string[] = [];
+        for (const att of dateAtts) {
+          if (!allLines.includes(att.lineCode)) allLines.push(att.lineCode);
+        }
+        const finalLine = allLines[allLines.length - 1];
+        const exLines = allLines.slice(0, -1);
+        
+        flowSequence.push({
+          dateKey,
+          lineCode: finalLine,
+          station: dateAtts[dateAtts.length-1].station,
+          exLines: exLines.length > 0 ? exLines : undefined
+        });
+      }
+
+      if (flowSequence.length === 0) continue;
+
+      // Buat node untuk setiap item di flowSequence (line-date)
+      const nodeIds: string[] = [];
+      for (const item of flowSequence) {
+        const nodeId = `line-${item.lineCode}-${item.dateKey}`;
+        if (!nodeMap.has(nodeId)) {
+          nodeMap.set(nodeId, {
+            id: nodeId,
+            name: `${item.lineCode} (${item.dateKey})`,
+            type: 'line-date',
+            employees: []
+          });
+        }
+        const node = nodeMap.get(nodeId);
+        // Tambahkan karyawan ke node (untuk tooltip)
+        const exLineText = item.exLines ? `Ex: ${item.exLines.join(', ')}` : null;
+        if (!node.employees.some((e: any) => e.nik === nik)) {
+          node.employees.push({ 
+            nik, 
+            name: empData.fullName, 
+            exLine: exLineText
+          });
+        }
+        nodeIds.push(nodeId);
+      }
+
+      // Link dari employee ke node pertama
+      const firstLinkKey = `${empNodeId}->${nodeIds[0]}`;
+      linkMap.set(firstLinkKey, (linkMap.get(firstLinkKey) || 0) + 1);
+
+      // Link antar node berurutan
+      for (let i = 0; i < nodeIds.length - 1; i++) {
+        const linkKey = `${nodeIds[i]}->${nodeIds[i+1]}`;
+        linkMap.set(linkKey, (linkMap.get(linkKey) || 0) + 1);
+      }
+    }
+
+    const nodes = Array.from(nodeMap.values());
+    const nodeIndexMap = new Map<string, number>();
+    nodes.forEach((node, idx) => nodeIndexMap.set(node.id, idx));
+
+    const links = Array.from(linkMap.entries()).map(([key, value]) => {
+      const [sourceId, targetId] = key.split('->');
+      return {
+        source: nodeIndexMap.get(sourceId)!,
+        target: nodeIndexMap.get(targetId)!,
+        value
+      };
+    });
+
+    setProcessedFlow({ nodes, links });
+  } catch (err: any) {
+    console.error('Fetch error:', err);
+    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      setError('Tidak dapat terhubung ke server. Pastikan backend berjalan di http://localhost:3000');
+    } else {
+      setError(err.message || 'Gagal mengambil data');
+    }
+    setProcessedFlow({ nodes: [], links: [] });
+  } finally {
+    setFlowLoading(false);
+  }
+}, [startDate, endDate, filterLine, searchNik]);
 
   // Auto-refresh setiap 30 detik
   useEffect(() => {
