@@ -113,6 +113,27 @@ export class ReportsController {
     });
   }
 
+  // ========== NEW: STATION PRODUCTION REPORT ==========
+  @Get('station-production')
+  async getStationProduction(
+    @Query('station') station: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('lineCode') lineCode?: string,
+    @Query('opNumber') opNumber?: string,
+  ) {
+    if (!station) {
+      throw new Error('Station parameter is required');
+    }
+    return this.reportsService.getStationProductionReport({
+      station,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      lineCode,
+      opNumber,
+    });
+  }
+
   // ========== EXPORTS (tetap, disesuaikan) ==========
   @Get('export/ng-cutting-pond')
   @Header('Content-Type', 'text/csv')

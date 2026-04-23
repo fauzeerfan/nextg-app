@@ -11,12 +11,20 @@ interface ReportFilter {
   groupBy?: 'line' | 'station';
 }
 
+interface StationReportFilter {
+  station: string;
+  startDate?: Date;
+  endDate?: Date;
+  lineCode?: string;
+  opNumber?: string;
+}
+
 @Injectable()
 export class ReportsService {
   constructor(private prisma: PrismaService) {}
 
   // ========== NEW: RUNNING OPS ==========
-async getRunningOps() {
+  async getRunningOps() {
     const ops = await this.prisma.productionOrder.findMany({
       where: {
         status: 'WIP',
@@ -40,7 +48,7 @@ async getRunningOps() {
 
   // ========== NG CUTTING POND & CHECK PANEL GABUNGAN ==========
   async getNgCuttingPondCheckPanel(filter: ReportFilter) {
-// Inisialisasi endOfDay di awal method
+    // Inisialisasi endOfDay di awal method
     const endOfDay = filter.endDate ? new Date(filter.endDate) : undefined;
     if (endOfDay) endOfDay.setHours(23, 59, 59, 999);
 
@@ -72,7 +80,7 @@ async getRunningOps() {
     });
 
     // 2. NG Check Panel (dari CheckPanelInspection)
-const cpWhere: any = {};
+    const cpWhere: any = {};
     if (filter.startDate && endOfDay) {
       cpWhere.createdAt = { gte: filter.startDate, lte: endOfDay };
     }
@@ -209,21 +217,21 @@ const cpWhere: any = {};
   }
 
   // ========== NG QUALITY CONTROL (tambah filter opId) ==========
-async getNgQualityControlReport(filter: ReportFilter) {
-  const where: any = {};
-  
-  // Perbaikan: Pastikan endDate mencakup hingga akhir hari (23:59:59)
-  if (filter.startDate && filter.endDate) {
-    const endOfDay = new Date(filter.endDate);
-    endOfDay.setHours(23, 59, 59, 999);
+  async getNgQualityControlReport(filter: ReportFilter) {
+    const where: any = {};
     
-    where.createdAt = { 
-      gte: filter.startDate, 
-      lte: endOfDay 
-    };
-  }
+    // Perbaikan: Pastikan endDate mencakup hingga akhir hari (23:59:59)
+    if (filter.startDate && filter.endDate) {
+      const endOfDay = new Date(filter.endDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      where.createdAt = { 
+        gte: filter.startDate, 
+        lte: endOfDay 
+      };
+    }
 
-  if (filter.opId) {
+    if (filter.opId) {
       where.opId = filter.opId;
     }
     const inspections = await this.prisma.qcInspection.findMany({
@@ -653,6 +661,226 @@ async getNgQualityControlReport(filter: ReportFilter) {
         byDate: Object.values(byDate)
       };
     }
+  }
+
+  // ========== NEW: STATION PRODUCTION REPORT ==========
+  async getStationProductionReport(filter: StationReportFilter) {
+    const { station, startDate, endDate, lineCode, opNumber } = filter;
+
+    // Helper: dapatkan daftar OP yang sesuai filter line & opNumber
+    const getOpFilter = async () => {
+      const opWhere: any = {};
+      if (lineCode) {
+        const line = await this.prisma.lineMaster.findUnique({ where: { code: lineCode } });
+        if (line) opWhere.lineId = line.id;
+      }
+      if (opNumber) {
+        opWhere.opNumber = opNumber;
+      }
+      return opWhere;
+    };
+
+    const opWhere = await getOpFilter();
+
+    // Ambil semua OP yang relevan (untuk menampilkan data OP)
+const ops = await this.prisma.productionOrder.findMany({
+  where: opWhere,
+  include: {
+    line: { select: { code: true, name: true, patternMultiplier: true } }, // <-- tambah patternMultiplier
+    patternProgress: true,
+    checkPanelInspections: true,
+    qcInspections: true,
+    cuttingBatches: true,
+    sewingStartProgress: true,
+    sewingFinishProgress: true,
+    packingItems: { include: { session: true } },
+  },
+  orderBy: { opNumber: 'asc' },
+});
+
+    // Fungsi helper untuk mendapatkan rentang tanggal proses di suatu station
+    const getStationDateRange = (op: any, stationCode: string) => {
+      let first: Date | null = null;
+      let last: Date | null = null;
+
+      switch (stationCode) {
+        case 'CUTTING_ENTAN':
+          if (op.cuttingBatches.length) {
+            first = op.cuttingBatches[0].createdAt;
+            last = op.cuttingBatches[op.cuttingBatches.length - 1].createdAt;
+          }
+          break;
+        case 'CUTTING_POND':
+          if (op.patternProgress.length) {
+            const dates = op.patternProgress.map((p: any) => p.updatedAt).filter(Boolean);
+            if (dates.length) {
+              first = new Date(Math.min(...dates.map((d: any) => d.getTime())));
+              last = new Date(Math.max(...dates.map((d: any) => d.getTime())));
+            }
+          }
+          break;
+        case 'CP':
+          if (op.checkPanelInspections.length) {
+            first = op.checkPanelInspections[0].createdAt;
+            last = op.checkPanelInspections[op.checkPanelInspections.length - 1].createdAt;
+          }
+          break;
+        case 'SEWING':
+          {
+            const startDates = op.sewingStartProgress.map((s: any) => s.createdAt || op.updatedAt);
+            const finishDates = op.sewingFinishProgress.map((f: any) => f.createdAt || op.updatedAt);
+            const allDates = [...startDates, ...finishDates];
+            if (allDates.length) {
+              first = new Date(Math.min(...allDates.map((d: any) => d.getTime())));
+              last = new Date(Math.max(...allDates.map((d: any) => d.getTime())));
+            }
+          }
+          break;
+        case 'QC':
+          if (op.qcInspections.length) {
+            first = op.qcInspections[0].createdAt;
+            last = op.qcInspections[op.qcInspections.length - 1].createdAt;
+          }
+          break;
+        case 'PACKING':
+          if (op.packingItems.length) {
+            const sessions = op.packingItems.map((i: any) => i.session).filter(Boolean);
+            if (sessions.length) {
+              const dates = sessions.map((s: any) => s.createdAt);
+              first = new Date(Math.min(...dates.map((d: any) => d.getTime())));
+              last = new Date(Math.max(...dates.map((d: any) => d.getTime())));
+            }
+          }
+          break;
+      }
+
+      // Jika tidak ada data, gunakan updatedAt OP sebagai fallback (jika OP sudah pernah masuk station ini)
+      if (!first && op.currentStation === stationCode) {
+        first = op.createdAt;
+        last = new Date(); // masih berjalan
+      }
+      return { first, last };
+    };
+
+    // Hitung data per OP
+    const opDetails = ops.map(op => {
+      let inputQty = 0;
+      let outputQty = 0;
+      let goodQty = 0;
+      let ngQty = 0;
+      let ngDetails: any[] = [];
+
+      const { first, last } = getStationDateRange(op, station);
+
+      switch (station) {
+        case 'CUTTING_ENTAN':
+          inputQty = op.qtyOp;
+          outputQty = op.qtyEntan;
+          goodQty = outputQty; // semua dianggap good (tidak ada NG)
+          break;
+        case 'CUTTING_POND':
+          inputQty = op.qtyEntan * (op.line?.patternMultiplier || 1);
+          goodQty = op.patternProgress.reduce((sum: number, p: any) => sum + p.good, 0);
+          ngQty = op.patternProgress.reduce((sum: number, p: any) => sum + p.ng, 0);
+          outputQty = goodQty + ngQty;
+          ngDetails = op.patternProgress
+            .filter((p: any) => p.ng > 0)
+            .map((p: any) => ({ patternName: p.patternName, ngQty: p.ng }));
+          break;
+        case 'CP':
+          inputQty = op.qtyCP;
+          goodQty = op.cpGoodQty;
+          ngQty = op.cpNgQty;
+          outputQty = goodQty + ngQty;
+          ngDetails = op.checkPanelInspections
+            .filter((i: any) => i.ng > 0)
+            .map((i: any) => ({
+              patternName: i.patternName,
+              ngQty: i.ng,
+              reasons: i.ngReasons || [],
+            }));
+          break;
+        case 'SEWING':
+          inputQty = op.qtySewingIn;
+          outputQty = op.qtySewingOut;
+          goodQty = outputQty; // tidak ada NG
+          break;
+        case 'QC':
+          inputQty = op.qtySewingOut;
+          goodQty = op.qtyQC;
+          ngQty = op.qcNgQty;
+          outputQty = goodQty + ngQty;
+          ngDetails = op.qcInspections
+            .filter((i: any) => i.ng > 0)
+            .map((i: any) => ({
+              ngQty: i.ng,
+              reasons: i.ngReasons || [],
+            }));
+          break;
+        case 'PACKING':
+          inputQty = op.qtyQC;
+          outputQty = op.qtyPacking;
+          goodQty = outputQty;
+          break;
+      }
+
+      const defectRate = outputQty > 0 ? (ngQty / outputQty) * 100 : 0;
+
+      return {
+        opNumber: op.opNumber,
+        styleCode: op.styleCode,
+        lineCode: op.line?.code || '-',
+        itemNumberFG: op.itemNumberFG,
+        itemNameFG: op.itemNameFG,
+        startDate: first,
+        endDate: last,
+        inputQty,
+        outputQty,
+        goodQty,
+        ngQty,
+        defectRate,
+        ngDetails,
+      };
+    });
+
+    // Filter berdasarkan tanggal (jika diberikan)
+    let filtered = opDetails;
+    if (startDate && endDate) {
+      const endOfDay = new Date(endDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(op => {
+        if (!op.startDate) return false;
+        return op.startDate >= startDate && op.startDate <= endOfDay;
+      });
+    } else if (startDate) {
+      filtered = filtered.filter(op => op.startDate && op.startDate >= startDate);
+    } else if (endDate) {
+      const endOfDay = new Date(endDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(op => op.startDate && op.startDate <= endOfDay);
+    }
+
+    // Hitung summary
+    const totalInput = filtered.reduce((sum, op) => sum + op.inputQty, 0);
+    const totalOutput = filtered.reduce((sum, op) => sum + op.outputQty, 0);
+    const totalGood = filtered.reduce((sum, op) => sum + op.goodQty, 0);
+    const totalNg = filtered.reduce((sum, op) => sum + op.ngQty, 0);
+    const overallDefectRate = totalOutput > 0 ? (totalNg / totalOutput) * 100 : 0;
+
+    return {
+      station,
+      summary: {
+        totalInput,
+        totalOutput,
+        totalGood,
+        totalNg,
+        defectRate: overallDefectRate,
+        totalOps: filtered.length,
+        period: { start: startDate, end: endDate },
+        lineCode: lineCode || 'ALL',
+      },
+      ops: filtered,
+    };
   }
 
   // ========== EXISTING METHODS TETAP DIJAGA UTUH ==========
