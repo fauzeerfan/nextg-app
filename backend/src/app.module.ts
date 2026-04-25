@@ -23,6 +23,7 @@ import { AiModule } from './ai/ai.module';
 import { ProductionPlanningModule } from './production-planning/production-planning.module';
 import { InboundWarehouseModule } from './inbound-warehouse/inbound-warehouse.module';
 import { ChatModule } from './chat/chat.module';
+import { SupportModule } from './support/support.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { ChatModule } from './chat/chat.module';
     ProductionPlanningModule,
     InboundWarehouseModule,
     ChatModule,
+    SupportModule,
   ],
   controllers: [AppController],
 })

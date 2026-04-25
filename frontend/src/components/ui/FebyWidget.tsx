@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { X, Minimize2, Maximize2, MessageCircle, Users } from 'lucide-react';
+import { X, Minimize2, Maximize2, MessageCircle, Users, Ticket } from 'lucide-react';
 import { AiChatWidgetContent } from './AiChatWidgetContent'; // konten copilot yang sudah ada
 import { FebySpace } from '../../features/chat/FebySpace';
+import { FebySupportView } from '../../features/support/FebySupportView';
 
 export const FebyWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
-  const [activeTab, setActiveTab] = useState<'copilot' | 'space'>('copilot');
+  const [activeTab, setActiveTab] = useState<'copilot' | 'space' | 'support'>('copilot');
   const [unreadCount, setUnreadCount] = useState(0);
 
   const toggleChat = () => {
@@ -92,6 +93,18 @@ export const FebyWidget: React.FC = () => {
               </span>
             )}
           </button>
+
+          <button
+            onClick={() => setActiveTab('support')}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all duration-300 relative ${
+              activeTab === 'support'
+                ? 'bg-green-500 text-white shadow-md shadow-green-500/40 scale-105 transform'
+                : 'bg-white/10 text-indigo-100 hover:bg-white/20 hover:text-white'
+            }`}
+          >
+            <Ticket size={18} strokeWidth={2.5} /> 
+            <span>Feby Support</span>
+          </button>
         </div>
 
         <div className="flex gap-1.5 items-center">
@@ -116,8 +129,10 @@ export const FebyWidget: React.FC = () => {
       <div className="flex-1 overflow-hidden bg-slate-50 dark:bg-slate-900">
         {activeTab === 'copilot' ? (
           <AiChatWidgetContent />
-        ) : (
+        ) : activeTab === 'space' ? (
           <FebySpace onUnreadCountChange={setUnreadCount} />
+        ) : (
+          <FebySupportView />
         )}
       </div>
     </div>

@@ -49,6 +49,9 @@ model User {
 
   chatParticipants ChatParticipant[]
   chatMessages     ChatMessage[]
+
+  supportTickets   SupportTicket[]
+  SupportTicketMessage SupportTicketMessage[]
 }
 
 // ========== NEW: Login Status Enum & Log ==========
@@ -744,4 +747,36 @@ model ChatMessage {
 
   room   ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
   sender User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+// ========== SUPPORT TICKET SYSTEM ==========
+model SupportTicket {
+  id           String   @id @default(uuid())
+  ticketNumber String   @unique   // auto-generated e.g. TKT-20260425-0001
+  userId       String                 // user yang membuat tiket (relasi ke User)
+  subject      String
+  category     String                 // FEATURE, BUG, DATA, OTHER
+  description  String   @db.Text
+  priority     String   @default("LOW") // LOW, MEDIUM, HIGH, URGENT
+  status       String   @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages     SupportTicketMessage[]
+
+  @@map("support_tickets")
+}
+
+model SupportTicketMessage {
+  id        String   @id @default(uuid())
+  ticketId  String
+  senderId  String                 // user yang mengirim (bisa user biasa atau admin)
+  message   String   @db.Text
+  createdAt DateTime @default(now())
+
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender    User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("support_ticket_messages")
 }
