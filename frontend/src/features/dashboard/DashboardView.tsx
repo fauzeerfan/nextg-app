@@ -254,7 +254,12 @@ const StationFlow = ({ data }: { data: Array<{
                       </div>
                       <span className="text-[10px] 2xl:text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">{wipLabel}</span>
                     </div>
-                    <span className="text-base 2xl:text-lg font-black text-amber-600 dark:text-amber-500 leading-none">{station.wipQty.toLocaleString()}</span>
+                    <span className="text-base 2xl:text-lg font-black text-amber-600 dark:text-amber-500 leading-none">
+                      {station.wipQty.toLocaleString()}
+                      <span className="text-[10px] font-semibold text-slate-400 ml-1">
+                        {station.station === 'CUTTING_POND' || station.station === 'CP' ? 'patterns' : 'sets'}
+                      </span>
+                    </span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 mt-1">
@@ -262,13 +267,23 @@ const StationFlow = ({ data }: { data: Array<{
                     <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/30 border-2 border-slate-100 dark:border-slate-700/50 flex flex-col items-center justify-center text-center">
                       <ArrowDownToLine size={16} className="text-indigo-500 mb-1" strokeWidth={3} />
                       <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Input</span>
-                      <span className="text-sm font-black text-slate-900 dark:text-white leading-none">{station.todayInput.toLocaleString()}</span>
+                      <span className="text-sm font-black text-slate-900 dark:text-white leading-none">
+                        {station.todayInput.toLocaleString()}
+                        <span className="text-[10px] font-semibold text-slate-400 ml-1">
+                          {station.station === 'CUTTING_POND' || station.station === 'CP' ? 'patterns' : 'sets'}
+                        </span>
+                      </span>
                     </div>
                     {/* Output */}
                     <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/30 border-2 border-slate-100 dark:border-slate-700/50 flex flex-col items-center justify-center text-center">
                       <ArrowUpFromLine size={16} className="text-emerald-500 mb-1" strokeWidth={3} />
                       <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Output</span>
-                      <span className="text-sm font-black text-slate-900 dark:text-white leading-none">{station.todayOutput.toLocaleString()}</span>
+                      <span className="text-sm font-black text-slate-900 dark:text-white leading-none">
+                        {station.todayOutput.toLocaleString()}
+                        <span className="text-[10px] font-semibold text-slate-400 ml-1">
+                          {station.station === 'CUTTING_POND' || station.station === 'CP' ? 'patterns' : 'sets'}
+                        </span>
+                      </span>
                     </div>
                   </div>
 
@@ -281,7 +296,12 @@ const StationFlow = ({ data }: { data: Array<{
                         </div>
                         <span className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-wider">Defect / NG</span>
                       </div>
-                      <span className="text-base font-black text-rose-600 dark:text-rose-400 leading-none">{station.qtyNg.toLocaleString()}</span>
+                      <span className="text-base font-black text-rose-600 dark:text-rose-400 leading-none">
+                        {station.qtyNg.toLocaleString()}
+                        <span className="text-[10px] font-semibold text-slate-400 ml-1">
+                          {station.station === 'CUTTING_POND' || station.station === 'CP' ? 'patterns' : 'sets'}
+                        </span>
+                      </span>
                     </div>
                   )}
                 </div>

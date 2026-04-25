@@ -490,9 +490,12 @@ if (station === 'CP') {
       }
       const cpInspected = (op.cpGoodQty || 0) + (op.cpNgQty || 0);
       const cpWip = (op.qtyCP || 0) - cpInspected;
-      if (cpWip > 0) {
+      const setsReady = (op.setsReadyForSewing || 0);
+      // OP masih aktif di CP jika masih ada set yang perlu diinspeksi ATAU masih ada set siap kirim ke Sewing
+      if (cpWip > 0 || setsReady > 0) {
         stationMap['CP'].count++;
-        stationMap['CP'].wipQty += cpWip;
+        // WIP = sisa inspeksi (jika ada), atau jumlah set yang siap dikirim
+        stationMap['CP'].wipQty += cpWip > 0 ? cpWip : setsReady;
       }
       const sewingWip = (op.qtySewingIn || 0) - (op.qtySewingOut || 0);
       if (sewingWip > 0) {

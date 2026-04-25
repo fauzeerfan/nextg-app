@@ -2,14 +2,14 @@ import { IsString, IsOptional, IsIn } from 'class-validator';
 
 export class CreateTicketDto {
   @IsString()
-  subject: string;
+  subject!: string;
 
   @IsString()
   @IsIn(['FEATURE', 'BUG', 'DATA', 'OTHER'])
-  category: string;
+  category!: string;
 
   @IsString()
-  description: string;
+  description!: string;
 
   @IsOptional()
   @IsString()
