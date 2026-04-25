@@ -4,11 +4,12 @@ import {
   LayoutDashboard, Scissors, Grid, ClipboardCheck, Shirt,
   CheckCircle, Package, Truck, Factory, Users,
   PanelLeftClose, PanelLeftOpen, LogOut, Sun, Moon,
-  BarChart3, History, Scan, Calendar, Target, LogIn, Cpu, Bot, TrendingUp, Box
+  BarChart3, History, Scan, Calendar, Target, LogIn, Cpu, Bot, TrendingUp, Box, MapPin
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigation } from '../../context/NavigationContext'; // <-- tambah import
 import { NextGLogo } from '../ui/Logo';
+
 
 interface UserData {
   username: string;
@@ -59,6 +60,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: "HOME",
       items: [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'text-blue-500' },
+        { id: 'automation_island', label: 'Automation Island', icon: MapPin, color: 'text-teal-500' },
       ]
     },
     {

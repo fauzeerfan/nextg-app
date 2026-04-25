@@ -227,6 +227,11 @@ frontend/src/context/NavigationContext.tsx
 frontend/src/context/ThemeContext.tsx
 frontend/src/features/ai/AiManagementView.tsx
 frontend/src/features/auth/LoginView.tsx
+frontend/src/features/automation-island/AutomationIslandView.tsx
+frontend/src/features/automation-island/FactoryScene.tsx
+frontend/src/features/automation-island/IoTDeviceModel.tsx
+frontend/src/features/automation-island/LayoutData.ts
+frontend/src/features/automation-island/StationModel.tsx
 frontend/src/features/chat/FebySpace.tsx
 frontend/src/features/dashboard/DashboardView.tsx
 frontend/src/features/employee/EmployeeManagementView.tsx
@@ -272,6 +277,821 @@ package.json
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="frontend/src/features/automation-island/AutomationIslandView.tsx">
+import React, { useState } from 'react';
+import { Factory, Cpu, MapPin, X, Monitor, Tablet, ScanLine, Camera, RadioReceiver, Printer } from 'lucide-react';
+import FactoryScene from './FactoryScene';
+
+const AutomationIslandView: React.FC = () => {
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+
+  const getDeviceIcon = (type: string) => {
+    switch (type) {
+      case 'pc': return <Monitor size={20} />;
+      case 'tablet': return <Tablet size={20} />;
+      case 'scanner': return <ScanLine size={20} />;
+      case 'dhristi': return <Camera size={20} />;
+      case 'sparsha': return <RadioReceiver size={20} />;
+      case 'printer': return <Printer size={20} />;
+      default: return <Cpu size={20} />;
+    }
+  };
+
+  const getDeviceTypeName = (type: string) => {
+    switch (type) {
+      case 'pc': return 'Komputer / PC';
+      case 'tablet': return 'Tablet Mobile';
+      case 'scanner': return 'Barcode Scanner';
+      case 'dhristi': return 'Dhristi Vision IoT';
+      case 'sparsha': return 'Sparsha Sensor IoT';
+      case 'printer': return 'Printer Output';
+      default: return 'IoT Device';
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-6">
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap'); .font-inter { font-family: 'Inter', sans-serif; }`}</style>
+
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm mb-6 overflow-hidden font-inter">
+        <div className="p-5 border-b border-slate-100 dark:border-slate-700">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/30">
+                <MapPin size={24} className="text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+                  Automation Island
+                  <span className="text-[11px] px-2 py-1 bg-indigo-600 text-white rounded-md font-bold uppercase tracking-wider">
+                    LINEAR FLOW LAYOUT
+                  </span>
+                </h1>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">Visualisasi 3D Alur Stasiun Produksi & Integrasi Perangkat</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800">
+              <span className="text-sm font-semibold text-indigo-600 dark:text-indigo-400">🖱️ Drag Kiri/Kanan, Scroll & Klik untuk Berinteraksi</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="h-[75vh] rounded-2xl overflow-hidden relative shadow-inner font-inter">
+        <FactoryScene
+          onStationClick={(station) => setSelectedItem({ type: 'station', data: station })}
+          onDeviceClick={(device) => setSelectedItem({ type: 'device', data: device })}
+        />
+      </div>
+
+      {selectedItem && (
+        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-5 z-50 max-w-md w-full animate-in fade-in slide-in-from-bottom-4 font-inter">
+          <div className="flex justify-between items-start mb-3">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                selectedItem.type === 'station' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400' : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400'
+              }`}>
+                {selectedItem.type === 'station' ? <Factory size={20} /> : getDeviceIcon(selectedItem.data.type)}
+              </div>
+              <div>
+                <h3 className="font-black text-lg text-slate-900 dark:text-white">{selectedItem.data.name}</h3>
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">
+                  {selectedItem.type === 'station' ? 'Stasiun Produksi' : getDeviceTypeName(selectedItem.data.type)}
+                </p>
+              </div>
+            </div>
+            <button onClick={() => setSelectedItem(null)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 transition-colors"><X size={18} /></button>
+          </div>
+          
+          {selectedItem.type === 'station' && selectedItem.data.description && (
+            <p className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700 leading-relaxed">
+              {selectedItem.data.description}
+            </p>
+          )}
+          
+          {selectedItem.type === 'device' && (
+            <div className="space-y-2.5 text-sm bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+              <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
+                <span className="text-slate-500 font-medium">Status Koneksi</span> 
+                <span className="flex items-center gap-1.5 font-bold text-emerald-600 text-xs bg-emerald-100 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Online
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 font-medium">Device ID</span> 
+                <span className="font-mono text-xs font-semibold bg-slate-200 dark:bg-slate-800 px-2 py-1 rounded text-slate-700 dark:text-slate-300">
+                  {selectedItem.data.id}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 font-medium">Node Stasiun</span> 
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                  {selectedItem.data.stationId}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default AutomationIslandView;
+</file>
+
+<file path="frontend/src/features/automation-island/FactoryScene.tsx">
+import React, { useState, useRef, useMemo } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls, PerspectiveCamera, Environment, Text, Sky, SoftShadows } from '@react-three/drei';
+import * as THREE from 'three';
+import StationModel from './StationModel';
+import IoTDeviceModel from './IoTDeviceModel';
+import { STATION_LAYOUTS, IOT_DEVICE_LAYOUTS } from './LayoutData';
+
+interface FactorySceneProps {
+  onStationClick: (station: any) => void;
+  onDeviceClick: (device: any) => void;
+}
+
+// ---------- PULAU DENGAN VEGETASI & ELEMEN ALAM ----------
+const Island = () => {
+  return (
+    <group>
+      {/* Base Tanah */}
+      <mesh position={[0, -0.6, 0]} receiveShadow>
+        <boxGeometry args={[40, 0.4, 10]} />
+        <meshStandardMaterial color="#8B7355" roughness={0.9} />
+      </mesh>
+      {/* Rumput Atas */}
+      <mesh position={[0, -0.35, 0]} receiveShadow>
+        <boxGeometry args={[39.8, 0.08, 9.8]} />
+        <meshStandardMaterial color="#7CBA3D" roughness={0.8} />
+      </mesh>
+
+      {/* Bebatuan di tepi pulau */}
+      {[
+        [18, -0.25, 3.5], [-18, -0.25, 3.5], [15, -0.25, -4.5], [-15, -0.25, -4.5],
+        [19, -0.3, 0], [-19, -0.3, 0], [0, -0.3, 4.8], [0, -0.3, -4.8]
+      ].map((pos, i) => (
+        <mesh key={`rock-${i}`} position={pos as [number, number, number]} castShadow receiveShadow>
+          <dodecahedronGeometry args={[0.25 + Math.random() * 0.3, 0]} />
+          <meshStandardMaterial color="#9CA3AF" roughness={0.6} />
+        </mesh>
+      ))}
+
+      {/* Pohon-pohon */}
+      {[
+        [-16, -0.25, 3], [-14, -0.25, -3.5], [16, -0.25, -3.5], [14, -0.25, 3.5],
+        [-10, -0.25, 4], [10, -0.25, -4], [-17, -0.25, -4], [17, -0.25, 4]
+      ].map((pos, i) => (
+        <group key={`tree-${i}`} position={pos as [number, number, number]}>
+          {/* Batang */}
+          <mesh position={[0, 0.3, 0]} castShadow>
+            <cylinderGeometry args={[0.08, 0.1, 0.6, 8]} />
+            <meshStandardMaterial color="#78350F" roughness={0.8} />
+          </mesh>
+          {/* Dedaunan (3 cone bertumpuk) */}
+          {[0.5, 0.7, 0.9].map((y, j) => (
+            <mesh key={`leaf-${j}`} position={[0, y, 0]} castShadow>
+              <coneGeometry args={[0.25 - j * 0.05, 0.3, 8]} />
+              <meshStandardMaterial color="#166534" roughness={0.4} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+
+      {/* Semak kecil */}
+      {[...Array(8)].map((_, i) => {
+        const angle = (i / 8) * Math.PI * 2;
+        const radius = 3 + Math.random() * 1.5;
+        const x = Math.cos(angle) * radius * 3;
+        const z = Math.sin(angle) * radius * 0.8;
+        return (
+          <mesh key={`bush-${i}`} position={[x, -0.28, z]} castShadow>
+            <coneGeometry args={[0.2, 0.25, 6]} />
+            <meshStandardMaterial color="#15803D" roughness={0.5} />
+          </mesh>
+        );
+      })}
+
+      {/* Dermaga detail */}
+      <group position={[18, -0.35, 2.5]}>
+        <mesh position={[0, 0.05, 0]} receiveShadow>
+          <boxGeometry args={[6, 0.15, 4]} />
+          <meshStandardMaterial color="#cbd5e1" roughness={0.9} />
+        </mesh>
+        {/* Pilar dermaga */}
+        {[[-2.5, -0.5, 1.5], [-2.5, -0.5, -1.5], [2.5, -0.5, 1.5], [2.5, -0.5, -1.5]].map((pos, i) => (
+          <mesh key={`pier-pillar-${i}`} position={pos as [number, number, number]} castShadow>
+            <cylinderGeometry args={[0.12, 0.12, 0.6, 8]} />
+            <meshStandardMaterial color="#4a5568" roughness={0.5} />
+          </mesh>
+        ))}
+        {/* Tiang tambat (bollard) */}
+        {[[-2, 0.15, 1.8], [2, 0.15, 1.8], [-2, 0.15, -1.8], [2, 0.15, -1.8]].map((pos, i) => (
+          <mesh key={`bollard-${i}`} position={pos as [number, number, number]} castShadow>
+            <cylinderGeometry args={[0.06, 0.08, 0.2, 8]} />
+            <meshStandardMaterial color="#334155" roughness={0.5} />
+          </mesh>
+        ))}
+      </group>
+
+      {/* Lampu jalan di sepanjang winding road */}
+      {STATION_LAYOUTS.map((station, i) => {
+        const pos = station.position;
+        return (
+          <group key={`streetlight-${i}`} position={[pos[0], 0, pos[2] + 1.8]}>
+            {/* Tiang */}
+            <mesh position={[0, 0.8, 0]} castShadow>
+              <cylinderGeometry args={[0.06, 0.07, 1.6, 8]} />
+              <meshStandardMaterial color="#1e293b" roughness={0.4} />
+            </mesh>
+            {/* Lengan */}
+            <mesh position={[0, 1.3, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+              <cylinderGeometry args={[0.04, 0.04, 0.4, 8]} />
+              <meshStandardMaterial color="#1e293b" roughness={0.4} />
+            </mesh>
+            {/* Lampu */}
+            <mesh position={[0, 1.3, 0]}>
+              <sphereGeometry args={[0.1, 16, 16]} />
+              <meshStandardMaterial color="#FEF08A" emissive="#FEF08A" emissiveIntensity={1.5} />
+            </mesh>
+            {/* Titik cahaya (point light) - akan ditambahkan di luar */}
+          </group>
+        );
+      })}
+    </group>
+  );
+};
+
+// ---------- AIR IMPROVED ----------
+const Water = () => {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.position.y = -0.7 + Math.sin(clock.getElapsedTime() * 0.8) * 0.04;
+  });
+  return (
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.7, 0]} receiveShadow>
+      <planeGeometry args={[80, 40]} />
+      <meshPhysicalMaterial
+        color="#0ea5e9"
+        transparent
+        opacity={0.9}
+        roughness={0.1}
+        metalness={0.1}
+        clearcoat={0.3}
+        clearcoatRoughness={0.2}
+      />
+    </mesh>
+  );
+};
+
+// ---------- KAPAL ----------
+const CargoShip = () => {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    if (ref.current) {
+      ref.current.position.y = -0.5 + Math.sin(clock.getElapsedTime() * 1.5) * 0.05;
+      ref.current.rotation.z = Math.sin(clock.getElapsedTime() * 1.2) * 0.02;
+    }
+  });
+
+  return (
+    <group>
+      <Text
+        position={[17.5, 2.5, 1]}
+        rotation={[0, -Math.PI / 4, 0]}
+        fontSize={1.2}
+        color="#ef4444"
+        outlineWidth={0.08}
+        outlineColor="#ffffff"
+        fontWeight="bold"
+      >
+        SHIPPING
+      </Text>
+      <group ref={ref} position={[22, -0.5, 2.5]} rotation={[0, -Math.PI / 2, 0]}>
+        <mesh position={[0, 0.5, 0]} castShadow>
+          <boxGeometry args={[8, 1.2, 2.5]} />
+          <meshStandardMaterial color="#334155" />
+        </mesh>
+        <mesh position={[0, 0.1, 0]}>
+          <boxGeometry args={[7.8, 0.4, 2.4]} />
+          <meshStandardMaterial color="#b91c1c" />
+        </mesh>
+        <mesh position={[-2.5, 1.5, 0]} castShadow>
+          <boxGeometry args={[1.5, 1, 2]} />
+          <meshStandardMaterial color="#f8fafc" />
+        </mesh>
+        <mesh position={[1, 1.4, 0]} castShadow>
+          <boxGeometry args={[1.5, 1, 2]} />
+          <meshStandardMaterial color="#06b6d4" />
+        </mesh>
+        <mesh position={[2.8, 1.4, 0]} castShadow>
+          <boxGeometry args={[1.5, 1, 2]} />
+          <meshStandardMaterial color="#3b82f6" />
+        </mesh>
+      </group>
+    </group>
+  );
+};
+
+// ---------- JALAN BERKELOK ----------
+const WindingRoad = () => {
+  const curve = useMemo(() => {
+    const points = [];
+    const stations = STATION_LAYOUTS.map(s => new THREE.Vector3(s.position[0], 0, s.position[2]));
+    for (let i = 0; i < stations.length - 1; i++) {
+      const current = stations[i];
+      const next = stations[i + 1];
+      points.push(current);
+      const midX = (current.x + next.x) / 2;
+      const offsetZ = current.z + (i % 2 === 0 ? 1.8 : -1.8);
+      points.push(new THREE.Vector3(midX, 0, offsetZ));
+    }
+    points.push(stations[stations.length - 1]);
+    points.push(new THREE.Vector3(15, 0, 0.5));
+    points.push(new THREE.Vector3(18, 0, 2.5));
+    return new THREE.CatmullRomCurve3(points);
+  }, []);
+
+  const dashedLines = useMemo(() => {
+    const lines = [];
+    const dashCount = 90;
+    for (let i = 0; i < dashCount; i++) {
+      const t = i / dashCount;
+      const position = curve.getPointAt(t);
+      const tangent = curve.getTangentAt(t);
+      const rotationY = Math.atan2(tangent.x, tangent.z);
+      lines.push({
+        position: [position.x, 0.02, position.z] as [number, number, number],
+        rotationY
+      });
+    }
+    return lines;
+  }, [curve]);
+
+  return (
+    <group position={[0, -0.36, 0]}>
+      {/* Base Jalan */}
+      <mesh receiveShadow scale={[1, 0.05, 1]}>
+        <tubeGeometry args={[curve, 128, 0.35, 16, false]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.9} />
+      </mesh>
+      {/* Marka putih */}
+      {dashedLines.map((line, idx) => (
+        <mesh
+          key={`dash-${idx}`}
+          position={line.position}
+          rotation={[0, line.rotationY, 0]}
+          receiveShadow
+        >
+          <boxGeometry args={[0.04, 0.01, 0.25]} />
+          <meshStandardMaterial color="#ffffff" roughness={1} />
+        </mesh>
+      ))}
+    </group>
+  );
+};
+
+// ---------- PARTIKEL ALIRAN MATERIAL ----------
+const MaterialParticles = () => {
+  const particlesRef = useRef<THREE.Group>(null);
+  const curve = useMemo(() => {
+    const points = [];
+    const stations = STATION_LAYOUTS.map(s => new THREE.Vector3(s.position[0], 0, s.position[2]));
+    for (let i = 0; i < stations.length - 1; i++) {
+      const current = stations[i];
+      const next = stations[i + 1];
+      points.push(current);
+      const midX = (current.x + next.x) / 2;
+      const offsetZ = current.z + (i % 2 === 0 ? 1.8 : -1.8);
+      points.push(new THREE.Vector3(midX, 0, offsetZ));
+    }
+    points.push(stations[stations.length - 1]);
+    points.push(new THREE.Vector3(15, 0, 0.5));
+    points.push(new THREE.Vector3(18, 0, 2.5));
+    return new THREE.CatmullRomCurve3(points);
+  }, []);
+
+  const particles = useMemo(() => {
+    const p = [];
+    for (let i = 0; i < 15; i++) {
+      p.push({
+        offset: (i / 15) * 0.9,
+        speed: 0.02 + Math.random() * 0.06,
+        color: new THREE.Color().setHSL(0.55 + i * 0.02, 0.8, 0.5)
+      });
+    }
+    return p;
+  }, []);
+
+  useFrame(({ clock }) => {
+    if (!particlesRef.current) return;
+    const t = (clock.getElapsedTime() * 0.1) % 1;
+    particlesRef.current.children.forEach((child, i) => {
+      const p = particles[i];
+      const u = (t * p.speed + p.offset) % 1;
+      const point = curve.getPointAt(u);
+      child.position.set(point.x, 0.15, point.z);
+    });
+  });
+
+  return (
+    <group ref={particlesRef}>
+      {particles.map((p, i) => (
+        <mesh key={i} castShadow>
+          <sphereGeometry args={[0.12, 8, 8]} />
+          <meshStandardMaterial color={p.color} emissive={p.color} emissiveIntensity={0.5} />
+        </mesh>
+      ))}
+    </group>
+  );
+};
+
+// ---------- SCENE UTAMA ----------
+const FactoryScene: React.FC<FactorySceneProps> = ({ onStationClick, onDeviceClick }) => {
+  const [hoverStation, setHoverStation] = useState<string | null>(null);
+  const [hoverDevice, setHoverDevice] = useState<string | null>(null);
+
+  const devicesWithPos = useMemo(() =>
+    IOT_DEVICE_LAYOUTS.map(d => {
+      const st = STATION_LAYOUTS.find(s => s.id === d.stationId);
+      const pos: [number, number, number] = st
+        ? [st.position[0] + d.positionOffset[0], st.position[1] + d.positionOffset[1], st.position[2] + d.positionOffset[2]]
+        : [0, 0, 0];
+      return { ...d, position: pos };
+    }), []
+  );
+
+  return (
+    <div className="w-full h-full bg-gradient-to-b from-sky-200 to-sky-400 rounded-xl overflow-hidden shadow-2xl">
+      <Canvas shadows camera={{ position: [0, 12, 18], fov: 45 }}>
+        <PerspectiveCamera makeDefault position={[0, 12, 18]} fov={45} />
+        <OrbitControls enableDamping dampingFactor={0.1} maxPolarAngle={Math.PI / 2.2} minDistance={10} maxDistance={40} target={[0, 0, 0]} />
+
+        {/* Pencahayaan & Suasana */}
+        <SoftShadows size={40} samples={16} focus={1} />
+        <Sky sunPosition={[100, 20, 100]} />
+        <fog attach="fog" args={['#e0f2fe', 30, 65]} />
+        <ambientLight intensity={0.5} />
+        <directionalLight
+          position={[10, 25, 15]}
+          intensity={1.2}
+          castShadow
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+          shadow-camera-far={60}
+          shadow-camera-left={-25}
+          shadow-camera-right={25}
+          shadow-camera-top={15}
+          shadow-camera-bottom={-15}
+        />
+
+        <Water />
+        <Island />
+        <WindingRoad />
+        <CargoShip />
+        <MaterialParticles />
+
+        {/* Stasiun */}
+        {STATION_LAYOUTS.map(l => (
+          <StationModel key={l.id} layout={l} onClick={onStationClick} isHovered={hoverStation === l.id} onHover={setHoverStation} />
+        ))}
+
+        {/* Perangkat */}
+        {devicesWithPos.map(d => (
+          <IoTDeviceModel key={d.id} device={d} onClick={onDeviceClick} isHovered={hoverDevice === d.id} onHover={setHoverDevice} />
+        ))}
+
+        <Environment preset="sunset" />
+      </Canvas>
+    </div>
+  );
+};
+
+export default FactoryScene;
+</file>
+
+<file path="frontend/src/features/automation-island/IoTDeviceModel.tsx">
+import React, { useRef } from 'react';
+import { Text } from '@react-three/drei';
+import * as THREE from 'three';
+import { useFrame } from '@react-three/fiber';
+import type { DeviceType } from './LayoutData';
+
+interface IoTDeviceModelProps {
+  device: {
+    id: string;
+    name: string;
+    type: DeviceType;
+    position: [number, number, number];
+  };
+  onClick: (device: any) => void;
+  isHovered: boolean;
+  onHover: (id: string | null) => void;
+}
+
+const IoTDeviceModel: React.FC<IoTDeviceModelProps> = ({ device, onClick, isHovered, onHover }) => {
+  const groupRef = useRef<THREE.Group>(null);
+  
+  useFrame(({ clock }) => {
+    if (groupRef.current) {
+      groupRef.current.position.y = device.position[1] + Math.sin(clock.getElapsedTime() * 3 + device.position[0]) * 0.1;
+      groupRef.current.rotation.y += 0.01;
+    }
+  });
+
+  const renderDeviceShape = () => {
+    switch (device.type) {
+      case 'sparsha':
+        return (
+          <>
+            <sphereGeometry args={[0.25, 32, 32]} />
+            <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.5} />
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+               <torusGeometry args={[0.35, 0.02, 16, 32]} />
+               <meshBasicMaterial color="#ffffff" />
+            </mesh>
+          </>
+        );
+      case 'dhristi':
+        return (
+          <>
+            <cylinderGeometry args={[0.15, 0.15, 0.4, 32]} />
+            <meshStandardMaterial color="#c084fc" emissive="#c084fc" emissiveIntensity={0.4} />
+            <mesh position={[0, 0.15, 0.1]} rotation={[Math.PI / 2, 0, 0]}>
+               <cylinderGeometry args={[0.1, 0.1, 0.2, 32]} />
+               <meshStandardMaterial color="#1e293b" />
+            </mesh>
+          </>
+        );
+      case 'pc':
+        return (
+          <group>
+            <mesh position={[0, 0.1, 0]}>
+              <boxGeometry args={[0.6, 0.4, 0.05]} />
+              <meshStandardMaterial color="#475569" />
+            </mesh>
+            <mesh position={[0, 0.1, 0.026]}>
+              <boxGeometry args={[0.55, 0.35, 0.01]} />
+              <meshStandardMaterial color="#38bdf8" emissive="#38bdf8" emissiveIntensity={0.3} />
+            </mesh>
+            <mesh position={[0, -0.15, 0]}>
+              <boxGeometry args={[0.2, 0.05, 0.2]} />
+              <meshStandardMaterial color="#334155" />
+            </mesh>
+            <mesh position={[0, -0.05, 0]}>
+              <cylinderGeometry args={[0.05, 0.05, 0.2]} />
+              <meshStandardMaterial color="#334155" />
+            </mesh>
+          </group>
+        );
+      case 'tablet':
+        return (
+          <mesh rotation={[-Math.PI / 6, 0, 0]}>
+            <boxGeometry args={[0.4, 0.6, 0.04]} />
+            <meshStandardMaterial color="#1e293b" />
+            <mesh position={[0, 0, 0.021]}>
+               <boxGeometry args={[0.35, 0.55, 0.01]} />
+               <meshStandardMaterial color="#a78bfa" emissive="#a78bfa" emissiveIntensity={0.2} />
+            </mesh>
+          </mesh>
+        );
+      case 'scanner':
+        return (
+          <group rotation={[Math.PI / 4, 0, 0]}>
+            <mesh position={[0, -0.15, 0]}>
+              <boxGeometry args={[0.1, 0.3, 0.1]} />
+              <meshStandardMaterial color="#334155" />
+            </mesh>
+            <mesh position={[0, 0.05, 0.1]}>
+              <boxGeometry args={[0.15, 0.15, 0.3]} />
+              <meshStandardMaterial color="#475569" />
+            </mesh>
+            <mesh position={[0, 0.05, 0.26]}>
+              <planeGeometry args={[0.1, 0.05]} />
+              <meshBasicMaterial color="#ef4444" />
+            </mesh>
+          </group>
+        );
+      default:
+        return (
+          <>
+            <boxGeometry args={[0.3, 0.3, 0.3]} />
+            <meshStandardMaterial color="#ffffff" />
+          </>
+        );
+    }
+  };
+
+  return (
+    <group position={[device.position[0], 0, device.position[2]]}>
+      <mesh
+        ref={groupRef}
+        castShadow
+        onClick={(e) => { e.stopPropagation(); onClick(device); }}
+        onPointerOver={(e) => { e.stopPropagation(); onHover(device.id); }}
+        onPointerOut={() => onHover(null)}
+        scale={isHovered ? 1.4 : 1.1}
+      >
+        {renderDeviceShape()}
+      </mesh>
+      
+      <Text
+        position={[0, device.position[1] + 0.5, 0]}
+        fontSize={0.25}
+        color="white"
+        anchorX="center"
+        anchorY="middle"
+        outlineWidth={0.03}
+        outlineColor="#0f172a"
+      >
+        {device.type.toUpperCase()}
+      </Text>
+    </group>
+  );
+};
+
+export default IoTDeviceModel;
+</file>
+
+<file path="frontend/src/features/automation-island/LayoutData.ts">
+// frontend/src/features/automation-island/LayoutData.ts
+export interface StationLayout {
+  id: string;
+  name: string;
+  position: [number, number, number];
+  color: string;
+  description: string;
+}
+
+export type DeviceType = 'sparsha' | 'dhristi' | 'pc' | 'tablet' | 'scanner' | 'printer';
+
+export interface IoTDeviceLayout {
+  id: string;
+  name: string;
+  type: DeviceType;
+  stationId: string;
+  positionOffset: [number, number, number];
+}
+
+export const STATION_LAYOUTS: StationLayout[] = [
+  {
+    id: 'CUTTING_ENTAN',
+    name: 'Cutting Entan',
+    position: [-12, 0, -1.5],
+    color: '#f97316',
+    description: 'Pemotongan kasar dan persiapan material',
+  },
+  {
+    id: 'CUTTING_POND',
+    name: 'Cutting Pond',
+    position: [-8, 0, -1.5],
+    color: '#f59e0b',
+    description: 'Pemotongan presisi per pola',
+  },
+  {
+    id: 'CP',
+    name: 'Check Panel',
+    position: [-4, 0, -1.5],
+    color: '#10b981',
+    description: 'Inspeksi visual per pola',
+  },
+  {
+    id: 'SEWING',
+    name: 'Sewing',
+    position: [0, 0, -1.5],
+    color: '#8b5cf6',
+    description: 'Proses penjahitan dan perakitan',
+  },
+  {
+    id: 'QC',
+    name: 'Quality Control',
+    position: [4, 0, -1.5],
+    color: '#ef4444',
+    description: 'Pemeriksaan kualitas akhir set',
+  },
+  {
+    id: 'PACKING',
+    name: 'Packing',
+    position: [8, 0, -1.5],
+    color: '#3b82f6',
+    description: 'Pengemasan dan pembuatan box',
+  },
+  {
+    id: 'FG',
+    name: 'Finished Goods',
+    position: [12, 0, -1.5],
+    color: '#06b6d4',
+    description: 'Penyimpanan barang jadi & siap kirim',
+  },
+];
+
+// Mengatur Offset X (-0.7 dan 0.7) agar perangkat berdampingan rapi
+export const IOT_DEVICE_LAYOUTS: IoTDeviceLayout[] = [
+  // CUTTING ENTAN: PC & Printer
+  { id: 'dev_ent_pc', name: 'Komputer Utama', type: 'pc', stationId: 'CUTTING_ENTAN', positionOffset: [-0.7, 1.2, 1.8] },
+  { id: 'dev_ent_prt', name: 'Printer Label', type: 'printer', stationId: 'CUTTING_ENTAN', positionOffset: [0.7, 1.2, 1.8] },
+
+  // CUTTING POND: Sparsha (Tetap 1)
+  { id: 'dev_pnd_01', name: 'Sparsha IoT Device', type: 'sparsha', stationId: 'CUTTING_POND', positionOffset: [0, 1.2, 1.8] },
+
+  // CHECK PANEL: Dhristi & Sparsha
+  { id: 'dev_cp_dhr', name: 'Dhristi Cam IoT', type: 'dhristi', stationId: 'CP', positionOffset: [-0.7, 1.2, 1.8] },
+  { id: 'dev_cp_spr', name: 'Sparsha Sensor IoT', type: 'sparsha', stationId: 'CP', positionOffset: [0.7, 1.2, 1.8] },
+
+  // SEWING: Dhristi & Sparsha
+  { id: 'dev_sew_dhr', name: 'Dhristi Vision', type: 'dhristi', stationId: 'SEWING', positionOffset: [-0.7, 1.2, 1.8] },
+  { id: 'dev_sew_spr', name: 'Sparsha Sewing', type: 'sparsha', stationId: 'SEWING', positionOffset: [0.7, 1.2, 1.8] },
+
+  // QUALITY CONTROL: Tablet (Tetap 1)
+  { id: 'dev_qc_01', name: 'QC Tablet Mobile', type: 'tablet', stationId: 'QC', positionOffset: [0, 1.2, 1.8] },
+
+  // PACKING: PC & Printer
+  { id: 'dev_pck_pc', name: 'Packing Station PC', type: 'pc', stationId: 'PACKING', positionOffset: [-0.7, 1.2, 1.8] },
+  { id: 'dev_pck_prt', name: 'Printer Barcode', type: 'printer', stationId: 'PACKING', positionOffset: [0.7, 1.2, 1.8] },
+
+  // FINISHED GOODS: PC & Scanner
+  { id: 'dev_fg_pc', name: 'FG Admin PC', type: 'pc', stationId: 'FG', positionOffset: [-0.7, 1.2, 1.8] },
+  { id: 'dev_fg_scn', name: 'Barcode Scanner', type: 'scanner', stationId: 'FG', positionOffset: [0.7, 1.2, 1.8] },
+];
+</file>
+
+<file path="frontend/src/features/automation-island/StationModel.tsx">
+import React, { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { Text } from '@react-three/drei';
+import * as THREE from 'three';
+import type { StationLayout } from './LayoutData';
+
+interface StationModelProps {
+  layout: StationLayout;
+  onClick: (layout: StationLayout) => void;
+  isHovered: boolean;
+  onHover: (id: string | null) => void;
+}
+
+const StationModel: React.FC<StationModelProps> = ({ layout, onClick, isHovered, onHover }) => {
+  const meshRef = useRef<THREE.Group>(null);
+
+  useFrame(() => {
+    if (meshRef.current) {
+      meshRef.current.scale.lerp(
+        new THREE.Vector3(isHovered ? 1.1 : 1, isHovered ? 1.1 : 1, isHovered ? 1.1 : 1),
+        0.15
+      );
+    }
+  });
+
+  return (
+    <group
+      ref={meshRef}
+      position={layout.position}
+      onClick={(e) => { e.stopPropagation(); onClick(layout); }}
+      onPointerOver={(e) => { e.stopPropagation(); onHover(layout.id); }}
+      onPointerOut={() => onHover(null)}
+    >
+      <mesh position={[0, -0.4, 0]} receiveShadow>
+        <boxGeometry args={[2.4, 0.2, 2.4]} />
+        <meshStandardMaterial color="#1e293b" />
+      </mesh>
+      <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
+        <boxGeometry args={[2, 1.6, 2]} />
+        <meshStandardMaterial color={isHovered ? '#f8fafc' : '#ffffff'} roughness={0.2} metalness={0.1} />
+      </mesh>
+      <mesh position={[0, 1.0, 0]}>
+        <boxGeometry args={[2.05, 0.15, 2.05]} />
+        <meshStandardMaterial color={layout.color} emissive={layout.color} emissiveIntensity={0.6} />
+      </mesh>
+      <mesh position={[0, 1.4, 0]} rotation={[0, 0, 0.15]} castShadow>
+        <boxGeometry args={[2.2, 0.2, 2.2]} />
+        <meshStandardMaterial color="#64748b" />
+      </mesh>
+      {/* Pintu diletakkan di depan mengarah ke jalan */}
+      <mesh position={[0, 0.3, 1.01]}>
+        <boxGeometry args={[0.6, 0.8, 0.05]} />
+        <meshStandardMaterial color="#334155" />
+      </mesh>
+      <Text
+        position={[0, 2.0, 0]}
+        fontSize={0.4}
+        color="#ffffff"
+        anchorX="center"
+        anchorY="bottom"
+        outlineWidth={0.05}
+        outlineColor="#0f172a"
+        maxWidth={3}
+      >
+        {layout.name}
+      </Text>
+    </group>
+  );
+};
+
+export default StationModel;
+</file>
 
 <file path="frontend/src/features/stations/CheckPanelView.tsx">
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -14161,104 +14981,6 @@ export const FebyWidget: React.FC = () => {
 };
 </file>
 
-<file path="frontend/src/components/ui/SplashPopup.tsx">
-// frontend/src/components/ui/SplashPopup.tsx
-import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
-
-interface SplashPopupProps {
-  show: boolean;
-  onClose: () => void;
-}
-
-export const SplashPopup = ({ show, onClose }: SplashPopupProps) => {
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    if (show) {
-      setIsVisible(true);
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [show]);
-
-  if (!isVisible) return null;
-
-  const handleClose = () => {
-    setIsVisible(false);
-    onClose();
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 backdrop-blur-sm transition-all duration-300 animate-in fade-in"
-      onClick={handleClose}
-    >
-      <div
-        className="relative max-w-5xl w-full mx-4 animate-scale-in"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Close button */}
-        <button
-          onClick={handleClose}
-          className="absolute -top-3 -right-3 z-10 p-2 bg-white dark:bg-slate-800 rounded-full shadow-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-200 border border-slate-200 dark:border-slate-700"
-          aria-label="Close"
-        >
-          <X size={20} className="text-slate-600 dark:text-slate-300" />
-        </button>
-
-        {/* Image container with smooth shine effect */}
-        <div className="relative rounded-2xl overflow-hidden shadow-2xl">
-          <img
-            src="/splash-image.jpg"
-            alt="Company Motto"
-            className="w-full h-auto"
-            style={{ maxHeight: '85vh', objectFit: 'contain' }}
-          />
-          {/* Smoother moving shine overlay - less opaque, slower, gentler skew */}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/8 to-transparent translate-x-[-100%] animate-shine-smooth pointer-events-none"></div>
-        </div>
-      </div>
-
-      <style>{`
-        @keyframes scale-in {
-          0% {
-            opacity: 0;
-            transform: scale(0.9) translateY(20px);
-          }
-          100% {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-        .animate-scale-in {
-          animation: scale-in 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1) forwards;
-        }
-
-        @keyframes shine-smooth {
-          0% {
-            transform: translateX(-100%) skewX(-10deg);
-          }
-          30% {
-            transform: translateX(100%) skewX(-10deg);
-          }
-          100% {
-            transform: translateX(200%) skewX(-10deg);
-          }
-        }
-        .animate-shine-smooth {
-          animation: shine-smooth 4s ease-in-out infinite;
-        }
-      `}</style>
-    </div>
-  );
-};
-</file>
-
 <file path="frontend/src/context/NavigationContext.tsx">
 import React, { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -14290,9 +15012,10 @@ const tabToPath: Record<string, string> = {
   capacity_dashboard: '/capacity-dashboard',
   gantt_simulation: '/gantt-simulation',
   plan_vs_actual: '/plan-vs-actual',
-inbound_receiving: '/inbound-receiving',
+  inbound_receiving: '/inbound-receiving',
   inspection_storage: '/inspection-storage',
   inventory_control: '/inventory-control',
+  'automation_island': '/automation-island',
 };
 
 // Mapping dari path ke ID tab (untuk sinkronisasi satu arah)
@@ -16337,6 +17060,270 @@ async traceByBcDocument(
     return this.service.getSuratJalanMaterialDetails(suratJalan);
   }
 }
+</file>
+
+<file path="frontend/src/components/ui/SplashPopup.tsx">
+// frontend/src/components/ui/SplashPopup.tsx
+import { useEffect, useState } from 'react';
+import { X, Loader2 } from 'lucide-react';
+
+interface SplashPopupProps {
+  show: boolean;
+  onClose: () => void;
+}
+
+interface QuoteData {
+  content: string;
+  author: string;
+  translatedContent?: string;
+}
+
+const QUOTE_API_URL = 'https://api.quotable.io/random?maxLength=100';
+const TRANSLATE_API_URL = 'https://api.mymemory.translated.net/get';
+const QUOTE_STORAGE_KEY = 'nextg_daily_quote';
+
+const getTodayKey = () => new Date().toISOString().split('T')[0];
+
+const fetchQuoteFromApi = async (): Promise<QuoteData> => {
+  const response = await fetch(QUOTE_API_URL);
+  if (!response.ok) throw new Error('Failed to fetch quote');
+  const data = await response.json();
+  return { content: data.content, author: data.author };
+};
+
+const translateText = async (text: string): Promise<string> => {
+  const params = new URLSearchParams({ q: text, langpair: 'en|id' });
+  const response = await fetch(`${TRANSLATE_API_URL}?${params}`);
+  if (!response.ok) throw new Error('Translation failed');
+  const data = await response.json();
+  if (data.responseStatus === 200 && data.responseData?.translatedText) {
+    return data.responseData.translatedText;
+  }
+  throw new Error('Translation response invalid');
+};
+
+/**
+ * Mengambil quote harian dengan terjemahan.
+ * Jika cache ada tapi tanpa terjemahan, akan mencoba menerjemahkan ulang.
+ * Jika tidak ada cache atau tanggal berbeda, ambil quote baru + terjemahan.
+ */
+const getDailyQuote = async (): Promise<QuoteData> => {
+  const today = getTodayKey();
+  const stored = localStorage.getItem(QUOTE_STORAGE_KEY);
+
+  // 1. Cek cache
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (parsed.date === today) {
+        // Jika sudah punya translatedContent, langsung gunakan
+        if (parsed.translatedContent) {
+          return {
+            content: parsed.content,
+            author: parsed.author,
+            translatedContent: parsed.translatedContent,
+          };
+        }
+        // Jika belum punya terjemahan, coba terjemahkan sekarang
+        if (parsed.content) {
+          try {
+            const translated = await translateText(parsed.content);
+            parsed.translatedContent = translated;
+            localStorage.setItem(QUOTE_STORAGE_KEY, JSON.stringify(parsed));
+            return {
+              content: parsed.content,
+              author: parsed.author,
+              translatedContent: translated,
+            };
+          } catch (e) {
+            // Terjemahan gagal, tetap pakai asli
+            return { content: parsed.content, author: parsed.author };
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 2. Ambil quote baru dari API
+  try {
+    const quote = await fetchQuoteFromApi();
+    let translatedContent: string | undefined;
+    try {
+      translatedContent = await translateText(quote.content);
+    } catch (transErr) {
+      console.warn('Translation failed, using original');
+    }
+
+    const finalQuote: QuoteData = {
+      content: quote.content,
+      author: quote.author,
+      translatedContent,
+    };
+
+    localStorage.setItem(QUOTE_STORAGE_KEY, JSON.stringify({
+      date: today,
+      content: finalQuote.content,
+      author: finalQuote.author,
+      translatedContent: finalQuote.translatedContent,
+    }));
+    return finalQuote;
+  } catch (error) {
+    // 3. Fallback lokal dengan terjemahan manual
+    const fallbacks: { content: string; author: string; translatedContent: string }[] = [
+      {
+        content: "The only way to do great work is to love what you do.",
+        author: "Steve Jobs",
+        translatedContent: "Satu-satunya cara untuk melakukan pekerjaan hebat adalah mencintai apa yang Anda lakukan.",
+      },
+      {
+        content: "Quality is not an act, it is a habit.",
+        author: "Aristotle",
+        translatedContent: "Kualitas bukanlah tindakan, melainkan kebiasaan.",
+      },
+      {
+        content: "Perfection is not attainable, but if we chase perfection we can catch excellence.",
+        author: "Vince Lombardi",
+        translatedContent: "Kesempurnaan tidak mungkin dicapai, tetapi jika kita mengejar kesempurnaan, kita bisa meraih keunggulan.",
+      },
+      {
+        content: "Strive not to be a success, but rather to be of value.",
+        author: "Albert Einstein",
+        translatedContent: "Berusahalah bukan untuk menjadi sukses, tetapi untuk menjadi bernilai.",
+      },
+      {
+        content: "The future depends on what you do today.",
+        author: "Mahatma Gandhi",
+        translatedContent: "Masa depan bergantung pada apa yang kamu lakukan hari ini.",
+      },
+    ];
+    const random = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    const finalQuote: QuoteData = {
+      content: random.content,
+      author: random.author,
+      translatedContent: random.translatedContent,
+    };
+    localStorage.setItem(QUOTE_STORAGE_KEY, JSON.stringify({
+      date: today,
+      content: finalQuote.content,
+      author: finalQuote.author,
+      translatedContent: finalQuote.translatedContent,
+    }));
+    return finalQuote;
+  }
+};
+
+export const SplashPopup = ({ show, onClose }: SplashPopupProps) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const [quote, setQuote] = useState<QuoteData | null>(null);
+  const [loadingTranslation, setLoadingTranslation] = useState(false);
+
+  useEffect(() => {
+    if (show) {
+      setIsVisible(true);
+      document.body.style.overflow = 'hidden';
+
+      // Mulai fetch quote (bisa dari cache atau API)
+      getDailyQuote().then((result) => {
+        // Jika translatedContent tidak ada (berarti terjemahan gagal total), tampilkan saja asli
+        setQuote(result);
+      });
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [show]);
+
+  if (!isVisible) return null;
+
+  const handleClose = () => {
+    setIsVisible(false);
+    onClose();
+  };
+
+  const displayContent = quote?.translatedContent || quote?.content || '';
+  const isTranslated = !!quote?.translatedContent;
+
+  return (
+    <div
+      className="fixed inset-0 z-[1000] flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm transition-all duration-300 animate-in fade-in p-4"
+      onClick={handleClose}
+    >
+      <div
+        className="w-full max-w-3xl flex flex-col items-center gap-6 animate-scale-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close button */}
+        <button
+          onClick={handleClose}
+          className="self-end p-2 bg-white dark:bg-slate-800 rounded-full shadow-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-200 border border-slate-200 dark:border-slate-700 -mb-4 mr-2 z-30"
+          aria-label="Close"
+        >
+          <X size={20} className="text-slate-600 dark:text-slate-300" />
+        </button>
+
+        {/* Quote Section */}
+        {quote ? (
+          <div className="w-full bg-white/10 backdrop-blur-xl rounded-2xl px-6 py-5 md:px-8 md:py-6 text-center border border-white/20 shadow-2xl">
+            {/* Loading indicator jika belum diterjemahkan & masih mungkin diproses */}
+            {!isTranslated ? (
+              <div className="flex items-center justify-center gap-2 text-white/70 mb-2">
+                <Loader2 size={16} className="animate-spin" />
+                <span className="text-sm">Menerjemahkan...</span>
+              </div>
+            ) : null}
+            <p className="text-white text-xl md:text-2xl lg:text-3xl font-serif italic leading-relaxed mb-4 drop-shadow-lg">
+              &ldquo;{displayContent}&rdquo;
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <div className="h-px w-12 bg-white/30"></div>
+              <p className="text-white/80 text-sm md:text-base font-medium">
+                {quote.author}
+              </p>
+              <div className="h-px w-12 bg-white/30"></div>
+            </div>
+          </div>
+        ) : (
+          <div className="w-full bg-white/10 backdrop-blur-xl rounded-2xl px-6 py-10 text-center border border-white/20 shadow-2xl">
+            <Loader2 size={24} className="animate-spin text-white/80 mx-auto mb-2" />
+            <p className="text-white/80 text-sm">Memuat quote motivasi...</p>
+          </div>
+        )}
+
+        {/* Image Below */}
+        <div className="w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl relative">
+          <img
+            src="/splash-image.jpg"
+            alt="Company Motto"
+            className="w-full h-auto"
+            style={{ maxHeight: '55vh', objectFit: 'contain' }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-100%] animate-shine-smooth pointer-events-none"></div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes scale-in {
+          0% { opacity: 0; transform: scale(0.9) translateY(20px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .animate-scale-in {
+          animation: scale-in 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1) forwards;
+        }
+
+        @keyframes shine-smooth {
+          0% { transform: translateX(-100%) skewX(-10deg); }
+          30% { transform: translateX(100%) skewX(-10deg); }
+          100% { transform: translateX(200%) skewX(-10deg); }
+        }
+        .animate-shine-smooth {
+          animation: shine-smooth 4s ease-in-out infinite;
+        }
+      `}</style>
+    </div>
+  );
+};
 </file>
 
 <file path="frontend/src/context/AuthContext.tsx">
@@ -26013,6 +27000,9 @@ export class ProductionOrdersController {
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.0",
+    "@react-three/postprocessing": "^3.0.4",
     "@tailwindcss/vite": "^4.1.17",
     "@types/node": "^20.11.5",
     "@types/react-router-dom": "^5.3.3",
@@ -26028,6 +27018,7 @@ export class ProductionOrdersController {
     "react-router-dom": "^6.30.3",
     "recharts": "^3.8.0",
     "tailwind-merge": "^3.5.0",
+    "three": "^0.184.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -32501,6 +33492,7 @@ import { PlanVsActualView } from '../features/production-planning/PlanVsActualVi
 import { InboundReceivingView } from '../features/inventory-management/InboundReceivingView';
 import { InspectionStorageView } from '../features/inventory-management/InspectionStorageView';
 import { InventoryControlView } from '../features/inventory-management/InventoryControlView';
+import AutomationIslandView from '../features/automation-island/AutomationIslandView';
 
 interface AppRouterProps {
   activeTab: string;
@@ -32543,6 +33535,7 @@ export const AppRouter: React.FC<AppRouterProps> = ({
     'inbound_receiving': <InboundReceivingView />,
     'inspection_storage': <InspectionStorageView />,
     'inventory_control': <InventoryControlView />,
+    'automation_island': <AutomationIslandView />,
   };
 
   return (
@@ -32583,7 +33576,9 @@ export const AppRouter: React.FC<AppRouterProps> = ({
       {/* Inventory Management */}
       <Route path="/inbound-receiving" element={tabComponents['inbound_receiving']} />
       <Route path="/inspection-storage" element={tabComponents['inspection_storage']} />
-      <Route path="/inventory-control" element={tabComponents['inventory_control']} />      
+      <Route path="/inventory-control" element={tabComponents['inventory_control']} />
+
+      <Route path="/automation-island" element={tabComponents['automation_island']} />      
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
@@ -35233,11 +36228,12 @@ import {
   LayoutDashboard, Scissors, Grid, ClipboardCheck, Shirt,
   CheckCircle, Package, Truck, Factory, Users,
   PanelLeftClose, PanelLeftOpen, LogOut, Sun, Moon,
-  BarChart3, History, Scan, Calendar, Target, LogIn, Cpu, Bot, TrendingUp, Box
+  BarChart3, History, Scan, Calendar, Target, LogIn, Cpu, Bot, TrendingUp, Box, MapPin
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigation } from '../../context/NavigationContext'; // <-- tambah import
 import { NextGLogo } from '../ui/Logo';
+
 
 interface UserData {
   username: string;
@@ -35288,6 +36284,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: "HOME",
       items: [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'text-blue-500' },
+        { id: 'automation_island', label: 'Automation Island', icon: MapPin, color: 'text-teal-500' },
       ]
     },
     {

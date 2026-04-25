@@ -27,6 +27,7 @@ import { PlanVsActualView } from '../features/production-planning/PlanVsActualVi
 import { InboundReceivingView } from '../features/inventory-management/InboundReceivingView';
 import { InspectionStorageView } from '../features/inventory-management/InspectionStorageView';
 import { InventoryControlView } from '../features/inventory-management/InventoryControlView';
+import AutomationIslandView from '../features/automation-island/AutomationIslandView';
 
 interface AppRouterProps {
   activeTab: string;
@@ -69,6 +70,7 @@ export const AppRouter: React.FC<AppRouterProps> = ({
     'inbound_receiving': <InboundReceivingView />,
     'inspection_storage': <InspectionStorageView />,
     'inventory_control': <InventoryControlView />,
+    'automation_island': <AutomationIslandView />,
   };
 
   return (
@@ -109,7 +111,9 @@ export const AppRouter: React.FC<AppRouterProps> = ({
       {/* Inventory Management */}
       <Route path="/inbound-receiving" element={tabComponents['inbound_receiving']} />
       <Route path="/inspection-storage" element={tabComponents['inspection_storage']} />
-      <Route path="/inventory-control" element={tabComponents['inventory_control']} />      
+      <Route path="/inventory-control" element={tabComponents['inventory_control']} />
+
+      <Route path="/automation-island" element={tabComponents['automation_island']} />      
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
