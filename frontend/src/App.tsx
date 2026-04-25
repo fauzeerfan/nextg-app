@@ -8,7 +8,7 @@ import { LoginView } from './features/auth/LoginView';
 import { AppRouter } from './routes/AppRouter';
 import { Sidebar } from './components/layout/Sidebar';
 import { SplashPopup } from './components/ui/SplashPopup';
-import { AiChatWidget } from './components/ui/AiChatWidget';
+import { FebyWidget } from './components/ui/FebyWidget';
 
 type UserData = {
   id: number;
@@ -195,7 +195,7 @@ const AppContent = () => {
           </main>
         </div>
       </div>
-      <AiChatWidget />
+      <FebyWidget />
     </>
   );
 };
