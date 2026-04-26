@@ -50,6 +50,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const location = useLocation();
   const { activeTab, setActiveTab, navigateToTab } = useNavigation(); // <-- gunakan context
   const [openGroup, setOpenGroup] = useState<number | null>(0); // Grup pertama (HOME) terbuka default
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   const getAvatarUrl = (seed: string) => {
     return `https://api.dicebear.com/9.x/identicon/svg?seed=${encodeURIComponent(seed)}`;
@@ -414,7 +415,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             
             <button 
-              onClick={() => { if (window.confirm('Are you sure you want to log out?')) onLogout(); }} 
+              onClick={() => setLogoutConfirmOpen(true)} 
               className={`p-2.5 rounded-xl transition-all duration-200 flex items-center justify-center group outline-none focus-visible:ring-2 focus-visible:ring-red-500
                 ${isCollapsed 
                   ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-500 hover:text-white' 
@@ -430,6 +431,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Logout Confirmation Popup */}
+      {logoutConfirmOpen && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4"
+          onClick={() => setLogoutConfirmOpen(false)}
+        >
+          <div
+            className="bg-white dark:bg-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <div className="w-16 h-16 bg-rose-100 dark:bg-rose-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
+                <LogOut size={32} className="text-rose-600 dark:text-rose-400" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2">
+                Confirm Logout
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                Are you sure you want to sign out? You will need to login again to access the system.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setLogoutConfirmOpen(false)}
+                  className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm uppercase tracking-wider focus:outline-none"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { setLogoutConfirmOpen(false); onLogout(); }}
+                  className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-sm uppercase tracking-wider transition-colors shadow-lg shadow-rose-600/30 focus:outline-none"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 };
