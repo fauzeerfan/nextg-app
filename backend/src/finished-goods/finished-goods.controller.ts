@@ -45,4 +45,10 @@ export class FinishedGoodsController {
   async getShippingDocumentItems(@Param('noSuratJalan') noSuratJalan: string) {
     return this.externalShipping.getItemsSuratJalan(noSuratJalan);
   }
+
+  @Get('box/:qrCode')
+  @UseGuards(JwtAuthGuard)
+  async getBoxForShipping(@Param('qrCode') qrCode: string) {
+    return this.service.getBoxForShipping(qrCode);
+  }
 }

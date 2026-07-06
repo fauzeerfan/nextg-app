@@ -1,10 +1,15 @@
+// backend/src/production-orders/production-orders.service.ts
 import { Injectable, InternalServerErrorException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ProductionStatus, StationCode } from '@prisma/client';
+import { ProductionStatus, StationCode, OpLevel } from '@prisma/client';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class ProductionOrdersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private settings: SettingsService,
+  ) {}
 
   // ======================================================
   // QUERY
@@ -393,9 +398,9 @@ if (station === 'CP') {
   }
 
   // ======================================================
-  // DASHBOARD COMPREHENSIVE (UPDATED PER INSTRUKSI)
+  // DASHBOARD COMPREHENSIVE (UPDATED: + filter line, + entan output, + sewing fix)
   // ======================================================
-  async getDashboardComprehensive(startDateStr?: string, endDateStr?: string) {
+  async getDashboardComprehensive(startDateStr?: string, endDateStr?: string, lineCode?: string) {
     // Tentukan rentang tanggal (default: hari ini)
     let startDate: Date;
     let endDate: Date;
@@ -403,7 +408,6 @@ if (station === 'CP') {
     if (startDateStr && endDateStr) {
       startDate = new Date(startDateStr);
       endDate = new Date(endDateStr);
-      // Set ke awal dan akhir hari
       startDate.setHours(0, 0, 0, 0);
       endDate.setHours(23, 59, 59, 999);
     } else {
@@ -413,54 +417,54 @@ if (station === 'CP') {
       endDate.setMilliseconds(-1);
     }
 
-    // 1. KPI UTAMA (dalam rentang tanggal)
-    const totalOps = await this.prisma.productionOrder.count();
-    const totalWip = await this.prisma.productionOrder.count({ where: { status: 'WIP' } });
+    // ===== Filter line (opsional). Kosong/undefined => semua line. =====
+    const hasLine = !!lineCode && lineCode.trim() !== '';
+    const lineWhere: any = hasLine ? { line: { code: lineCode } } : {};                          // model punya relasi `line` (ProductionOrder)
+    const opLineWhere: any = hasLine ? { op: { line: { code: lineCode } } } : {};                // model punya relasi `op` (ProductionLog/CheckPanelInspection/QcInspection/CuttingBatch)
+    const itemsLineWhere: any = hasLine ? { items: { some: { op: { line: { code: lineCode } } } } } : {}; // PackingSession & Shipment (lewat items -> op)
 
-    // Total output hari ini = packing session closed dalam rentang
+    // 1. KPI UTAMA (dalam rentang tanggal)
+    const totalOps = await this.prisma.productionOrder.count({ where: { ...lineWhere, level: { not: OpLevel.PARENT } } });
+    const totalWip = await this.prisma.productionOrder.count({ where: { status: 'WIP', ...lineWhere, level: { not: OpLevel.PARENT } } });
+
     const packingSessionsInRange = await this.prisma.packingSession.aggregate({
-      where: {
-        status: 'CLOSED',
-        createdAt: { gte: startDate, lte: endDate }
-      },
+      where: { status: 'CLOSED', createdAt: { gte: startDate, lte: endDate }, ...itemsLineWhere },
       _sum: { totalQty: true }
     });
     const todayOutput = packingSessionsInRange._sum.totalQty || 0;
 
-    // Active lines (tidak perlu filter tanggal, karena line aktif berdasarkan status WIP)
     const activeLines = await this.prisma.lineMaster.count({
-      where: { productionOrders: { some: { status: 'WIP' } } }
+      where: {
+        ...(hasLine ? { code: lineCode } : {}),
+        productionOrders: { some: { status: 'WIP' } },
+      }
     });
     const targetOutput = activeLines * 8 * 50;
     const achievement = targetOutput > 0 ? Math.round((todayOutput / targetOutput) * 100) : 0;
 
     // Defect rate dalam rentang (CP + QC)
     const totalGoodCP = await this.prisma.checkPanelInspection.aggregate({
-      where: { createdAt: { gte: startDate, lte: endDate } },
-      _sum: { good: true }
+      where: { createdAt: { gte: startDate, lte: endDate }, ...opLineWhere }, _sum: { good: true }
     });
     const totalNgCP = await this.prisma.checkPanelInspection.aggregate({
-      where: { createdAt: { gte: startDate, lte: endDate } },
-      _sum: { ng: true }
+      where: { createdAt: { gte: startDate, lte: endDate }, ...opLineWhere }, _sum: { ng: true }
     });
     const totalGoodQC = await this.prisma.qcInspection.aggregate({
-      where: { createdAt: { gte: startDate, lte: endDate } },
-      _sum: { good: true }
+      where: { createdAt: { gte: startDate, lte: endDate }, ...opLineWhere }, _sum: { good: true }
     });
     const totalNgQC = await this.prisma.qcInspection.aggregate({
-      where: { createdAt: { gte: startDate, lte: endDate } },
-      _sum: { ng: true }
+      where: { createdAt: { gte: startDate, lte: endDate }, ...opLineWhere }, _sum: { ng: true }
     });
     const totalGood = (totalGoodCP._sum.good || 0) + (totalGoodQC._sum.good || 0);
     const totalProduced = totalGood + (totalNgCP._sum.ng || 0) + (totalNgQC._sum.ng || 0);
     const defectRate = totalProduced > 0 ? Number(((totalProduced - totalGood) / totalProduced) * 100).toFixed(1) : 0;
 
     const overallEfficiency = achievement;
-    const onTimeDelivery = 95;
+    const totalNg = (totalNgCP._sum.ng || 0) + (totalNgQC._sum.ng || 0);
 
-    // 2. WIP per station (tidak perlu filter tanggal, karena WIP adalah kondisi saat ini)
+    // 2. WIP per station (kondisi saat ini, difilter line)
     const allWipOps = await this.prisma.productionOrder.findMany({
-      where: { status: 'WIP' },
+      where: { status: 'WIP', ...lineWhere },
       select: {
         id: true, opNumber: true, currentStation: true,
         qtyEntan: true, qtySentToPond: true, qtyPond: true, qtyCP: true,
@@ -478,55 +482,41 @@ if (station === 'CP') {
     for (const op of allWipOps) {
       const multiplier = op.line?.patternMultiplier || 1;
       const entanWip = (op.qtyEntan || 0) - (op.qtySentToPond || 0);
-      if (entanWip > 0) {
-        stationMap['CUTTING_ENTAN'].count++;
-        stationMap['CUTTING_ENTAN'].wipQty += entanWip;
-      }
-      const targetPond = (op.qtyEntan || 0) * multiplier;
+      if (entanWip > 0) { stationMap['CUTTING_ENTAN'].count++; stationMap['CUTTING_ENTAN'].wipQty += entanWip; }
+
+      const targetPond = (op.qtySentToPond || 0) * multiplier; // FIX: Pond hanya berisi yang SUDAH dikirim dari Entan (bukan total qtyEntan dari API)
       const pondWip = targetPond - (op.qtyPond || 0);
-      if (pondWip > 0) {
-        stationMap['CUTTING_POND'].count++;
-        stationMap['CUTTING_POND'].wipQty += pondWip;
-      }
+      if (pondWip > 0) { stationMap['CUTTING_POND'].count++; stationMap['CUTTING_POND'].wipQty += pondWip; }
+
       const cpInspected = (op.cpGoodQty || 0) + (op.cpNgQty || 0);
       const cpWip = (op.qtyCP || 0) - cpInspected;
       const setsReady = (op.setsReadyForSewing || 0);
-      // OP masih aktif di CP jika masih ada set yang perlu diinspeksi ATAU masih ada set siap kirim ke Sewing
       if (cpWip > 0 || setsReady > 0) {
         stationMap['CP'].count++;
-        // WIP = sisa inspeksi (jika ada), atau jumlah set yang siap dikirim
         stationMap['CP'].wipQty += cpWip > 0 ? cpWip : setsReady;
       }
+
       const sewingWip = (op.qtySewingIn || 0) - (op.qtySewingOut || 0);
-      if (sewingWip > 0) {
-        stationMap['SEWING'].count++;
-        stationMap['SEWING'].wipQty += sewingWip;
-      }
+      if (sewingWip > 0) { stationMap['SEWING'].count++; stationMap['SEWING'].wipQty += sewingWip; }
+
       const qcInspected = (op.qtyQC || 0) + (op.qcNgQty || 0);
       const qcWip = (op.qtySewingOut || 0) - qcInspected;
-      if (qcWip > 0) {
-        stationMap['QC'].count++;
-        stationMap['QC'].wipQty += qcWip;
-      }
+      if (qcWip > 0) { stationMap['QC'].count++; stationMap['QC'].wipQty += qcWip; }
+
       const packingWip = (op.qtyQC || 0) - (op.qtyPacking || 0);
-      if (packingWip > 0) {
-        stationMap['PACKING'].count++;
-        stationMap['PACKING'].wipQty += packingWip;
-      }
+      if (packingWip > 0) { stationMap['PACKING'].count++; stationMap['PACKING'].wipQty += packingWip; }
+
       const fgWip = (op.qtyPacking || 0) - (op.qtyFG || 0);
-      if (fgWip > 0) {
-        stationMap['FG'].count++;
-        stationMap['FG'].wipQty += fgWip;
-      }
+      if (fgWip > 0) { stationMap['FG'].count++; stationMap['FG'].wipQty += fgWip; }
     }
 
-    // 3. Hitung input/output/ng berdasarkan rentang tanggal
+    // 3. Hitung input/output/ng per rentang tanggal
     const stationStats: Record<string, { input: number; output: number; ng: number }> = {};
     stationKeys.forEach(key => { stationStats[key] = { input: 0, output: 0, ng: 0 }; });
 
     // Cutting Pond input dari CuttingBatch dalam rentang
     const batchesInRange = await this.prisma.cuttingBatch.findMany({
-      where: { createdAt: { gte: startDate, lte: endDate } },
+      where: { createdAt: { gte: startDate, lte: endDate }, ...opLineWhere },
       select: { qty: true }
     });
     stationStats['CUTTING_POND'].input = batchesInRange.reduce((sum, b) => sum + b.qty, 0);
@@ -536,7 +526,8 @@ if (station === 'CP') {
       where: {
         station: StationCode.CUTTING_POND,
         createdAt: { gte: startDate, lte: endDate },
-        type: { in: ['GOOD', 'NG'] }
+        type: { in: ['GOOD', 'NG'] },
+        ...opLineWhere,
       },
       select: { type: true, qty: true }
     });
@@ -547,41 +538,28 @@ if (station === 'CP') {
 
     // CP input dari log TRANSFER_TO_CP
     const cpTransferLogs = await this.prisma.productionLog.findMany({
-      where: {
-        station: StationCode.CUTTING_POND,
-        type: 'TRANSFER_TO_CP',
-        createdAt: { gte: startDate, lte: endDate }
-      },
+      where: { station: StationCode.CUTTING_POND, type: 'TRANSFER_TO_CP', createdAt: { gte: startDate, lte: endDate }, ...opLineWhere },
       select: { qty: true }
     });
     stationStats['CP'].input = cpTransferLogs.reduce((sum, l) => sum + l.qty, 0);
 
     // CP output dari log SEND_TO_SEWING
     const cpSendLogs = await this.prisma.productionLog.findMany({
-      where: {
-        station: StationCode.CP,
-        type: 'SEND_TO_SEWING',
-        createdAt: { gte: startDate, lte: endDate }
-      },
+      where: { station: StationCode.CP, type: 'SEND_TO_SEWING', createdAt: { gte: startDate, lte: endDate }, ...opLineWhere },
       select: { qty: true }
     });
     stationStats['CP'].output = cpSendLogs.reduce((sum, l) => sum + l.qty, 0);
 
     // CP NG dari CheckPanelInspection
     const cpNgInRange = await this.prisma.checkPanelInspection.aggregate({
-      where: { createdAt: { gte: startDate, lte: endDate } },
-      _sum: { ng: true }
+      where: { createdAt: { gte: startDate, lte: endDate }, ...opLineWhere }, _sum: { ng: true }
     });
     stationStats['CP'].ng = cpNgInRange._sum.ng || 0;
 
     // Sewing
     stationStats['SEWING'].input = stationStats['CP'].output;
     const sewingFinishLogs = await this.prisma.productionLog.findMany({
-      where: {
-        station: StationCode.SEWING,
-        type: 'SEWING_FINISH',
-        createdAt: { gte: startDate, lte: endDate }
-      },
+      where: { station: StationCode.SEWING, type: 'SEWING_FINISH', createdAt: { gte: startDate, lte: endDate }, ...opLineWhere },
       select: { qty: true }
     });
     stationStats['SEWING'].output = sewingFinishLogs.reduce((sum, l) => sum + l.qty, 0);
@@ -589,20 +567,18 @@ if (station === 'CP') {
     // QC
     stationStats['QC'].input = stationStats['SEWING'].output;
     const qcGoodInRange = await this.prisma.qcInspection.aggregate({
-      where: { createdAt: { gte: startDate, lte: endDate } },
-      _sum: { good: true }
+      where: { createdAt: { gte: startDate, lte: endDate }, ...opLineWhere }, _sum: { good: true }
     });
     stationStats['QC'].output = qcGoodInRange._sum.good || 0;
     const qcNgInRange = await this.prisma.qcInspection.aggregate({
-      where: { createdAt: { gte: startDate, lte: endDate } },
-      _sum: { ng: true }
+      where: { createdAt: { gte: startDate, lte: endDate }, ...opLineWhere }, _sum: { ng: true }
     });
     stationStats['QC'].ng = qcNgInRange._sum.ng || 0;
 
     // Packing
     stationStats['PACKING'].input = stationStats['QC'].output;
     const packingOutputInRange = await this.prisma.packingSession.aggregate({
-      where: { status: 'CLOSED', createdAt: { gte: startDate, lte: endDate } },
+      where: { status: 'CLOSED', createdAt: { gte: startDate, lte: endDate }, ...itemsLineWhere },
       _sum: { totalQty: true }
     });
     stationStats['PACKING'].output = packingOutputInRange._sum.totalQty || 0;
@@ -610,14 +586,18 @@ if (station === 'CP') {
     // FG
     stationStats['FG'].input = stationStats['PACKING'].output;
     const fgOutputInRange = await this.prisma.shipment.aggregate({
-      where: { createdAt: { gte: startDate, lte: endDate } },
+      where: { createdAt: { gte: startDate, lte: endDate }, ...itemsLineWhere },
       _sum: { totalQty: true }
     });
     stationStats['FG'].output = fgOutputInRange._sum.totalQty || 0;
 
-    // Cutting Entan
-    stationStats['CUTTING_ENTAN'].input = 0;
-    stationStats['CUTTING_ENTAN'].output = 0;
+    // Cutting Entan — FIX 2: output hari ini = total dikirim ke Pond (QR_GENERATED) dalam rentang
+    const entanQrLogs = await this.prisma.productionLog.findMany({
+      where: { station: StationCode.CUTTING_ENTAN, type: 'QR_GENERATED', createdAt: { gte: startDate, lte: endDate }, ...opLineWhere },
+      select: { qty: true }
+    });
+    stationStats['CUTTING_ENTAN'].input = 0; // tidak ada sumber "input harian" untuk Entan (qtyEntan dari sync eksternal)
+    stationStats['CUTTING_ENTAN'].output = entanQrLogs.reduce((sum, l) => sum + l.qty, 0);
     stationStats['CUTTING_ENTAN'].ng = 0;
 
     const stationFlow = stationKeys.map(station => ({
@@ -630,7 +610,7 @@ if (station === 'CP') {
       progress: stationStats[station].input > 0 ? Math.round((stationStats[station].output / stationStats[station].input) * 100) : 0
     }));
 
-    // 4. Hourly production (hanya untuk rentang tanggal yang dipilih)
+    // 4. Hourly production (global; tidak dirender di UI saat ini)
     const hourlyRaw = await this.prisma.$queryRaw`
       SELECT EXTRACT(HOUR FROM "createdAt") as hour, SUM("totalQty") as output
       FROM "PackingSession"
@@ -644,16 +624,17 @@ if (station === 'CP') {
       target: activeLines * 50
     }));
 
-    // 5. Status distribution (tidak perlu filter tanggal, karena status saat ini)
+    // 5. Status distribution (difilter line)
     const statusCounts = await this.prisma.productionOrder.groupBy({
       by: ['status'],
+      where: { ...lineWhere, level: { not: OpLevel.PARENT } },
       _count: { status: true }
     });
     const statusDistribution = statusCounts.map(s => ({ status: s.status, count: s._count.status }));
 
-    // 6. Slow moving ops (tidak perlu filter tanggal)
+    // 6. Slow moving ops (difilter line)
     const slowOps = await this.prisma.productionOrder.findMany({
-      where: { status: 'WIP' },
+      where: { status: 'WIP', ...lineWhere, level: { not: OpLevel.PARENT } },
       orderBy: { updatedAt: 'asc' },
       take: 5,
       select: { opNumber: true, currentStation: true, updatedAt: true }
@@ -665,9 +646,9 @@ if (station === 'CP') {
       hoursInStation: Math.round((now.getTime() - op.updatedAt.getTime()) / (1000 * 60 * 60))
     }));
 
-    // 7. Recent activities (dalam rentang tanggal)
+    // 7. Recent activities (dalam rentang, difilter line)
     const recentLogs = await this.prisma.productionLog.findMany({
-      where: { createdAt: { gte: startDate, lte: endDate } },
+      where: { createdAt: { gte: startDate, lte: endDate }, ...opLineWhere },
       orderBy: { createdAt: 'desc' },
       take: 10,
       include: { op: { select: { opNumber: true } } }
@@ -680,7 +661,7 @@ if (station === 'CP') {
       qty: log.qty
     }));
 
-    // 8. Line summaries (dalam rentang tanggal)
+    // 8. Line summaries — SELALU semua line (dipakai untuk mengisi dropdown)
     const lines = await this.prisma.lineMaster.findMany({ select: { code: true, name: true } });
     const lineSummaries: { lineCode: string; output: number; efficiency: number; defectRate: number; target: number }[] = [];
     for (const line of lines) {
@@ -720,8 +701,7 @@ if (station === 'CP') {
       });
     }
 
-    // 9. Quality trend (7 hari terakhir, dihitung dari rentang yang dipilih? lebih baik tetap 7 hari terakhir dari tanggal akhir)
-    // Untuk konsistensi, kita gunakan 7 hari terakhir dari endDate (atau hari ini jika tidak ada filter)
+    // 9. Quality trend (7 hari terakhir dari endDate, difilter line)
     const endDateForTrend = endDateStr ? new Date(endDateStr) : new Date();
     const qualityTrend: { date: string; defectRate: number }[] = [];
     for (let i = 6; i >= 0; i--) {
@@ -730,12 +710,10 @@ if (station === 'CP') {
       const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
       const dateEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
       const dayGood = await this.prisma.checkPanelInspection.aggregate({
-        where: { createdAt: { gte: dateStart, lt: dateEnd } },
-        _sum: { good: true }
+        where: { createdAt: { gte: dateStart, lt: dateEnd }, ...opLineWhere }, _sum: { good: true }
       });
       const dayNg = await this.prisma.checkPanelInspection.aggregate({
-        where: { createdAt: { gte: dateStart, lt: dateEnd } },
-        _sum: { ng: true }
+        where: { createdAt: { gte: dateStart, lt: dateEnd }, ...opLineWhere }, _sum: { ng: true }
       });
       const dayTotal = (dayGood._sum.good || 0) + (dayNg._sum.ng || 0);
       const dayDefect = dayTotal > 0 ? Number(((dayNg._sum.ng || 0) / dayTotal) * 100).toFixed(1) : '0';
@@ -748,7 +726,8 @@ if (station === 'CP') {
     return {
       kpi: {
         totalOps, todayOutput, totalWip, overallEfficiency,
-        defectRate: Number(defectRate), onTimeDelivery, targetOutput, achievement
+        defectRate: Number(defectRate), targetOutput, achievement,
+        totalGood, totalNg,
       },
       stationFlow,
       hourlyProduction,
@@ -761,67 +740,186 @@ if (station === 'CP') {
   }
 
   // ======================================================
-  // SYNC EXTERNAL
+  // SYNC EXTERNAL (robust: per-OP, anti-timeout, URL dari .env)
   // ======================================================
   async syncExternalData() {
+    // ===== FASE 6: CUTOVER KE CUTTING REPORT INTERNAL (switch runtime) =====
+    // Sumber data Cutting Entan dikendalikan oleh SystemSetting "CUTTING_SOURCE"
+    // (tombol switch di UI), DEFAULT = INTERNAL. Saat INTERNAL, sumber OP induk
+    // (qtyEntan) sepenuhnya dari Cutting Report internal NextG (postToProduction),
+    // sehingga sync eksternal dilewati. Guard berlaku untuk scheduler MAUPUN
+    // endpoint manual /production-orders/sync. ENV CUTTING_SYNC_DISABLED tetap
+    // dihormati sebagai pemutus paksa (override) bila diset 'true'.
+    const source = await this.settings.getCuttingSource();
+    if (process.env.CUTTING_SYNC_DISABLED === 'true' || source === 'INTERNAL') {
+      return {
+        success: true,
+        disabled: true,
+        source,
+        message:
+          'Sync eksternal dilewati. Sumber OP = Cutting Report internal NextG (switch CUTTING_SOURCE=INTERNAL).',
+        total: 0,
+        fromApi: 0,
+        uniqueOps: 0,
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        errors: 0,
+      };
+    }
+
+    // 1. URL diambil dari .env (EXTERNAL_CUTTING_API) + '/cuttingreport',
+    //    dengan fallback ke alamat lama bila env belum diset.
+    const base = (
+      process.env.EXTERNAL_CUTTING_API ||
+      'http://202.52.15.30:998/miniapps/admin/api'
+    ).replace(/\/+$/, '');
+    const url = `${base}/cuttingreport`;
+
+    // 2. Ambil data dari API eksternal (dengan validasi respons).
+    let externalData: any[];
     try {
-      const response = await fetch('http://202.52.15.30:998/miniapps/admin/api/cuttingreport');
-      const externalData = await response.json();
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} ${response.statusText}`);
+      }
+      externalData = await response.json();
+    } catch (error: any) {
+      console.error('[sync] Gagal fetch API cutting:', error?.message ?? error);
+      throw new InternalServerErrorException(
+        `Sync failed (fetch ${url}): ${error?.message ?? error}`,
+      );
+    }
 
-      return await this.prisma.$transaction(async (tx) => {
-        for (const item of externalData) {
-          if (!item?.nomorOp) continue;
+    if (!Array.isArray(externalData)) {
+      throw new InternalServerErrorException('Sync failed: respons API bukan array');
+    }
 
-          const styleCode = item.nomorOp.substring(0, 4).toUpperCase();
-          const qtyOp = parseInt(item.qtyOp ?? '0') || 0;
-          const grandTotalCutting = parseInt(item.grandTotalCutting ?? '0') || 0;
+    // 3. Parser angka tahan-format ("1.250" / "1,250" / "1250 pcs" -> 1250).
+    const toInt = (v: any) =>
+      parseInt(String(v ?? '').replace(/[^\d-]/g, ''), 10) || 0;
 
-          // ===== FIND / CREATE LINE =====
-          let line = await tx.lineMaster.findUnique({
-            where: { code: styleCode }
-          });
+    // 4. Dedupe per nomorOp (ambil nilai terbesar) agar tidak terpotong bila API
+    //    mengirim beberapa baris untuk satu OP yang sama.
+    const byOp = new Map<
+      string,
+      {
+        opNumber: string;
+        itemNumberFG: string | null;
+        itemNameFG: string | null;
+        qtyOp: number;
+        qtyEntan: number;
+      }
+    >();
+    for (const item of externalData) {
+      const opNumber = item?.nomorOp;
+      if (!opNumber || typeof opNumber !== 'string') continue;
+      const prev = byOp.get(opNumber);
+      byOp.set(opNumber, {
+        opNumber,
+        itemNumberFG: item.itemNumberFinishGood ?? prev?.itemNumberFG ?? null,
+        itemNameFG: item.itemNameFinishGood ?? prev?.itemNameFG ?? null,
+        qtyOp: Math.max(toInt(item.qtyOp), prev?.qtyOp ?? 0),
+        qtyEntan: Math.max(toInt(item.grandTotalCutting), prev?.qtyEntan ?? 0),
+      });
+    }
 
-          if (!line) {
-            line = await tx.lineMaster.create({
-              data: {
-                code: styleCode,
-                name: `Line ${styleCode}`,
-                patternMultiplier: 4,
-              }
-            });
-          }
+    // 5. Tulis PER-OP (BUKAN dalam satu transaksi besar) agar:
+    //    - tidak terkena batas waktu transaksi Prisma (default 5 dtk) saat data
+    //      banyak — ini sering terjadi TEPAT setelah reset karena semua baris
+    //      adalah INSERT baru; dan
+    //    - satu baris bermasalah tidak membatalkan SEMUA OP lain (ambil semua yang valid).
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    let errors = 0;
+    const lineCache = new Map<string, string>(); // styleCode -> lineId
 
-          await tx.productionOrder.upsert({
-            where: { opNumber: item.nomorOp },
-            update: {
-              itemNumberFG: item.itemNumberFinishGood,
-              itemNameFG: item.itemNameFinishGood,
-              qtyOp: qtyOp,
-              qtyEntan: grandTotalCutting,
-            },
-            create: {
-              opNumber: item.nomorOp,
-              styleCode,
-              lineId: line.id,
-              itemNumberFG: item.itemNumberFinishGood,
-              itemNameFG: item.itemNameFinishGood,
-              qtyOp,
-              qtyEntan: grandTotalCutting,
-              currentStation: StationCode.CUTTING_ENTAN,
-              status: ProductionStatus.WIP,
-            }
-          });
+    for (const op of byOp.values()) {
+      try {
+        // itemNumberFG wajib (NOT NULL di schema). Bila kosong, lewati & catat
+        // (jangan biarkan satu baris invalid menggagalkan seluruh sync).
+        if (!op.itemNumberFG) {
+          skipped++;
+          console.warn(`[sync] OP ${op.opNumber} dilewati: itemNumberFinishGood kosong`);
+          continue;
         }
 
-        return {
-          success: true,
-          total: externalData.length
-        };
-      });
-    } catch (error: any) {
-      console.error(error);
-      throw new Error(`Sync failed: ${error.message}`);
+        const styleCode = op.opNumber.substring(0, 4).toUpperCase();
+
+        // FIND / CREATE LINE (pakai cache agar hemat query).
+        let lineId = lineCache.get(styleCode);
+        if (!lineId) {
+          let line = await this.prisma.lineMaster.findUnique({
+            where: { code: styleCode },
+          });
+          if (!line) {
+            line = await this.prisma.lineMaster.create({
+              data: { code: styleCode, name: `Line ${styleCode}`, patternMultiplier: 4 },
+            });
+          }
+          lineId = line.id;
+          lineCache.set(styleCode, lineId);
+        }
+
+        // Baca data lama untuk: (a) bedakan create vs update, dan
+        // (b) menjaga qtyEntan KUMULATIF & hanya NAIK (lihat catatan di bawah).
+        const existing = await this.prisma.productionOrder.findUnique({
+          where: { opNumber: op.opNumber },
+          select: { qtyEntan: true },
+        });
+
+        // qtyEntan = total hasil cutting kumulatif; secara fisik hanya bertambah,
+        // tidak mungkin berkurang. Mengunci agar monotonik (hanya naik) menjaga
+        // konsistensi terhadap batch yang SUDAH dikirim ke Pond (qtySentToPond),
+        // sehingga hasil cutting baru selalu MENAMBAH pending (jadi batch berikutnya),
+        // bukan menimpa/menghapus yang sudah dikirim.
+        const nextEntan = existing
+          ? Math.max(existing.qtyEntan, op.qtyEntan)
+          : op.qtyEntan;
+
+        await this.prisma.productionOrder.upsert({
+          where: { opNumber: op.opNumber },
+          update: {
+            itemNumberFG: op.itemNumberFG,
+            itemNameFG: op.itemNameFG,
+            qtyOp: op.qtyOp,
+            qtyEntan: nextEntan,
+            cuttingSource: 'EXTERNAL', // OP ini milik sumber EXTERNAL (API lama)
+          },
+          create: {
+            opNumber: op.opNumber,
+            styleCode,
+            lineId,
+            itemNumberFG: op.itemNumberFG,
+            itemNameFG: op.itemNameFG,
+            qtyOp: op.qtyOp,
+            qtyEntan: nextEntan,
+            currentStation: StationCode.CUTTING_ENTAN,
+            status: ProductionStatus.WIP,
+            level: OpLevel.PARENT, // OP baru = induk (penampung Entan); batch dibuat saat Generate QR
+            cuttingSource: 'EXTERNAL',
+          },
+        });
+        if (existing) updated++; else created++;
+      } catch (err: any) {
+        errors++;
+        console.error(`[sync] Gagal memproses OP ${op.opNumber}: ${err?.message ?? err}`);
+      }
     }
+
+    const summary = {
+      success: true,
+      total: created + updated, // jumlah OP yang berhasil ditulis
+      fromApi: externalData.length, // jumlah baris mentah dari API
+      uniqueOps: byOp.size,
+      created,
+      updated,
+      skipped,
+      errors,
+    };
+    console.log('[sync] Selesai:', summary);
+    return summary;
   }
 
   // ======================================================

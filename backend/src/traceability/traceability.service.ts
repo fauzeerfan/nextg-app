@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { StationCode } from '@prisma/client';
+import { StationCode, OpLevel } from '@prisma/client';
 
 export interface TraceabilityResult {
   opNumber: string;
@@ -15,6 +15,11 @@ export interface TraceabilityResult {
     totalPacked: number;
     totalShipped: number;
   };
+  batches?: Array<{
+    batchCode: string;
+    batchNumber: number | null;
+    summary: { totalGood: number; totalNg: number; totalPacked: number; totalShipped: number };
+  }>;
 }
 
 export interface TraceabilityEvent {
@@ -28,6 +33,45 @@ export interface TraceabilityEvent {
 @Injectable()
 export class TraceabilityService {
   constructor(private prisma: PrismaService) {}
+
+  // ===== Gabungkan jejak (timeline) semua batch turunan dari sebuah OP induk =====
+  private async traceParentByBatches(parent: any): Promise<TraceabilityResult> {
+    const children = await this.prisma.productionOrder.findMany({
+      where: { parentOpId: parent.id },
+      orderBy: { batchNumber: 'asc' },
+      select: { opNumber: true, batchCode: true, batchNumber: true },
+    });
+
+    const timeline: TraceabilityEvent[] = [];
+    const summary = { totalGood: 0, totalNg: 0, totalPacked: 0, totalShipped: 0 };
+    const batches: NonNullable<TraceabilityResult['batches']> = [];
+
+    for (const c of children) {
+      const res = await this.traceByOpNumber(c.opNumber); // anak = BATCH -> alur normal
+      const tag = c.batchCode || c.opNumber;
+      res.timeline.forEach((ev) =>
+        timeline.push({ ...ev, details: { ...(ev.details || {}), batch: tag } }),
+      );
+      summary.totalGood += res.summary.totalGood;
+      summary.totalNg += res.summary.totalNg;
+      summary.totalPacked += res.summary.totalPacked;
+      summary.totalShipped += res.summary.totalShipped;
+      batches.push({ batchCode: tag, batchNumber: c.batchNumber, summary: res.summary });
+    }
+
+    timeline.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    return {
+      opNumber: parent.opNumber,
+      styleCode: parent.styleCode,
+      itemNumberFG: parent.itemNumberFG,
+      currentStatus: parent.status,
+      currentStation: parent.currentStation || 'UNKNOWN',
+      timeline,
+      summary,
+      batches,
+    };
+  }
 
   async traceByOpNumber(opNumber: string): Promise<TraceabilityResult> {
     const op = await this.prisma.productionOrder.findUnique({
@@ -101,6 +145,11 @@ export class TraceabilityService {
 
     if (!op) {
       throw new NotFoundException(`OP ${opNumber} not found`);
+    }
+
+    // ===== OP INDUK: gabungkan jejak semua batch turunannya =====
+    if (op.level === OpLevel.PARENT) {
+      return this.traceParentByBatches(op);
     }
 
     // Build timeline

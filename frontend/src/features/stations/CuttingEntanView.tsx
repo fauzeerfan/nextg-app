@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TargetSummaryCard } from '../../components/ui/TargetSummaryCard';
+import { CuttingReportView } from './CuttingReportView';
+import { API_BASE_URL } from '../../lib/api';
 import {
   Scissors, Printer, CheckCircle, Loader2, RefreshCw, Package,
   ClipboardCheck, ArrowRight, Database, Target, AlertTriangle, History, X,
-  Activity
+  Activity, Layers, Check
 } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:3000';
 
 interface ReadyOp {
   id: string;
@@ -18,6 +19,8 @@ interface ReadyOp {
   totalCut: number;
   sentToPond: number;
   pending: number;
+  batchCount?: number;
+  lineCode?: string;
   lastBatch: {
     id: string;
     batchNumber: number;
@@ -92,6 +95,19 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
   const [showAll, setShowAll] = useState(false);
   const [all, setAll] = useState<any[]>([]);
   const [totalSent, setTotalSent] = useState(0);
+  const [mainTab, setMainTab] = useState<'dispatch' | 'report'>('dispatch');
+
+  // FASE 3 — dialog pilih Pola + Batch saat Generate QR
+  const [showDispatch, setShowDispatch] = useState(false);
+  const [dispInfo, setDispInfo] = useState<any>(null);
+  const [dispLoading, setDispLoading] = useState(false);
+  const [selPatterns, setSelPatterns] = useState<number[]>([]);
+  const [batchNumberInput, setBatchNumberInput] = useState<string>(''); // nomor batch MANUAL
+  const [dispQty, setDispQty] = useState<number>(0);
+
+  // SWITCH sumber data: INTERNAL (Cutting Report NextG) | EXTERNAL (API lama)
+  const [cuttingSource, setCuttingSource] = useState<'INTERNAL' | 'EXTERNAL'>('INTERNAL');
+  const [sourceLoading, setSourceLoading] = useState(false);
 
   // FUNGSI BARU: Menyimpan dan Mengingat OP ke LocalStorage
   const updateOpCache = useCallback((opsData: any[]) => {
@@ -116,15 +132,15 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
     }
   }, []);
 
-  const fetchOps = useCallback(async (skipSync = false) => {
+  const fetchOps = useCallback(async () => {
     setRefreshing(true);
     try {
-      if (!skipSync) await fetch(`${API_BASE_URL}/production-orders/sync`, { method: 'POST' });
+      // Tidak perlu sync lagi
       const res = await fetch(`${API_BASE_URL}/cutting-entan/ops`);
       if (res.ok) {
         const data = await res.json();
         setOps(data);
-        updateOpCache(data); // Simpan ingatan saat antrean di-load
+        updateOpCache(data);
       } else addLog('Failed to fetch cutting entan queue', 'error');
     } catch { addLog('Network error fetching OPs', 'error'); } finally { setRefreshing(false); }
   }, [addLog, updateOpCache]);
@@ -144,46 +160,135 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
     } catch { console.error('Failed to fetch total sent'); }
   }, []);
 
+  const fetchCuttingSource = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/settings/cutting-source`);
+      if (res.ok) {
+        const j = await res.json();
+        if (j?.source === 'EXTERNAL' || j?.source === 'INTERNAL') setCuttingSource(j.source);
+      }
+    } catch { /* diam: default INTERNAL */ }
+  }, []);
+
+  const toggleCuttingSource = async () => {
+    const next = cuttingSource === 'INTERNAL' ? 'EXTERNAL' : 'INTERNAL';
+    const msg =
+      next === 'EXTERNAL'
+        ? 'Beralih ke API Cutting Report LAMA (eksternal)?\nOP induk akan kembali ditarik dari sistem lama.'
+        : 'Beralih ke Cutting Report INTERNAL NextG?\nOP induk berasal dari hasil "Kirim ke Produksi".';
+    if (!confirm(msg)) return;
+    setSourceLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/settings/cutting-source`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: next }),
+      });
+      if (res.ok) {
+        const j = await res.json();
+        setCuttingSource(j.source);
+        addLog(`Sumber data Cutting beralih ke ${j.source}`, 'success');
+        await fetchOps();
+      } else {
+        addLog('Gagal mengubah sumber data', 'error');
+      }
+    } catch {
+      addLog('Network error saat mengubah sumber data', 'error');
+    } finally {
+      setSourceLoading(false);
+    }
+  };
+
   const viewAll = async () => { 
     await fetchAll(); 
     setShowAll(true); 
   };
 
   useEffect(() => {
-    fetchOps(); fetchTotal();
-    const i = setInterval(() => { fetchOps(true); fetchTotal(); }, 10000);
+    fetchOps(); fetchTotal(); fetchCuttingSource();
+    const i = setInterval(() => { fetchOps(); fetchTotal(); }, 10000);
     return () => clearInterval(i);
-  }, [fetchOps, fetchTotal]);
+  }, [fetchOps, fetchTotal, fetchCuttingSource]);
 
   const selectOp = (op: ReadyOp) => setSelOp(op);
 
+  // Buka dialog: pilih pola + batch sebelum generate QR (Fase 3)
   const generateQR = async () => {
     if (!selOp) return;
+    setShowDispatch(true);
+    setDispInfo(null);
+    setSelPatterns([]);
+    setBatchNumberInput(''); // nomor batch WAJIB diisi manual oleh operator
+    setDispLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/cutting-entan/op/${selOp.opNumber}/dispatch-info`);
+      if (res.ok) {
+        const info = await res.json();
+        setDispInfo(info);
+        setDispQty(info.pending > 0 ? info.pending : 0);
+        // Tidak auto-pilih pola & tidak auto-pilih batch: operator menentukan sendiri.
+        setSelPatterns([]);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Error: ${err.message || 'Gagal memuat info dispatch'}`);
+        setShowDispatch(false);
+      }
+    } catch {
+      alert('Network error');
+      setShowDispatch(false);
+    } finally {
+      setDispLoading(false);
+    }
+  };
+
+  const togglePattern = (idx: number) =>
+    setSelPatterns((prev) =>
+      prev.includes(idx) ? prev.filter((x) => x !== idx) : [...prev, idx],
+    );
+
+  // Kirim dispatch (batch baru atau tambah pola ke batch lama) -> generate QR
+  // batch existing yang cocok dengan nomor yang diketik (untuk mode "tambah pola")
+  const targetBatch = (dispInfo?.batches || []).find(
+    (b: any) => b.batchNumber === parseInt(batchNumberInput, 10),
+  );
+  const isExistingBatch = !!targetBatch;
+
+  const confirmDispatch = async () => {
+    if (!selOp) return;
+    const pats = [...selPatterns].sort((a, b) => a - b);
+    if (pats.length === 0) { alert('Pilih minimal 1 pola.'); return; }
+    const bn = parseInt(batchNumberInput, 10);
+    if (!bn || bn <= 0) { alert('Masukkan nomor batch manual (mis. 1, 2, 3).'); return; }
+    if (!isExistingBatch && dispQty <= 0) { alert('Qty harus lebih dari 0 untuk batch baru.'); return; }
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/cutting-entan/generate/${selOp.opNumber}`, { method: 'POST' });
+      const body: any = { patternIndexes: pats, batchNumber: bn };
+      if (!isExistingBatch) body.qty = dispQty; // qty hanya untuk batch baru
+      const res = await fetch(`${API_BASE_URL}/cutting-entan/generate/${selOp.opNumber}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
       if (res.ok) {
         const r = await res.json();
-        
-        // Simpan ingatan OP ini sebelum menghilang
         updateOpCache([selOp]);
-
         setQr({
           code: r.qr,
-          opNumber: r.opNumber,
-          itemNumberFG: selOp.itemNumberFG,
-          itemNameFG: selOp.itemNameFG,
-          qtyOp: selOp.qtyOp,
-          batchQty: r.qty,
-          batchNumber: r.batchNumber,
-          createdAt: new Date().toISOString()
+          opNumber: r.opNumber || selOp.opNumber,
+          itemNumberFG: r.itemNumberFG || selOp.itemNumberFG,
+          itemNameFG: r.itemNameFG || selOp.itemNameFG,
+          qtyOp: r.qtyOp ?? selOp.qtyOp,
+          batchQty: r.batchQty ?? r.qty ?? 0,
+          batchNumber: r.batchNumber ?? bn,
+          createdAt: r.createdAt || new Date().toISOString(),
         });
-        await fetchOps(true);
+        setShowDispatch(false);
+        await fetchOps();
         await fetchTotal();
         setSelOp(null);
       } else {
-        const err = await res.json();
-        alert(`Error: ${err.message || 'Failed to generate QR'}`);
+        const err = await res.json().catch(() => ({}));
+        alert(`Error: ${err.message || 'Gagal generate QR'}`);
       }
     } catch {
       alert('Network error');
@@ -209,31 +314,21 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
     try {
       const res = await fetch(`${API_BASE_URL}/cutting-entan/reprint/${id}`);
       if (res.ok) {
+        // Backend kini mengembalikan data LENGKAP (dari OP induk + batch), jadi
+        // tidak perlu lagi menebak dari cache. Label reprint = label saat generate.
         const r = await res.json();
-        
-        // 1. Ambil data batch
-        const batch = all.find(b => b.id === id) || hist.find(b => b.id === id);
-        const opNum = batch?.opNumber || r?.opNumber;
-        
-        // 2. Ambil ingatan dari LocalStorage (CACHE SAKTI)
-        const cache = JSON.parse(localStorage.getItem('cutting_op_cache') || '{}');
-        const cachedOp = cache[opNum] || {};
-
-        // 3. Gabungkan semua sumber data (Prioritaskan Cache > Database langsung)
-        const finalItemNumberFG = cachedOp.itemNumberFG || batch?.productionOrder?.itemNumberFG || r?.itemNumberFG || batch?.itemNumberFG || '-';
-        const finalItemNameFG = cachedOp.itemNameFG || batch?.productionOrder?.itemNameFG || r?.itemNameFG || batch?.itemNameFG || '-';
-        const finalQtyOp = cachedOp.qtyOp || batch?.productionOrder?.qty || r?.qtyOp || batch?.qtyOp || 0;
-
         setQr({
-          code: r.qr,
-          opNumber: opNum || '-',
-          itemNumberFG: finalItemNumberFG,
-          itemNameFG: finalItemNameFG,
-          qtyOp: finalQtyOp,
-          batchQty: r.qty || batch?.qty || 0,
-          batchNumber: r.batchNumber || batch?.batchNumber || 0,
-          createdAt: batch?.createdAt || r?.createdAt || new Date().toISOString()
+          code: r.qr || r.code,
+          opNumber: r.opNumber || '-',
+          itemNumberFG: r.itemNumberFG || r.fgNumber || '-',
+          itemNameFG: r.itemNameFG || '-',
+          qtyOp: r.qtyOp ?? 0,
+          batchQty: r.batchQty ?? r.qty ?? 0,
+          batchNumber: r.batchNumber ?? 0,
+          createdAt: r.createdAt || new Date().toISOString(),
         });
+      } else {
+        alert('Failed to reprint');
       }
     } catch { alert('Failed to reprint'); }
   };
@@ -241,6 +336,13 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
   const totalPending = ops.reduce((sum, op) => sum + op.pending, 0);
   const totalTarget = totalSent + totalPending;
   const overallProgress = totalTarget > 0 ? Math.round((totalSent / totalTarget) * 100) : 0;
+
+  // Pola yang TERKUNCI = pola yang sudah ada di batch bernomor sama (target).
+  // Untuk batch BARU (nomor belum ada), tidak ada yang terkunci. Setiap batch
+  // adalah 1 set terpisah sehingga pola yang sama boleh ada di batch berbeda.
+  const dispUsed = new Set<number>(
+    (targetBatch?.dispatchedPatterns || []) as number[],
+  );
 
   // Solid Modal for Batches
   const BatchModal = ({ show, onClose, title, data, cols }: any) => {
@@ -308,8 +410,53 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
     return `${day}/${month}/${year}`;
   };
 
+  const cuttingTabBar = (
+    <div className="flex flex-wrap items-center gap-2 mb-5 font-poppins p-4 md:p-6 pb-0">
+      {(['dispatch', 'report'] as const).map((t) => (
+        <button
+          key={t}
+          onClick={() => setMainTab(t)}
+          className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${mainTab === t ? 'bg-orange-600 text-white shadow-md' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-2 border-slate-200 dark:border-slate-700'}`}
+        >
+          {t === 'dispatch' ? 'Generate QR / Dispatch' : 'Cutting Report'}
+        </button>
+      ))}
+
+      {/* SWITCH sumber data Cutting Entan (default: Internal NextG) */}
+      <div className="ml-auto flex items-center gap-2">
+        <span
+          className={`text-[11px] font-black px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 ${cuttingSource === 'INTERNAL'
+            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}
+          title="Sumber OP induk untuk dispatch"
+        >
+          <Database size={13} /> {cuttingSource === 'INTERNAL' ? 'Cutting Report Internal' : 'API Lama (Eksternal)'}
+        </span>
+        <button
+          onClick={toggleCuttingSource}
+          disabled={sourceLoading}
+          title="Ganti sumber data Cutting Entan"
+          className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-800 text-white dark:bg-slate-700 hover:bg-slate-900 flex items-center gap-1.5 disabled:opacity-50"
+        >
+          {sourceLoading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+          Switch ke {cuttingSource === 'INTERNAL' ? 'API Lama' : 'Internal'}
+        </button>
+      </div>
+    </div>
+  );
+
+  if (mainTab === 'report') {
+    return (
+      <div className="font-poppins text-slate-800 dark:text-slate-100 min-h-screen animate-in fade-in duration-300 p-4 md:p-6">
+        {cuttingTabBar}
+        <CuttingReportView />
+      </div>
+    );
+  }
+
   return (
     <div className="font-poppins text-slate-800 dark:text-slate-100 min-h-screen animate-in fade-in duration-300">
+      {cuttingTabBar}
       <style dangerouslySetInnerHTML={{__html: `
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
         .font-poppins { font-family: 'Poppins', sans-serif; }
@@ -351,7 +498,7 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
                   <div className="flex flex-col justify-center text-left font-semibold text-[9pt] leading-[1.1] tracking-wide">
                     <div>{qr.itemNumberFG}</div>
                     <div>{qr.opNumber}</div>
-                    <div>{qr.qtyOp} PCS</div>
+                    <div>Batch {qr.batchNumber} · {qr.batchQty} PCS</div>
                     <div>{formatDate(qr.createdAt ? new Date(qr.createdAt) : new Date())}</div>
                   </div>
                 </div>
@@ -393,7 +540,7 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
                         <div className="flex flex-col justify-center text-left font-bold text-[15px] leading-tight tracking-wide">
                           <div>{qr.itemNumberFG}</div>
                           <div>{qr.opNumber}</div>
-                          <div>{qr.qtyOp} PCS</div>
+                          <div>Batch {qr.batchNumber} · {qr.batchQty} PCS</div>
                           <div>{formatDate(qr.createdAt ? new Date(qr.createdAt) : new Date())}</div>
                         </div>
                       </div>
@@ -423,6 +570,110 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
             </div>
           </div>
         </>
+      )}
+
+      {/* ===== FASE 3: Dialog Pilih Pola + Batch ===== */}
+      {showDispatch && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 print:hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center shadow-lg text-white">
+                  <Layers size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white leading-none">Dispatch ke Cutting Pond</h3>
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mt-1">{selOp?.opNumber} · pilih pola & batch</p>
+                </div>
+              </div>
+              <button onClick={() => setShowDispatch(false)} className="p-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors">
+                <X size={22} className="text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-6 flex-1 overflow-y-auto custom-scrollbar space-y-6">
+              {dispLoading || !dispInfo ? (
+                <div className="py-16 flex justify-center"><Loader2 className="animate-spin text-orange-500" size={32} /></div>
+              ) : (
+                <>
+                  <div>
+                    <div className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">1. Nomor Batch (INPUT MANUAL)</div>
+                    <input
+                      type="number" min={1} value={batchNumberInput}
+                      onChange={(e) => setBatchNumberInput(e.target.value.replace(/[^0-9]/g, ''))}
+                      placeholder="Ketik nomor batch, mis. 1, 2, 3"
+                      className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-black text-lg text-slate-900 dark:text-white focus:border-orange-500 outline-none"
+                    />
+                    {isExistingBatch ? (
+                      <div className="mt-2 text-xs font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2">
+                        Batch {batchNumberInput} sudah ada ({targetBatch.qty} set). Pola yang dipilih akan DITAMBAHKAN untuk melengkapi set (qty tetap).
+                      </div>
+                    ) : (
+                      <div className="mt-3">
+                        <div className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Qty Set (batch baru)</div>
+                        <input type="number" min={1} max={dispInfo.pending} value={dispQty}
+                          onChange={(e) => setDispQty(Math.max(0, parseInt(e.target.value) || 0))}
+                          className="w-full px-4 py-3 rounded-xl border-2 border-orange-300 dark:border-orange-700 bg-white dark:bg-slate-800 font-black text-lg text-right text-slate-900 dark:text-white outline-none" />
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Sisa pending: {dispInfo.pending} set</div>
+                      </div>
+                    )}
+                    {(dispInfo.batches || []).length > 0 && (
+                      <div className="mt-3">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Batch sudah ada (klik untuk melanjutkan):</div>
+                        <div className="flex flex-wrap gap-2">
+                          {(dispInfo.batches || []).map((b: any) => {
+                            const names = (b.dispatchedPatterns || []).map((i: number) => (dispInfo.patterns?.[i]?.name ?? (i + 1))).join(', ') || '-';
+                            const active = b.batchNumber === parseInt(batchNumberInput, 10);
+                            return (
+                              <button key={b.id} type="button"
+                                onClick={() => setBatchNumberInput(String(b.batchNumber))}
+                                className={`px-3 py-2 rounded-lg border-2 text-left text-xs transition ${active ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-orange-300'}`}>
+                                <div className="font-black text-slate-900 dark:text-white">Batch {b.batchNumber}</div>
+                                <div className="text-slate-500 dark:text-slate-400">{b.qty} set · pola: {names}</div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">2. Pilih Pola ({selPatterns.length}/{dispInfo.totalPatterns})</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(dispInfo.patterns || []).map((p: any) => {
+                        const already = dispUsed.has(p.index);
+                        const checked = selPatterns.includes(p.index);
+                        return (
+                          <button key={p.index} type="button" disabled={already}
+                            onClick={() => togglePattern(p.index)}
+                            className={`flex items-center gap-2 p-3 rounded-xl border-2 text-left transition ${already ? 'border-slate-200 dark:border-slate-700 opacity-40 cursor-not-allowed' : checked ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-orange-300'}`}>
+                            <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${checked ? 'bg-orange-600 text-white' : 'border-2 border-slate-300 dark:border-slate-600'}`}>
+                              {checked && <Check size={14} />}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-slate-900 dark:text-white text-sm truncate">{p.name}</div>
+                              {already && <div className="text-[10px] text-slate-400 font-semibold uppercase">sudah di batch</div>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">Pola yang sudah di-dispatch terkunci. Cutting Pond hanya menghitung pola yang dipilih; transfer ke Check Panel baru terbuka setelah <strong>semua pola</strong> 1 set lengkap.</p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-3">
+              <button onClick={() => setShowDispatch(false)} className="flex-1 py-3 border-2 border-slate-200 dark:border-slate-700 rounded-xl font-black text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition uppercase tracking-wider text-sm">Batal</button>
+              <button onClick={confirmDispatch} disabled={loading || dispLoading || !dispInfo || selPatterns.length === 0 || !batchNumberInput || (!isExistingBatch && dispQty <= 0)}
+                className="flex-[2] py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-black flex justify-center items-center gap-2 text-sm uppercase tracking-wider shadow-lg shadow-orange-600/30 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                {loading ? <Loader2 className="animate-spin" size={20} /> : <><Printer size={18} /> Generate QR</>}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ========================================================= */}
@@ -481,7 +732,7 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
                   <History size={18} />
                   History
                 </button>
-                <button onClick={() => fetchOps(false)} disabled={refreshing} className="group px-5 py-3 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-2 hover:border-orange-500 hover:text-orange-600 dark:hover:border-orange-400 dark:hover:text-orange-400 transition-colors shadow-sm text-sm">
+                <button onClick={() => fetchOps()} disabled={refreshing} className="group px-5 py-3 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-2 hover:border-orange-500 hover:text-orange-600 dark:hover:border-orange-400 dark:hover:text-orange-400 transition-colors shadow-sm text-sm">
                   {refreshing ? <RefreshCw size={18} className="animate-spin text-orange-500" /> : <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-500" />}
                   Refresh
                 </button>
@@ -640,13 +891,15 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
                   <div className="mt-auto">
                     <button 
                       onClick={generateQR} 
-                      disabled={loading || selOp.pending === 0} 
+                      disabled={loading || (selOp.pending === 0 && !selOp.batchCount)} 
                       className="w-full py-5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black text-xl flex justify-center items-center gap-3 shadow-xl shadow-orange-600/30 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed transition-all hover:-translate-y-1 active:translate-y-0"
                     >
                       {loading ? <Loader2 className="animate-spin" size={24} /> : (
                         <>
                           <Printer size={24} />
-                          Generate QR for {selOp.pending} pieces
+                          {selOp.pending > 0
+                            ? `Generate QR for ${selOp.pending} pieces`
+                            : 'Lanjutkan Dispatch Pola'}
                           <ArrowRight size={22} className="ml-2" />
                         </>
                       )}

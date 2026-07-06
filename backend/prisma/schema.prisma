@@ -27,6 +27,12 @@ enum ProductionStatus {
   HOLD
 }
 
+// ===== Pemisahan Batch: peran sebuah baris ProductionOrder =====
+enum OpLevel {
+  PARENT
+  BATCH
+}
+
 //////////////////////////////////////////////////////
 // USER
 //////////////////////////////////////////////////////
@@ -192,6 +198,22 @@ model ProductionOrder {
 
   status         ProductionStatus @default(WIP)
   currentStation StationCode?
+
+  // Sumber data Cutting Entan pembuat OP induk ini: "INTERNAL" (Cutting Report
+  // NextG) atau "EXTERNAL" (API Cutting Report lama). Dipakai agar daftar OP di
+  // Cutting Entan HANYA menampilkan OP sesuai switch aktif (satu sumber/waktu).
+  // Batch turunan (child) tidak difilter, jadi yang sudah masuk Cutting Pond &
+  // seterusnya TIDAK terpengaruh saat switch.
+  cuttingSource  String @default("INTERNAL")
+
+  // ===== Pemisahan Batch =====
+  level       OpLevel @default(BATCH)
+  parentOpId  String?
+  batchNumber Int?
+  batchCode   String? @unique
+
+  parent  ProductionOrder?  @relation("OpBatches", fields: [parentOpId], references: [id])
+  batches ProductionOrder[] @relation("OpBatches")
 
   line LineMaster @relation(fields: [lineId], references: [id])
 
@@ -779,4 +801,174 @@ model SupportTicketMessage {
   sender    User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@map("support_ticket_messages")
+}
+
+
+//////////////////////////////////////////////////////
+// CUTTING REPORT (internal NextG, menggantikan app eksternal)
+//////////////////////////////////////////////////////
+
+enum CuttingVariant {
+  AUT // automotive
+  NAT // non-automotive
+}
+
+model CuttingForm {
+  id          String    @id @default(uuid())
+  kodeForm    String    @unique
+  shipDate    DateTime?
+  creatorName String?
+  createdById String?
+  status      String    @default("OPEN") // OPEN, CLOSED
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  ops CuttingFormOp[]
+
+  @@map("cutting_forms")
+}
+
+model CuttingFormOp {
+  id           String    @id @default(uuid())
+  formId       String
+  opNumber     String
+  styleCode    String
+  itemNumberFG String
+  itemNameFG   String?
+  qtyOp        Int       @default(0)
+  releaseDate  DateTime?
+  createdAt    DateTime  @default(now())
+
+  form      CuttingForm             @relation(fields: [formId], references: [id], onDelete: Cascade)
+  materials CuttingFormOpMaterial[]
+  entans    CuttingEntan[]
+
+  @@map("cutting_form_ops")
+}
+
+model CuttingFormOpMaterial {
+  id             String         @id @default(uuid())
+  formOpId       String
+  setArtnr       String // set_artnr_u
+  artName        String?
+  unit           String? // Art_einheit
+  pricePerUnit   Float? // Art_ekletzt
+  usagePerSet    Float          @default(0) // total (pemakaian per set)
+  variant        CuttingVariant @default(AUT)
+  qtyRequirement Float          @default(0) // usagePerSet * qtyOp
+  qtySetPcs      Int            @default(0) // progress hasil
+  createdAt      DateTime       @default(now())
+
+  formOp   CuttingFormOp    @relation(fields: [formOpId], references: [id], onDelete: Cascade)
+  details  CuttingDetail[]
+  turunans CuttingTurunan[]
+
+  @@map("cutting_form_op_materials")
+}
+
+model CuttingEntan {
+  id         String    @id @default(uuid())
+  formOpId   String
+  entanKe    Int       @default(1)
+  startAt    DateTime  @default(now())
+  finishAt   DateTime?
+  approved   Boolean   @default(false)
+  approvedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  formOp  CuttingFormOp   @relation(fields: [formOpId], references: [id], onDelete: Cascade)
+  details CuttingDetail[]
+
+  @@unique([formOpId, entanKe])
+  @@map("cutting_entans")
+}
+
+model CuttingDetail {
+  id                 String   @id @default(uuid())
+  entanId            String
+  materialId         String
+  noLot              String?
+  panjangPackingList Float    @default(0)
+  panjangAktual      Float    @default(0)
+  lebar              Float    @default(0)
+  markerPanjang      Float    @default(0)
+  markerLebar        Float    @default(0)
+  entanLembar        Int      @default(0)
+  entanGambar        Int      @default(0)
+  losSambungan       Float    @default(0)
+  losCacat           Float    @default(0)
+  losAktual          Float    @default(0)
+  // losWarna: loss khusus alur NON-AUTOMOTIVE (NAT/turunan) dari app lama.
+  // Untuk AUT selalu 0 (tidak dipakai). Dihitung ke dalam total loss.
+  losWarna           Float    @default(0)
+
+  // === BARU ===
+  // AUT = potong utama (panel automotive). NAT = potong turunan (non-automotive)
+  // yang memakai sisa material dari potong utama.
+  variant            CuttingVariant @default(AUT)
+  // NORMAL = potong biasa, SISA = baris dari sisa/lebihan, MR = pakai material request.
+  sumber             String         @default("NORMAL")
+  // Nomor grup turunan untuk NAT (1,2,...). null untuk AUT.
+  // Tetap dipertahankan untuk kompatibilitas; nilainya = CuttingTurunan.noTurun.
+  turunanKe          Int?
+  // Relasi resmi ke grup turunan (mirror tbl_turuncutting app lama). null untuk AUT.
+  turunanId          String?
+
+  // dihitung server:
+  totalSetOrPcs      Int      @default(0)
+  aktualPemakaian    Float    @default(0)
+  aktualMaterial     Float    @default(0)
+  sisa               Float    @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+ 
+  entan    CuttingEntan          @relation(fields: [entanId], references: [id], onDelete: Cascade)
+  material CuttingFormOpMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  turunan  CuttingTurunan?       @relation(fields: [turunanId], references: [id], onDelete: SetNull)
+
+  @@index([materialId, variant])
+  @@index([turunanId])
+  @@map("cutting_details")
+}
+
+// Grup turunan (NON-AUTOMOTIVE) per material — mirror tbl_turuncutting app lama.
+// Satu material bisa punya beberapa turunan (noTurun 1,2,...); tiap turunan
+// menampung baris CuttingDetail bervariant NAT yang memakai sisa material.
+model CuttingTurunan {
+  id         String   @id @default(uuid())
+  materialId String
+  noTurun    Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  material CuttingFormOpMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  details  CuttingDetail[]
+
+  @@unique([materialId, noTurun])
+  @@map("cutting_turunans")
+}
+
+model CuttingDispatch {
+  id                String   @id @default(uuid())
+  productionOrderId String // soft-link ke ProductionOrder induk
+  batchOpId         String // soft-link ke ProductionOrder batch (child)
+  batchLabel        String // "B1", "B2"
+  qty               Int      @default(0) // jumlah set
+  patternIndexes    Json // contoh [0,1] = pola 1 & 2
+  sourceEntanId     String? // jejak ke CuttingEntan sumber
+  createdAt         DateTime @default(now())
+
+  @@map("cutting_dispatches")
+}
+
+// Pengaturan sistem key-value (runtime, tanpa restart).
+// Dipakai antara lain untuk SWITCH sumber data Cutting Entan:
+//   key = "CUTTING_SOURCE", value = "INTERNAL" (default) | "EXTERNAL"
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("system_settings")
 }

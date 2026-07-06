@@ -79,7 +79,7 @@ export class PackingService {
     const firstItem = session.items[0];
     if (!firstItem) throw new BadRequestException('Session has no items');
     const line = firstItem.op.line;
-    let packSize = 100;
+    let packSize = 50;
     if (line && line.packingConfig) {
       const config = line.packingConfig as any;
       if (config && typeof config.packSize === 'number') {

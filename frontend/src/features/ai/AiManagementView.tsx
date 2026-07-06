@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bot, Plus, Edit, Trash2, Save, X, Search, Loader2, Hash, FileText, Navigation } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 
 interface Intent {
   id: string;

@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Users, UserPlus, Edit, Save, Shield, Lock, Unlock, Mail, Building,
   CheckCircle, Eye, EyeOff, Trash2, XCircle, Search,
   Calendar, Loader2, UserCheck, TrendingUp, Star, AlertCircle,
-  ArrowRight, UserCog, Hash, Layers
+  UserCog, Hash, Layers
 } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 
 interface SystemUser {
   id: string; username: string; fullName: string; email: string; role: 'OPERATOR' | 'MANAGER' | 'ADMINISTRATOR';
@@ -24,16 +24,11 @@ const jobOpts = [
   { code: 'OPR', name: 'Operator' }, { code: 'LDR', name: 'Leader' }, { code: 'KASI', name: 'Kepala Seksi' },
   { code: 'KABAG', name: 'Kepala Bagian' }, { code: 'MGR', name: 'Manager' }, { code: 'STF', name: 'Staff' }, { code: 'DIR', name: 'Director' }
 ];
-const stationOpts = [
-  { value: 'CUTTING_ENTAN', label: 'Cutting Entan' }, { value: 'CUTTING_POND', label: 'Cutting Pond' },
-  { value: 'CP', label: 'Check Panel' }, { value: 'SEWING', label: 'Sewing' }, { value: 'QC', label: 'Quality Control' },
-  { value: 'PACKING', label: 'Packing' }, { value: 'FG', label: 'Finished Goods' }
-];
 
 // --- MENU OPTIONS ---
 const menuOptions = [
   { id: 'dashboard', label: 'Dashboard', category: 'Core' },
-  { id: 'ai_chat', label: 'AI Assistant Chat', category: 'Core' },
+  { id: 'ai_chat', label: 'Widget Feby', category: 'Core' },
   { id: 'cutting_entan', label: 'Cutting Entan', category: 'Production' },
   { id: 'cutting_pond', label: 'Cutting Pond', category: 'Production' },
   { id: 'cp', label: 'Check Panel', category: 'Production' },

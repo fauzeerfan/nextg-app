@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Target, Save, Plus, Trash2, Edit, Calendar, Hash, AlertCircle, CheckCircle } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 
 interface TargetSetting {
   id: string;

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 
 const categories = [
   { value: 'FEATURE', label: 'Feature Request', color: 'text-blue-500' },

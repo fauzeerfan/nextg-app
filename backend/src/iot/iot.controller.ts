@@ -99,6 +99,21 @@ export class IotController {
     }
   }
 
+  // ========== DHRISTI CHECK-IN ABSENSI (Manpower via IoT) ==========
+  // Resolusi karyawan dari hasil scan nametag (isi QR = NIK).
+  @Get('attendance/resolve')
+  async resolveAttendance(@Query('code') code: string) {
+    return this.iot.resolveEmployeeForAttendance(code);
+  }
+
+  // Simpan check-in absensi (sama seperti Manpower Control) -> Manpower Monitoring.
+  @Post('attendance/checkin')
+  async attendanceCheckin(
+    @Body() body: { deviceId?: string; nik: string; lineCode?: string; station?: string },
+  ) {
+    return this.iot.deviceCheckIn(body);
+  }
+
   // ========== NEW CRUD ENDPOINTS ==========
   @Get('device/:id')
   async getDevice(@Param('id') id: string) {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Users, Scan, Calendar, CheckCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 
 interface AttendanceRecord {
   id: string;

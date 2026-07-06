@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Package, Box, RefreshCw, Search, Plus, Printer, X, CheckCircle,
-  Layers, Save, Loader2, QrCode, History, Delete, Activity
+  Layers, Save, Loader2, QrCode, History, Delete, Activity,
+  Maximize2, Minimize2, AlertCircle
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { TargetSummaryCard } from '../../components/ui/TargetSummaryCard';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 
 interface ProductionOrder {
   id: string;
@@ -66,7 +68,7 @@ interface QrData {
 const MetricCard = ({ title, value, icon: Icon, color = 'indigo', subtitle, suffix }: {
   title: string;
   value: number | string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   color?: 'indigo' | 'emerald' | 'amber' | 'blue';
   subtitle?: string;
   suffix?: string;
@@ -263,7 +265,7 @@ export const PackingView = () => {
   const [ops, setOps] = useState<PackingOp[]>([]);
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState('');
+const [, setLastUpdate] = useState('');
 
   const [activeSession, setActiveSession] = useState<PackingSession | null>(null);
   const [loadingSession, setLoadingSession] = useState(false);
@@ -272,6 +274,13 @@ export const PackingView = () => {
 
   const [selectedOpId, setSelectedOpId] = useState<string>('');
   const [inputQty, setInputQty] = useState<number>(0);
+
+  // ========== RESET KETIKA SESSION AKTIF BERUBAH ==========
+  useEffect(() => {
+    setSelectedOpId('');
+    setInputQty(0);
+  }, [activeSession]);
+
   const [adding, setAdding] = useState(false);
   const [closing, setClosing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -291,7 +300,8 @@ export const PackingView = () => {
   const prevPackedBoxesRef = useRef<PackedBox[]>([]);
 
   // ========== PACK SIZE ==========
-  const [packSize, setPackSize] = useState<number>(100);
+  const [packSize, setPackSize] = useState<number>(50);
+  const [fullscreen, setFullscreen] = useState(false);
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('nextg_token');
@@ -450,14 +460,14 @@ export const PackingView = () => {
         fetch(`${API_BASE_URL}/line-masters/${firstOp.lineCode}/packing-config`, {
           headers: getAuthHeaders(),
         })
-          .then(res => res.ok ? res.json() : { packSize: 100 })
+          .then(res => res.ok ? res.json() : { packSize: 50 })
           .then(data => setPackSize(data.packSize))
-          .catch(() => setPackSize(100));
+          .catch(() => setPackSize(50));
       } else {
-        setPackSize(100);
+        setPackSize(50);
       }
     } else {
-      setPackSize(100);
+      setPackSize(50);
     }
   }, [activeSession]);
 
@@ -476,15 +486,23 @@ export const PackingView = () => {
     return () => clearInterval(interval);
   }, [fetchOps, fetchActiveSession, fetchHistory, fetchPackedBoxes]);
 
-  const filteredOps = useMemo(() => {
-    if (search.trim() === '') return ops;
+  // ========== FILTER OPS HANYA BERDASARKAN SESSION AKTIF ==========
+  const filteredOpsByFGSession = useMemo(() => {
+    if (activeSession) {
+      return ops.filter(op => op.itemNumberFG === activeSession.fgNumber);
+    }
+    return ops; // Belum ada session → tampilkan semua OP
+  }, [ops, activeSession]);
+
+  const displayedOps = useMemo(() => {
+    if (search.trim() === '') return filteredOpsByFGSession;
     const lower = search.toLowerCase();
-    return ops.filter(op => 
+    return filteredOpsByFGSession.filter(op => 
       op.opNumber.toLowerCase().includes(lower) || 
       op.styleCode.toLowerCase().includes(lower) ||
       op.itemNumberFG?.toLowerCase().includes(lower)
     );
-  }, [ops, search]);
+  }, [filteredOpsByFGSession, search]);
 
   const createSession = async () => {
     if (!selectedFG) return;
@@ -549,7 +567,7 @@ export const PackingView = () => {
     }
   };
 
-  const removeItem = async (itemId: string) => {
+const removeItem = async (_itemId: string) => {
     alert('Remove item function not yet available');
   };
 
@@ -897,231 +915,287 @@ export const PackingView = () => {
           </div>
         </div>
 
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-          {/* Left Column - Available OPs */}
-          <div className="lg:col-span-2">
-            <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col h-full">
-              <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-md text-white">
-                    <Package size={18} />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-slate-900 dark:text-white text-base">Available from QC</h3>
-                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">Select OP to pack</p>
-                  </div>
-                </div>
-                <div className="px-3 py-1 bg-slate-200 dark:bg-slate-700 rounded-lg text-xs font-black text-slate-700 dark:text-slate-200">
-                  {ops.length} OPs
-                </div>
-              </div>
-              <div className="p-4 flex-1 flex flex-col">
-                <div className="relative mb-4">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input
-                    type="text"
-                    placeholder="Search OP, style, FG..."
-                    className="w-full pl-10 pr-4 py-3 text-sm font-semibold border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-xl text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/30 transition-all outline-none"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                  {filteredOps.length === 0 ? (
-                    <div className="text-center py-10">
-                      <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Package size={28} className="text-slate-300 dark:text-slate-600" />
-                      </div>
-                      <p className="text-sm font-bold text-slate-500 dark:text-slate-400">No OPs ready for packing</p>
+        {/* Fullscreen wrapper */}
+        <div
+          className={
+            fullscreen
+              ? 'fixed inset-0 z-[200] bg-white dark:bg-slate-900 overflow-auto p-4'
+              : ''
+          }
+        >
+          {fullscreen && (
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={() => setFullscreen(false)}
+                className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                title="Keluar fullscreen"
+              >
+                <Minimize2 size={20} className="text-slate-600 dark:text-slate-300" />
+              </button>
+            </div>
+          )}
+          {/* Main Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+            {/* Left Column - Available OPs */}
+            <div className="lg:col-span-2">
+              <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col h-full">
+                <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-md text-white">
+                      <Package size={18} />
                     </div>
-                  ) : (
-                    filteredOps.map(op => {
-                      const isSelected = selectedOpId === op.id;
-                      return (
-                        <div
-                          key={op.id}
-                          className={`group p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 ${
-                            isSelected
-                              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 shadow-md ring-1 ring-indigo-500'
-                              : 'border-slate-200 dark:border-slate-700 hover:border-indigo-400 hover:shadow-sm bg-white dark:bg-slate-800'
-                          }`}
-                          onClick={() => setSelectedOpId(op.id)}
-                        >
-                          <div className="flex items-start justify-between mb-2">
-                            <div>
-                              <div className="font-mono font-black text-lg leading-none mb-1 text-slate-900 dark:text-white">{op.opNumber}</div>
-                              <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Style: {op.styleCode}</div>
-                              <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mt-0.5">FG: {op.itemNumberFG}</div>
+                    <div>
+                      <h3 className="font-black text-slate-900 dark:text-white text-base">Available from QC</h3>
+                      <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">Select OP to pack</p>
+                    </div>
+                  </div>
+                  <div className="px-3 py-1 bg-slate-200 dark:bg-slate-700 rounded-lg text-xs font-black text-slate-700 dark:text-slate-200">
+                    {ops.length} OPs
+                  </div>
+                </div>
+                <div className="p-4 flex-1 flex flex-col">
+                  <div className="relative mb-4">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input
+                      type="text"
+                      placeholder="Search OP, style, FG..."
+                      className="w-full pl-10 pr-4 py-3 text-sm font-semibold border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-xl text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/30 transition-all outline-none"
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                    {displayedOps.length === 0 ? (
+                      <div className="text-center py-10">
+                        {!activeSession && ops.length === 0 && (
+                          <div>
+                            <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                              <Package size={28} className="text-slate-300 dark:text-slate-600" />
+                            </div>
+                            <p className="text-sm font-bold text-slate-500 dark:text-slate-400">Tidak ada OP yang siap packing</p>
+                          </div>
+                        )}
+                        {!activeSession && ops.length > 0 && (
+                          <div>
+                            <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
+                              <Package size={28} className="text-indigo-500 dark:text-indigo-400" />
+                            </div>
+                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Pilih FG Number & Start Packing Box</p>
+                            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1">Setelah box aktif, hanya OP dengan FG sama yang akan ditampilkan</p>
+                          </div>
+                        )}
+                        {activeSession && (
+                          <div>
+                            <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
+                              <AlertCircle size={28} className="text-amber-600 dark:text-amber-400" />
+                            </div>
+                            <p className="text-sm font-bold text-amber-600 dark:text-amber-400">
+                              Tidak ada OP dengan FG {activeSession.fgNumber} yang tersisa
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      displayedOps.map(op => {
+                        const isSelected = selectedOpId === op.id;
+                        return (
+                          <div
+                            key={op.id}
+                            className={`group p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 ${
+                              isSelected
+                                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 shadow-md ring-1 ring-indigo-500'
+                                : 'border-slate-200 dark:border-slate-700 hover:border-indigo-400 hover:shadow-sm bg-white dark:bg-slate-800'
+                            }`}
+                            onClick={() => setSelectedOpId(op.id)}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div>
+                                <div className="font-mono font-black text-lg leading-none mb-1 text-slate-900 dark:text-white">{op.opNumber}</div>
+                                <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Style: {op.styleCode}</div>
+                                <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mt-0.5">FG: {op.itemNumberFG}</div>
+                              </div>
+                            </div>
+                            <div className="mt-3 flex items-center justify-between bg-slate-50 dark:bg-slate-700/30 p-2 rounded-xl border border-slate-100 dark:border-slate-700">
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Rem: {op.remainingPacking}</span>
+                              </div>
+                              <div className="text-right flex items-center gap-2">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total QC</div>
+                                <div className="text-sm font-black text-slate-900 dark:text-white">{op.qtyQC || 0}</div>
+                              </div>
                             </div>
                           </div>
-                          <div className="mt-3 flex items-center justify-between bg-slate-50 dark:bg-slate-700/30 p-2 rounded-xl border border-slate-100 dark:border-slate-700">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                              <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Rem: {op.remainingPacking}</span>
-                            </div>
-                            <div className="text-right flex items-center gap-2">
-                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total QC</div>
-                              <div className="text-sm font-black text-slate-900 dark:text-white">{op.qtyQC || 0}</div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Right Column - Packing Session */}
-          <div className="lg:col-span-3">
-            <div className="bg-white dark:bg-slate-800 rounded-3xl border-2 border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col h-full">
-              <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center gap-4">
-                <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-md text-white">
-                  <Box size={22} />
-                </div>
-                <div>
-                  <h3 className="font-black text-slate-900 dark:text-white text-lg leading-none">Packing Session</h3>
-                  <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 mt-1 uppercase tracking-wider">
-                    {activeSession ? `Active Box: ${activeSession.fgNumber} (${activeSession.totalQty}/${packSize})` : 'No active session'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-6 flex-1 flex flex-col">
-                {loadingSession ? (
-                  <div className="flex flex-1 justify-center items-center">
-                    <Loader2 className="animate-spin text-indigo-600" size={32} />
+            {/* Right Column - Packing Session */}
+            <div className="lg:col-span-3">
+              <div className="bg-white dark:bg-slate-800 rounded-3xl border-2 border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col h-full">
+                <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center gap-4">
+                  <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-md text-white">
+                    <Box size={22} />
                   </div>
-                ) : !activeSession ? (
-                  <div className="flex-1 flex flex-col items-center justify-center py-10">
-                    <div className="w-full max-w-md bg-slate-50 dark:bg-slate-900/50 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 text-center">
-                      <Box size={48} className="text-slate-300 dark:text-slate-600 mx-auto mb-6" />
-                      <h4 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-2">Create New Box</h4>
-                      <p className="text-sm font-medium text-slate-500 mb-8">Select a Finished Goods number to start a new packing session box.</p>
-                      
-                      <div className="text-left mb-6">
-                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Select FG Number</label>
-                        <select
-                          className="w-full px-4 py-3 text-sm font-semibold border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/30 transition-all outline-none"
-                          value={selectedFG}
-                          onChange={e => setSelectedFG(e.target.value)}
-                        >
-                          <option value="">-- Choose Finished Goods --</option>
-                          {fgOptions.map(fg => (
-                            <option key={fg} value={fg}>{fg}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <button
-                        onClick={createSession}
-                        disabled={!selectedFG}
-                        className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black flex items-center justify-center gap-2 text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-600/30"
-                      >
-                        <Plus size={20} />
-                        Start Packing Box
-                      </button>
-                    </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 dark:text-white text-lg leading-none">Packing Session</h3>
+                    <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 mt-1 uppercase tracking-wider">
+                      {activeSession ? `Active Box: ${activeSession.fgNumber} (${activeSession.totalQty}/${packSize})` : 'No active session'}
+                    </p>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
-                    {/* Left Inner: Items */}
-                    <div className="flex flex-col h-full">
-                      <div className="bg-slate-50 dark:bg-slate-700/30 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 mb-5">
-                        <div className="flex justify-between text-xs font-bold mb-2 uppercase tracking-wider">
-                          <span className="text-slate-500 dark:text-slate-400">Box Fill Progress</span>
-                          <span className="text-indigo-600 dark:text-indigo-400">{activeSession.totalQty} / {packSize} sets</span>
-                        </div>
-                        <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
-                          <div
-                            className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-                            style={{ width: `${(activeSession.totalQty / packSize) * 100}%` }}
-                          />
-                        </div>
-                      </div>
+                  <div className="ml-auto">
+                    <button
+                      onClick={() => setFullscreen(!fullscreen)}
+                      className="p-2.5 bg-white dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-slate-600 transition-all shadow-sm"
+                      title={fullscreen ? 'Keluar fullscreen' : 'Fullscreen'}
+                    >
+                      {fullscreen ? (
+                        <Minimize2 size={18} className="text-slate-600 dark:text-slate-300" />
+                      ) : (
+                        <Maximize2 size={18} className="text-slate-600 dark:text-slate-300" />
+                      )}
+                    </button>
+                  </div>
+                </div>
 
-                      <div className="flex-1 overflow-hidden flex flex-col">
-                        <h4 className="font-black text-sm text-slate-800 dark:text-slate-200 mb-3 uppercase tracking-wider">Items inside Box</h4>
-                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2">
-                          {activeSession.items?.map(item => (
-                            <SessionItemRow
-                              key={item.id}
-                              item={item}
-                              onRemove={() => removeItem(item.id)}
-                            />
-                          ))}
-                          {(!activeSession.items || activeSession.items.length === 0) && (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-400 py-10 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
-                              <Box size={32} className="mb-2 opacity-50" />
-                              <p className="text-sm font-bold">Box is empty</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                <div className="p-6 flex-1 flex flex-col">
+                  {loadingSession ? (
+                    <div className="flex flex-1 justify-center items-center">
+                      <Loader2 className="animate-spin text-indigo-600" size={32} />
                     </div>
-
-                    {/* Right Inner: Add Item Numpad */}
-                    <div className="flex flex-col">
-                      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 border-2 border-slate-100 dark:border-slate-700 flex-1">
-                        <h4 className="font-black text-sm text-slate-800 dark:text-slate-200 mb-4 uppercase tracking-wider flex items-center gap-2">
-                          <Plus size={16} className="text-indigo-500" />
-                          Add Item to Box
-                        </h4>
+                  ) : !activeSession ? (
+                    <div className="flex-1 flex flex-col items-center justify-center py-10">
+                      <div className="w-full max-w-md bg-slate-50 dark:bg-slate-900/50 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 text-center">
+                        <Box size={48} className="text-slate-300 dark:text-slate-600 mx-auto mb-6" />
+                        <h4 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-2">Create New Box</h4>
+                        <p className="text-sm font-medium text-slate-500 mb-8">Select a Finished Goods number to start a new packing session box.</p>
                         
-                        <div className="mb-5">
-                          <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5">Selected OP</label>
-                          <div className="px-4 py-3 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-600 rounded-xl">
-                            {selectedOp ? (
-                              <div className="font-mono font-black text-lg text-indigo-600 dark:text-indigo-400 leading-none">
-                                {selectedOp.opNumber} <span className="text-xs text-slate-400 font-semibold">(Rem: {selectedOp.remainingPacking})</span>
-                              </div>
-                            ) : (
-                              <div className="text-sm font-semibold text-slate-400">Select an OP from left panel</div>
-                            )}
-                          </div>
+                        <div className="text-left mb-6">
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Select FG Number</label>
+                          <select
+                            className="w-full px-4 py-3 text-sm font-semibold border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-xl text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/30 transition-all outline-none"
+                            value={selectedFG}
+                            onChange={e => setSelectedFG(e.target.value)}
+                          >
+                            <option value="">-- Choose Finished Goods --</option>
+                            {fgOptions.map(fg => (
+                              <option key={fg} value={fg}>{fg}</option>
+                            ))}
+                          </select>
                         </div>
-
-                        <CompactNumpad
-                          value={inputQty}
-                          onChange={setInputQty}
-                          max={maxQty}
-                        />
-
                         <button
-                          onClick={addItem}
-                          disabled={adding || !selectedOpId || inputQty <= 0}
-                          className="mt-4 w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black flex items-center justify-center gap-2 text-base transition-colors shadow-lg shadow-emerald-500/30 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed"
+                          onClick={createSession}
+                          disabled={!selectedFG}
+                          className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black flex items-center justify-center gap-2 text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-600/30"
                         >
-                          {adding ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
-                          Add To Box
+                          <Plus size={20} />
+                          Start Packing Box
                         </button>
                       </div>
                     </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+                      {/* Left Inner: Items */}
+                      <div className="flex flex-col h-full">
+                        <div className="bg-slate-50 dark:bg-slate-700/30 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 mb-5">
+                          <div className="flex justify-between text-xs font-bold mb-2 uppercase tracking-wider">
+                            <span className="text-slate-500 dark:text-slate-400">Box Fill Progress</span>
+                            <span className="text-indigo-600 dark:text-indigo-400">{activeSession.totalQty} / {packSize} sets</span>
+                          </div>
+                          <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                            <div
+                              className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                              style={{ width: `${(activeSession.totalQty / packSize) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex-1 overflow-hidden flex flex-col">
+                          <h4 className="font-black text-sm text-slate-800 dark:text-slate-200 mb-3 uppercase tracking-wider">Items inside Box</h4>
+                          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2">
+                            {activeSession.items?.map(item => (
+                              <SessionItemRow
+                                key={item.id}
+                                item={item}
+                                onRemove={() => removeItem(item.id)}
+                              />
+                            ))}
+                            {(!activeSession.items || activeSession.items.length === 0) && (
+                              <div className="h-full flex flex-col items-center justify-center text-slate-400 py-10 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
+                                <Box size={32} className="mb-2 opacity-50" />
+                                <p className="text-sm font-bold">Box is empty</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Inner: Add Item Numpad */}
+                      <div className="flex flex-col">
+                        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 border-2 border-slate-100 dark:border-slate-700 flex-1">
+                          <h4 className="font-black text-sm text-slate-800 dark:text-slate-200 mb-4 uppercase tracking-wider flex items-center gap-2">
+                            <Plus size={16} className="text-indigo-500" />
+                            Add Item to Box
+                          </h4>
+                          
+                          <div className="mb-5">
+                            <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5">Selected OP</label>
+                            <div className="px-4 py-3 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-600 rounded-xl">
+                              {selectedOp ? (
+                                <div className="font-mono font-black text-lg text-indigo-600 dark:text-indigo-400 leading-none">
+                                  {selectedOp.opNumber} <span className="text-xs text-slate-400 font-semibold">(Rem: {selectedOp.remainingPacking})</span>
+                                </div>
+                              ) : (
+                                <div className="text-sm font-semibold text-slate-400">Select an OP from left panel</div>
+                              )}
+                            </div>
+                          </div>
+
+                          <CompactNumpad
+                            value={inputQty}
+                            onChange={setInputQty}
+                            max={maxQty}
+                          />
+
+                          <button
+                            onClick={addItem}
+                            disabled={adding || !selectedOpId || inputQty <= 0}
+                            className="mt-4 w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black flex items-center justify-center gap-2 text-base transition-colors shadow-lg shadow-emerald-500/30 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed"
+                          >
+                            {adding ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+                            Add To Box
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {activeSession && (
+                  <div className="p-5 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 grid grid-cols-2 gap-4">
+                    <button
+                      onClick={cancelSession}
+                      disabled={cancelling}
+                      className="w-full py-4 bg-white dark:bg-slate-800 border-2 border-rose-200 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl font-black flex items-center justify-center gap-2 text-sm transition-colors disabled:opacity-50 uppercase tracking-wider"
+                    >
+                      {cancelling ? <Loader2 size={18} className="animate-spin" /> : <X size={18} />}
+                      Cancel Box
+                    </button>
+                    <button
+                      onClick={closeSession}
+                      disabled={closing || activeSession.totalQty !== packSize}
+                      className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black flex items-center justify-center gap-2 text-sm transition-colors shadow-lg shadow-blue-600/30 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed uppercase tracking-wider"
+                    >
+                      {closing ? <Loader2 size={18} className="animate-spin" /> : <QrCode size={18} />}
+                      Seal Box & Generate QR
+                    </button>
                   </div>
                 )}
               </div>
-
-              {activeSession && (
-                <div className="p-5 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 grid grid-cols-2 gap-4">
-                  <button
-                    onClick={cancelSession}
-                    disabled={cancelling}
-                    className="w-full py-4 bg-white dark:bg-slate-800 border-2 border-rose-200 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl font-black flex items-center justify-center gap-2 text-sm transition-colors disabled:opacity-50 uppercase tracking-wider"
-                  >
-                    {cancelling ? <Loader2 size={18} className="animate-spin" /> : <X size={18} />}
-                    Cancel Box
-                  </button>
-                  <button
-                    onClick={closeSession}
-                    disabled={closing || activeSession.totalQty !== packSize}
-                    className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black flex items-center justify-center gap-2 text-sm transition-colors shadow-lg shadow-blue-600/30 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed uppercase tracking-wider"
-                  >
-                    {closing ? <Loader2 size={18} className="animate-spin" /> : <QrCode size={18} />}
-                    Seal Box & Generate QR
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>

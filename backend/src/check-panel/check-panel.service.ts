@@ -24,8 +24,15 @@ export class CheckPanelService {
       include: { line: true },
     });
     if (!op) throw new NotFoundException('OP not found');
-    if (op.currentStation !== StationCode.CP) {
-      throw new BadRequestException(`OP not at Check Panel (current: ${op.currentStation})`);
+    // Panel boleh MELANJUTKAN counting selama OP SUDAH pernah masuk Check Panel
+    // (qtyCP > 0), walaupun sebagian set sudah mengalir ke Sewing/QC/Packing/FG
+    // sehingga currentStation sudah maju. Sebelumnya diblok keras
+    // `currentStation === CP` -> muncul error "OP not at Check Panel (current: PACKING)".
+    const reachedCP = (op.qtyCP ?? 0) > 0 || op.currentStation === StationCode.CP;
+    if (!reachedCP) {
+      throw new BadRequestException(
+        `OP belum ditransfer dari Cutting Pond ke Check Panel (current: ${op.currentStation})`,
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -149,16 +156,26 @@ export class CheckPanelService {
       if (allInspections.length > 0) {
         const allCompleted = allInspections.every(i => (i.good + i.ng) >= targetPatterns);
         if (allCompleted) {
-          // ✅ setsReady = nilai minimum good dari semua pattern
-          const setsReady = Math.min(...allInspections.map(i => i.good));
+          // Total set lengkap yang GOOD = minimum good antar pattern.
+          const minGood = Math.min(...allInspections.map(i => i.good));
+          // KURANGI set yang SUDAH dikirim ke Sewing (qtySewingIn) agar tidak
+          // dobel-hitung saat panel menyelesaikan sisa setelah pengiriman parsial.
+          // Untuk alur normal (belum ada yang dikirim) qtySewingIn = 0 sehingga
+          // hasilnya = minGood (perilaku lama tetap sama, tidak ada regresi).
+          const fresh = await tx.productionOrder.findUnique({
+            where: { id: opId },
+            select: { qtySewingIn: true },
+          });
+          const alreadySent = fresh?.qtySewingIn ?? 0;
+          const setsReady = Math.max(0, minGood - alreadySent);
           await tx.productionOrder.update({
             where: { id: opId },
-            data: { 
+            data: {
               setsReadyForSewing: setsReady,
               allPatternsCompleted: true,
             },
           });
-          console.log(`setsReadyForSewing updated to ${setsReady} for OP ${op.opNumber}`);
+          console.log(`setsReadyForSewing updated to ${setsReady} for OP ${op.opNumber} (minGood=${minGood}, alreadySent=${alreadySent})`);
         }
       }
 
@@ -172,8 +189,11 @@ export class CheckPanelService {
     return this.prisma.$transaction(async (tx) => {
       const op = await tx.productionOrder.findUnique({ where: { id: opId } });
       if (!op) throw new NotFoundException('OP not found');
-      if (op.currentStation !== StationCode.CP) {
-        throw new BadRequestException('OP not at Check Panel');
+      // Boleh supply ke Sewing selama OP sudah pernah masuk Check Panel (qtyCP > 0),
+      // walaupun currentStation sudah maju (partial supply). Gating utama = sets siap.
+      const reachedCP = (op.qtyCP ?? 0) > 0 || op.currentStation === StationCode.CP;
+      if (!reachedCP) {
+        throw new BadRequestException('OP belum masuk Check Panel');
       }
       if ((op.setsReadyForSewing ?? 0) < qty) {
         throw new BadRequestException(`Not enough sets ready. Available: ${op.setsReadyForSewing}`);

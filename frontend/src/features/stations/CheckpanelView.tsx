@@ -2,13 +2,14 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle, XCircle, RefreshCw, ImageIcon, ImageOff, AlertTriangle,
   ClipboardCheck, ThumbsUp, Layers, Package, ArrowLeft, Wifi, Eye, Award,
-  Shield,
+  Shield, Maximize2, Minimize2
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { ProductionOrder, PatternPart } from '../../types/production';
 import { NG_REASONS as FALLBACK_NG_REASONS } from '../../lib/data';
 import { TargetSummaryCard } from '../../components/ui/TargetSummaryCard';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 const STORAGE_KEY_OP = 'nextg_cp_active_op';
 const STORAGE_KEY_GLOBAL_LOGS = 'nextg_cp_recent_logs';
 
@@ -25,7 +26,7 @@ interface InspectionLog {
 interface MetricCardProps {
   title: string;
   value: number | string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   color?: 'blue' | 'emerald' | 'rose' | 'amber';
   subtitle?: string;
   suffix?: string;
@@ -98,7 +99,7 @@ export const CheckPanelView = ({
   const [ops, setOps] = useState<ProductionOrder[]>([]);
   const [actOp, setActOp] = useState<ProductionOrder | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [lastUpd, setLastUpd] = useState('');
+const [, setLastUpd] = useState('');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [ngReason, setNgReason] = useState('');
   const [patterns, setPatterns] = useState<PatternPart[]>([]);
@@ -109,9 +110,10 @@ export const CheckPanelView = ({
   );
   const [sets, setSets] = useState(0);
   const [categories, setCategories] = useState<string[]>([]);
-  const [refTrigger, setRefTrigger] = useState(0);
+const [refTrigger] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
+  const [fullscreen, setFullscreen] = useState(false);
 
   const getPatternMultiplier = (op: ProductionOrder) => (op as any).line?.patternMultiplier ?? 4;
 
@@ -531,448 +533,479 @@ export const CheckPanelView = ({
         </div>
       </div>
 
-      {/* Main grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
-        {/* Left column - Solid Listing */}
-        <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden h-full flex flex-col">
-            <div className="p-4 border-b border-slate-100 dark:border-slate-700">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                      actOp
-                        ? 'bg-purple-600 shadow-purple-600/30'
-                        : 'bg-blue-600 shadow-blue-600/30'
-                    } shadow-md text-white`}
-                  >
-                    {actOp ? <Layers size={18} /> : <ClipboardCheck size={18} />}
+      {/* Fullscreen wrapper */}
+      <div
+        className={
+          fullscreen
+            ? 'fixed inset-0 z-[200] bg-white dark:bg-slate-900 overflow-auto p-4'
+            : ''
+        }
+      >
+        {fullscreen && (
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={() => setFullscreen(false)}
+              className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              title="Keluar fullscreen"
+            >
+              <Minimize2 size={20} className="text-slate-600 dark:text-slate-300" />
+            </button>
+          </div>
+        )}
+        {/* Main grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
+          {/* Left column - Solid Listing */}
+          <div className="lg:col-span-1">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden h-full flex flex-col">
+              <div className="p-4 border-b border-slate-100 dark:border-slate-700">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                        actOp
+                          ? 'bg-purple-600 shadow-purple-600/30'
+                          : 'bg-blue-600 shadow-blue-600/30'
+                      } shadow-md text-white`}
+                    >
+                      {actOp ? <Layers size={18} /> : <ClipboardCheck size={18} />}
+                    </div>
+                    <div>
+                      <h3 className="font-black text-slate-900 dark:text-white text-sm">
+                        {actOp ? 'Patterns List' : 'Prod. Orders'}
+                      </h3>
+                      <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                        {actOp ? `OP: ${actOp.opNumber}` : `${tq} orders ready`}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-black text-slate-900 dark:text-white text-sm">
-                      {actOp ? 'Patterns List' : 'Prod. Orders'}
-                    </h3>
-                    <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                      {actOp ? `OP: ${actOp.opNumber}` : `${tq} orders ready`}
-                    </p>
+                  <div className="px-2.5 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs font-black text-slate-700 dark:text-slate-200">
+                    {actOp ? patterns.length : tq}
                   </div>
-                </div>
-                <div className="px-2.5 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs font-black text-slate-700 dark:text-slate-200">
-                  {actOp ? patterns.length : tq}
                 </div>
               </div>
-            </div>
-            <div className="p-3 flex-1 overflow-y-auto max-h-[calc(100vh-280px)] custom-scrollbar">
-              {!actOp ? (
-                tq === 0 ? (
+              <div className="p-3 flex-1 overflow-y-auto max-h-[calc(100vh-280px)] custom-scrollbar">
+                {!actOp ? (
+                  tq === 0 ? (
+                    <div className="text-center py-10">
+                      <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <CheckCircle size={28} className="text-slate-300 dark:text-slate-600" />
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">No Orders</h4>
+                      <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Waiting for incoming...</p>
+                    </div>
+                  ) : (
+                    ops.map((op: ProductionOrder) => {
+                      const patternMultiplier = getPatternMultiplier(op);
+                      const cpInspected = (op.cpGoodQty || 0) + (op.cpNgQty || 0);
+                      const cpTotalPatterns = (op.qtyCP || 0) * patternMultiplier;
+                      const isCpCompleted = cpTotalPatterns > 0 && cpInspected >= cpTotalPatterns;
+
+                      return (
+                        <div
+                          key={op.id}
+                          className={`group p-3 rounded-xl border-2 transition-all duration-300 cursor-pointer mb-2 ${
+                            isCpCompleted
+                              ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10 opacity-70 cursor-not-allowed'
+                             : (actOp as ProductionOrder | null)?.id === op.id
+                              ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30 shadow-md'
+                              : 'border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:shadow-sm bg-white dark:bg-slate-800'
+                          }`}
+                          onClick={() => !isCpCompleted && selectOp(op)}
+                        >
+                          <div className="flex items-start justify-between mb-1">
+                            <div>
+                              <div className="font-mono font-black text-[13px] text-slate-900 dark:text-white">
+                                {op.opNumber}
+                              </div>
+                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                                Style: {op.styleCode}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">From Pond</span>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-black text-blue-600 dark:text-blue-400 leading-none">
+                                {op.qtyCP || 0} sets
+                              </div>
+                              <div className="text-[10px] font-medium text-slate-500 mt-1">
+                                ({(op.qtyCP || 0) * patternMultiplier} parts)
+                              </div>
+                              {op.qtyCP > 0 && (
+                                <div className="text-[10px] font-bold text-slate-600 dark:text-slate-300 mt-1">
+                                  Inspected: {op.cpGoodQty + op.cpNgQty}/{cpTotalPatterns} 
+                                  <span className="ml-1 text-slate-400">({Math.round(((op.cpGoodQty + op.cpNgQty) / cpTotalPatterns) * 100)}%)</span>
+                                </div>
+                              )}
+                              {isCpCompleted && (
+                                <div className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1 mt-1">
+                                  <CheckCircle size={10} />
+                                  Ready: {op.setsReadyForSewing || 0} sets
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {op.qtyCP > 0 && (
+                            <div className="mt-2.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                                style={{ width: `${((op.cpGoodQty + op.cpNgQty) / cpTotalPatterns) * 100}%` }}
+                              />
+                            </div>
+                          )}
+
+                          {/* Detail NG per Pattern */}
+                          {op.checkPanelInspections && op.checkPanelInspections.some(insp => insp.ng > 0) && (
+                            <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                              <div className="text-[10px] font-black text-rose-600 dark:text-rose-400 mb-1.5 uppercase tracking-wide">NG Details:</div>
+                              <div className="space-y-1">
+                                {op.checkPanelInspections
+                                  .filter(insp => insp.ng > 0)
+                                  .map(insp => (
+                                    <div key={insp.patternIndex} className="flex justify-between items-center text-[10px]">
+                                      <span className="font-semibold text-slate-600 dark:text-slate-400 truncate max-w-[120px]">{insp.patternName}</span>
+                                      <span className="font-black px-1.5 py-0.5 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded">
+                                        {insp.ng} pcs
+                                      </span>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )
+                ) : patterns.length === 0 ? (
                   <div className="text-center py-10">
                     <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <CheckCircle size={28} className="text-slate-300 dark:text-slate-600" />
+                      <Layers size={28} className="text-slate-300 dark:text-slate-600" />
                     </div>
-                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">No Orders</h4>
-                    <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Waiting for incoming...</p>
+                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">No Patterns</h4>
+                    <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Configure in Line Master</p>
                   </div>
                 ) : (
-                  ops.map((op: ProductionOrder) => {
-                    const patternMultiplier = getPatternMultiplier(op);
-                    const cpInspected = (op.cpGoodQty || 0) + (op.cpNgQty || 0);
-                    const cpTotalPatterns = (op.qtyCP || 0) * patternMultiplier;
-                    const isCpCompleted = cpTotalPatterns > 0 && cpInspected >= cpTotalPatterns;
+                  patterns.map((pat, idx) => {
+                    const p = prog[idx] || { good: 0, ng: 0, completed: false };
+                    const target = actOp.qtyCP || 0;
+                    const done = p.good + p.ng;
+                    const rem = Math.max(0, target - done);
+                    const isCompleted = done >= target;
 
                     return (
                       <div
-                        key={op.id}
-                        className={`group p-3 rounded-xl border-2 transition-all duration-300 cursor-pointer mb-2 ${
-                          isCpCompleted
-                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10 opacity-70 cursor-not-allowed'
-                            : actOp?.id === op.id
-                            ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30 shadow-md'
-                            : 'border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:shadow-sm bg-white dark:bg-slate-800'
+                        key={idx}
+                        className={`group p-3 rounded-xl border-2 transition-all duration-300 mb-2 ${
+                          p.completed
+                            ? 'opacity-60 cursor-not-allowed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50'
+                            : 'cursor-pointer hover:border-purple-500 hover:shadow-sm bg-white dark:bg-slate-800'
+                        } ${
+                          actPtrn?.name === pat.name && !p.completed
+                            ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/30 shadow-md ring-1 ring-purple-600'
+                            : 'border-slate-200 dark:border-slate-700'
                         }`}
-                        onClick={() => !isCpCompleted && selectOp(op)}
+                        onClick={() => !p.completed && setActPtrn(pat)}
                       >
                         <div className="flex items-start justify-between mb-1">
                           <div>
-                            <div className="font-mono font-black text-[13px] text-slate-900 dark:text-white">
-                              {op.opNumber}
+                            <div className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
+                              Pola
                             </div>
-                            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                              Style: {op.styleCode}
-                            </div>
+                            <div className="font-bold text-[13px] text-slate-900 dark:text-white mt-0.5">{pat.name}</div>
                           </div>
+                          {p.completed && <CheckCircle size={16} className="text-emerald-500" />}
                         </div>
-                        <div className="flex items-center justify-between mt-2">
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                            <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">From Pond</span>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-black text-blue-600 dark:text-blue-400 leading-none">
-                              {op.qtyCP || 0} sets
-                            </div>
-                            <div className="text-[10px] font-medium text-slate-500 mt-1">
-                              ({(op.qtyCP || 0) * patternMultiplier} parts)
-                            </div>
-                            {op.qtyCP > 0 && (
-                              <div className="text-[10px] font-bold text-slate-600 dark:text-slate-300 mt-1">
-                                Inspected: {op.cpGoodQty + op.cpNgQty}/{cpTotalPatterns} 
-                                <span className="ml-1 text-slate-400">({Math.round(((op.cpGoodQty + op.cpNgQty) / cpTotalPatterns) * 100)}%)</span>
-                              </div>
-                            )}
-                            {isCpCompleted && (
-                              <div className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1 mt-1">
-                                <CheckCircle size={10} />
-                                Ready: {op.setsReadyForSewing || 0} sets
-                              </div>
-                            )}
-                          </div>
+                        <div className="mt-2.5 flex items-center justify-between text-[11px] font-bold">
+                          <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md">G: {p.good}</span>
+                          <span className="text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/40 px-2 py-0.5 rounded-md">NG: {p.ng}</span>
+                          <span className={`px-2 py-0.5 rounded-md ${isCompleted ? 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/40' : 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700'}`}>
+                            Rem: {rem}
+                          </span>
                         </div>
-                        {op.qtyCP > 0 && (
-                          <div className="mt-2.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
-                            <div
-                              className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                              style={{ width: `${((op.cpGoodQty + op.cpNgQty) / cpTotalPatterns) * 100}%` }}
-                            />
-                          </div>
-                        )}
-
-                        {/* Detail NG per Pattern */}
-                        {op.checkPanelInspections && op.checkPanelInspections.some(insp => insp.ng > 0) && (
-                          <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700">
-                            <div className="text-[10px] font-black text-rose-600 dark:text-rose-400 mb-1.5 uppercase tracking-wide">NG Details:</div>
-                            <div className="space-y-1">
-                              {op.checkPanelInspections
-                                .filter(insp => insp.ng > 0)
-                                .map(insp => (
-                                  <div key={insp.patternIndex} className="flex justify-between items-center text-[10px]">
-                                    <span className="font-semibold text-slate-600 dark:text-slate-400 truncate max-w-[120px]">{insp.patternName}</span>
-                                    <span className="font-black px-1.5 py-0.5 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded">
-                                      {insp.ng} pcs
-                                    </span>
-                                  </div>
-                                ))}
-                            </div>
+                        <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 mt-2.5 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              isCompleted ? 'bg-emerald-500' : 'bg-purple-500'
+                            }`}
+                            style={{ width: `${Math.min((done / target) * 100, 100)}%` }}
+                          ></div>
+                        </div>
+                        {isCompleted && (
+                          <div className="mt-2 text-[10px] font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1 uppercase tracking-wide">
+                            <CheckCircle size={10} />
+                            Complete ({done}/{target})
                           </div>
                         )}
                       </div>
                     );
                   })
-                )
-              ) : patterns.length === 0 ? (
-                <div className="text-center py-10">
-                  <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Layers size={28} className="text-slate-300 dark:text-slate-600" />
-                  </div>
-                  <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">No Patterns</h4>
-                  <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Configure in Line Master</p>
-                </div>
-              ) : (
-                patterns.map((pat, idx) => {
-                  const p = prog[idx] || { good: 0, ng: 0, completed: false };
-                  const target = actOp.qtyCP || 0;
-                  const done = p.good + p.ng;
-                  const rem = Math.max(0, target - done);
-                  const isCompleted = done >= target;
-
-                  return (
-                    <div
-                      key={idx}
-                      className={`group p-3 rounded-xl border-2 transition-all duration-300 mb-2 ${
-                        p.completed
-                          ? 'opacity-60 cursor-not-allowed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50'
-                          : 'cursor-pointer hover:border-purple-500 hover:shadow-sm bg-white dark:bg-slate-800'
-                      } ${
-                        actPtrn?.name === pat.name && !p.completed
-                          ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/30 shadow-md ring-1 ring-purple-600'
-                          : 'border-slate-200 dark:border-slate-700'
-                      }`}
-                      onClick={() => !p.completed && setActPtrn(pat)}
-                    >
-                      <div className="flex items-start justify-between mb-1">
-                        <div>
-                          <div className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
-                            Part {idx + 1}
-                          </div>
-                          <div className="font-bold text-[13px] text-slate-900 dark:text-white mt-0.5">{pat.name}</div>
-                        </div>
-                        {p.completed && <CheckCircle size={16} className="text-emerald-500" />}
-                      </div>
-                      <div className="mt-2.5 flex items-center justify-between text-[11px] font-bold">
-                        <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md">G: {p.good}</span>
-                        <span className="text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/40 px-2 py-0.5 rounded-md">NG: {p.ng}</span>
-                        <span className={`px-2 py-0.5 rounded-md ${isCompleted ? 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/40' : 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700'}`}>
-                          Rem: {rem}
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 mt-2.5 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            isCompleted ? 'bg-emerald-500' : 'bg-purple-500'
-                          }`}
-                          style={{ width: `${Math.min((done / target) * 100, 100)}%` }}
-                        ></div>
-                      </div>
-                      {isCompleted && (
-                        <div className="mt-2 text-[10px] font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1 uppercase tracking-wide">
-                          <CheckCircle size={10} />
-                          Complete ({done}/{target})
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Right column - Main Inspection Area */}
-        <div className="lg:col-span-4">
-          {!actOp ? (
-            <div className="h-full flex flex-col items-center justify-center bg-white dark:bg-slate-800 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 p-8 shadow-sm">
-              <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Eye size={36} className="text-blue-600 dark:text-blue-400" />
-              </div>
-              <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">Select an Order to Inspect</h3>
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400 text-center mb-6 max-w-md mx-auto leading-relaxed">
-                Choose a production order from the queue on the left panel to begin your visual inspection process.
-              </p>
-              <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-full uppercase tracking-wider">
-                <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-pulse"></div>
-                Waiting for selection...
-              </div>
-            </div>
-          ) : !actPtrn ? (
-            <div className="h-full flex flex-col items-center justify-center bg-white dark:bg-slate-800 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 p-8 shadow-sm">
-              <div className="w-20 h-20 bg-purple-100 dark:bg-purple-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Layers size={36} className="text-purple-600 dark:text-purple-400" />
-              </div>
-              <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">Select a Pattern</h3>
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400 text-center mb-6 max-w-md mx-auto leading-relaxed">
-                Choose a specific pattern part from the list to begin recording inspection results.
-              </p>
-              <button
-                onClick={back}
-                className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-xl font-bold flex items-center gap-2 transition-colors shadow-sm"
-              >
-                <ArrowLeft size={16} />
-                Return to Queue
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4 h-full flex flex-col">
-              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex-1 flex flex-col">
-                {/* Inspection Header Container */}
-                <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={back}
-                        className="group p-2.5 bg-white dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-600 transition-all shadow-sm"
-                        title="Back to queue"
-                      >
-                        <ArrowLeft size={18} className="text-slate-600 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
-                      </button>
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-600/30">
-                          <Shield size={22} className="text-white" />
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-0.5">Active Inspection</div>
-                          <h2 className="text-xl font-black text-slate-900 dark:text-white leading-none">{actOp.opNumber}</h2>
-                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">{actOp.styleCode}</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-5 bg-white dark:bg-slate-700 px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 shadow-sm">
-                      <div className="text-center">
-                        <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Good</div>
-                        <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none mt-1">{actOp.cpGoodQty || 0}</div>
-                      </div>
-                      <div className="w-px h-8 bg-slate-200 dark:bg-slate-600"></div>
-                      <div className="text-center">
-                        <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total NG</div>
-                        <div className="text-xl font-black text-rose-600 dark:text-rose-400 leading-none mt-1">{actOp.cpNgQty || 0}</div>
-                      </div>
-                    </div>
-                  </div>
+          {/* Right column - Main Inspection Area */}
+          <div className="lg:col-span-4">
+            {!actOp ? (
+              <div className="h-full flex flex-col items-center justify-center bg-white dark:bg-slate-800 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 p-8 shadow-sm">
+                <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Eye size={36} className="text-blue-600 dark:text-blue-400" />
                 </div>
-
-                <div className="p-6 flex-1 flex flex-col">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shadow-md shadow-purple-600/30">
-                      <Eye size={20} className="text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-black text-slate-900 dark:text-white leading-tight">Inspecting: {actPtrn.name}</h3>
-                      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">Select GOOD or NOT GOOD to record result</p>
+                <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">Select an Order to Inspect</h3>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400 text-center mb-6 max-w-md mx-auto leading-relaxed">
+                  Choose a production order from the queue on the left panel to begin your visual inspection process.
+                </p>
+                <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-full uppercase tracking-wider">
+                  <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-pulse"></div>
+                  Waiting for selection...
+                </div>
+              </div>
+            ) : !actPtrn ? (
+              <div className="h-full flex flex-col items-center justify-center bg-white dark:bg-slate-800 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 p-8 shadow-sm">
+                <div className="w-20 h-20 bg-purple-100 dark:bg-purple-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Layers size={36} className="text-purple-600 dark:text-purple-400" />
+                </div>
+                <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">Select a Pattern</h3>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400 text-center mb-6 max-w-md mx-auto leading-relaxed">
+                  Choose a specific pattern part from the list to begin recording inspection results.
+                </p>
+                <button
+                  onClick={back}
+                  className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-xl font-bold flex items-center gap-2 transition-colors shadow-sm"
+                >
+                  <ArrowLeft size={16} />
+                  Return to Queue
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4 h-full flex flex-col">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex-1 flex flex-col">
+                  {/* Inspection Header Container */}
+                  <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div className="flex items-center gap-4">
+                        <button
+                          onClick={back}
+                          className="group p-2.5 bg-white dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-600 transition-all shadow-sm"
+                          title="Back to queue"
+                        >
+                          <ArrowLeft size={18} className="text-slate-600 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
+                        </button>
+                        <button
+                          onClick={() => setFullscreen(!fullscreen)}
+                          className="group p-2.5 bg-white dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-600 transition-all shadow-sm"
+                          title={fullscreen ? 'Keluar fullscreen' : 'Fullscreen'}
+                        >
+                          {fullscreen ? (
+                            <Minimize2 size={18} className="text-slate-600 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
+                          ) : (
+                            <Maximize2 size={18} className="text-slate-600 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
+                          )}
+                        </button>
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-600/30">
+                            <Shield size={22} className="text-white" />
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-0.5">Active Inspection</div>
+                            <h2 className="text-xl font-black text-slate-900 dark:text-white leading-none">{actOp.opNumber}</h2>
+                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">{actOp.styleCode}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-5 bg-white dark:bg-slate-700 px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 shadow-sm">
+                        <div className="text-center">
+                          <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Good</div>
+                          <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none mt-1">{actOp.cpGoodQty || 0}</div>
+                        </div>
+                        <div className="w-px h-8 bg-slate-200 dark:bg-slate-600"></div>
+                        <div className="text-center">
+                          <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total NG</div>
+                          <div className="text-xl font-black text-rose-600 dark:text-rose-400 leading-none mt-1">{actOp.cpNgQty || 0}</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {allPatternsCompleted ? (
-                    <div className="text-center py-8 flex-1 flex flex-col justify-center">
-                      <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-5 shadow-lg shadow-emerald-500/30">
-                        <CheckCircle size={36} className="text-white" />
+                  <div className="p-6 flex-1 flex flex-col">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shadow-md shadow-purple-600/30">
+                        <Eye size={20} className="text-white" />
                       </div>
-                      <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2">All Patterns Completed!</h3>
-                      <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-6 uppercase tracking-wider">
-                        OP ready for Sewing ({sets} sets)
-                      </p>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto mb-6 w-full">
-                        <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 p-4 rounded-2xl">
-                          <div className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-1">Total Pattern Good</div>
-                          <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400">{totalGoodPola}</div>
-                        </div>
-                        <div className="bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 p-4 rounded-2xl">
-                          <div className="text-[11px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider mb-1">Total Pattern NG</div>
-                          <div className="text-3xl font-black text-rose-600 dark:text-rose-400">{totalNgPola}</div>
-                        </div>
-                        <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 p-4 rounded-2xl">
-                          <div className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-1">Unused Good Patterns</div>
-                          <div className="text-3xl font-black text-amber-600 dark:text-amber-400">{polaSisa}</div>
-                        </div>
+                      <div>
+                        <h3 className="text-xl font-black text-slate-900 dark:text-white leading-tight">Inspecting: {actPtrn.name}</h3>
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">Select GOOD or NOT GOOD to record result</p>
                       </div>
+                    </div>
 
-                      {/* Detail NG per Pattern - SELALU DITAMPILKAN */}
-                      <div className="mt-2 max-w-md mx-auto w-full">
-                        <h4 className="text-sm font-black text-rose-600 dark:text-rose-400 mb-3 uppercase tracking-wider text-left">NG Details</h4>
-                        <div className="bg-white dark:bg-slate-800 rounded-xl border border-rose-200 dark:border-rose-800 overflow-hidden shadow-sm">
-                          <table className="w-full text-sm">
-                            <thead className="bg-rose-600 text-white">
-                              <tr>
-                                <th className="py-3 px-4 text-left text-xs font-bold uppercase tracking-wider">Pattern</th>
-                                <th className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider">NG Count</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-rose-100 dark:divide-rose-800/50">
-                              {patterns.map((pat, idx) => {
-                                const ngCount = prog[idx]?.ng || 0;
-                                return (
-                                  <tr key={idx} className="hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors">
-                                    <td className="py-3 px-4 text-left font-semibold text-slate-800 dark:text-slate-200">{pat.name}</td>
-                                    <td className="py-3 px-4 text-right font-black text-rose-600 dark:text-rose-400">
-                                      {ngCount > 0 ? `${ngCount} pcs` : <span className="text-slate-400 font-medium">-</span>}
+                    {allPatternsCompleted ? (
+                      <div className="text-center py-8 flex-1 flex flex-col justify-center">
+                        <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-5 shadow-lg shadow-emerald-500/30">
+                          <CheckCircle size={36} className="text-white" />
+                        </div>
+                        <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2">All Patterns Completed!</h3>
+                        <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-6 uppercase tracking-wider">
+                          OP ready for Sewing ({sets} sets)
+                        </p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto mb-6 w-full">
+                          <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 p-4 rounded-2xl">
+                            <div className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-1">Total Pattern Good</div>
+                            <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400">{totalGoodPola}</div>
+                          </div>
+                          <div className="bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 p-4 rounded-2xl">
+                            <div className="text-[11px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider mb-1">Total Pattern NG</div>
+                            <div className="text-3xl font-black text-rose-600 dark:text-rose-400">{totalNgPola}</div>
+                          </div>
+                          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 p-4 rounded-2xl">
+                            <div className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-1">Unused Good Patterns</div>
+                            <div className="text-3xl font-black text-amber-600 dark:text-amber-400">{polaSisa}</div>
+                          </div>
+                        </div>
+
+                        {/* Detail NG per Pattern - SELALU DITAMPILKAN */}
+                        <div className="mt-2 max-w-md mx-auto w-full">
+                          <h4 className="text-sm font-black text-rose-600 dark:text-rose-400 mb-3 uppercase tracking-wider text-left">NG Details</h4>
+                          <div className="bg-white dark:bg-slate-800 rounded-xl border border-rose-200 dark:border-rose-800 overflow-hidden shadow-sm">
+                            <table className="w-full text-sm">
+                              <thead className="bg-rose-600 text-white">
+                                <tr>
+                                  <th className="py-3 px-4 text-left text-xs font-bold uppercase tracking-wider">Pattern</th>
+                                  <th className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider">NG Count</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-rose-100 dark:divide-rose-800/50">
+                                {patterns.map((pat, idx) => {
+                                  const ngCount = prog[idx]?.ng || 0;
+                                  return (
+                                    <tr key={idx} className="hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors">
+                                      <td className="py-3 px-4 text-left font-semibold text-slate-800 dark:text-slate-200">{pat.name}</td>
+                                      <td className="py-3 px-4 text-right font-black text-rose-600 dark:text-rose-400">
+                                        {ngCount > 0 ? `${ngCount} pcs` : <span className="text-slate-400 font-medium">-</span>}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                                {patterns.every((_, idx) => (prog[idx]?.ng || 0) === 0) && (
+                                  <tr>
+                                    <td colSpan={2} className="py-4 px-4 text-center text-sm font-medium text-slate-500">
+                                      Tidak ada catatan NG untuk OP ini
                                     </td>
                                   </tr>
-                                );
-                              })}
-                              {patterns.every((_, idx) => (prog[idx]?.ng || 0) === 0) && (
-                                <tr>
-                                  <td colSpan={2} className="py-4 px-4 text-center text-sm font-medium text-slate-500">
-                                    Tidak ada catatan NG untuk OP ini
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                          </table>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl mt-6 max-w-2xl mx-auto border border-slate-200 dark:border-slate-700 text-left">
-                        <p className="text-xs font-medium text-slate-600 dark:text-slate-400 leading-relaxed mb-2">
-                          Out of <span className="font-bold text-slate-900 dark:text-white">{totalGoodPola}</span> good patterns, only <span className="font-bold text-slate-900 dark:text-white">{sets * patterns.length}</span> patterns can form <span className="font-bold text-slate-900 dark:text-white">{sets}</span> complete sets. The remaining <span className="font-bold text-rose-600">{polaSisa}</span> good patterns cannot form a set and will be considered NG.
-                        </p>
-                        <p className="text-sm font-black text-rose-600 dark:text-rose-400">
-                          Effective NG: {totalNgEfektif} patterns ({setNgEfektif} sets)
-                        </p>
-                      </div>
-                      
-                      <button
-                        onClick={back}
-                        className="mt-6 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-2 mx-auto transition-colors shadow-lg shadow-blue-600/30"
-                      >
-                        <ArrowLeft size={18} />
-                        Back to Queue
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 items-center">
-                      {/* SOLID GOOD Button */}
-                      <div
-                        className={`group relative aspect-[4/3] rounded-3xl overflow-hidden border-4 transition-all duration-300 hover:scale-[1.03] shadow-lg ${
-                          submitting
-                            ? 'opacity-50 pointer-events-none border-gray-300'
-                            : 'border-emerald-500 hover:shadow-emerald-500/40 cursor-pointer'
-                        } bg-white dark:bg-slate-800`}
-                      >
-                        <button
-                          onClick={handleGood}
-                          disabled={submitting || (actPtrn && prog[patterns.findIndex((p) => p.name === actPtrn.name)]?.completed)}
-                          className="absolute inset-0 w-full h-full flex flex-col items-center justify-center focus:outline-none"
-                        >
-                          {actPtrn.imgGood ? (
-                            <>
-                              <img
-                                src={`${API_BASE_URL}/uploads/patterns/${actPtrn.imgGood}`}
-                                alt="Good"
-                                className="w-full h-full object-contain p-6 transition-transform group-hover:scale-105 duration-500 relative z-10"
-                                onError={handleImgError}
-                              />
-                              <div className="hidden absolute inset-0 flex-col items-center justify-center bg-emerald-500 text-white z-20">
-                                <ImageIcon size={48} className="mb-4 drop-shadow-md" />
-                                <span className="font-black text-2xl tracking-widest drop-shadow-md">NO IMAGE</span>
-                              </div>
-                            </>
-                          ) : (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-500 text-white transition-colors group-hover:bg-emerald-600">
-                              <ThumbsUp size={64} className="mb-4 drop-shadow-md" />
-                              <span className="font-black text-4xl tracking-widest drop-shadow-md">GOOD</span>
-                            </div>
-                          )}
-                        </button>
-                        {/* Solid Label Banner */}
-                        <div className="absolute bottom-0 left-0 right-0 bg-emerald-600 text-white p-4 font-black flex justify-between items-center z-30 group-hover:bg-emerald-700 transition-colors">
-                          <span className="uppercase tracking-widest text-sm">Accept Pattern</span>
-                          <CheckCircle size={20} />
+                        <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl mt-6 max-w-2xl mx-auto border border-slate-200 dark:border-slate-700 text-left">
+                          <p className="text-xs font-medium text-slate-600 dark:text-slate-400 leading-relaxed mb-2">
+                            Out of <span className="font-bold text-slate-900 dark:text-white">{totalGoodPola}</span> good patterns, only <span className="font-bold text-slate-900 dark:text-white">{sets * patterns.length}</span> patterns can form <span className="font-bold text-slate-900 dark:text-white">{sets}</span> complete sets. The remaining <span className="font-bold text-rose-600">{polaSisa}</span> good patterns cannot form a set and will be considered NG.
+                          </p>
+                          <p className="text-sm font-black text-rose-600 dark:text-rose-400">
+                            Effective NG: {totalNgEfektif} patterns ({setNgEfektif} sets)
+                          </p>
                         </div>
+                        
+                        <button
+                          onClick={back}
+                          className="mt-6 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-2 mx-auto transition-colors shadow-lg shadow-blue-600/30"
+                        >
+                          <ArrowLeft size={18} />
+                          Back to Queue
+                        </button>
                       </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 items-center">
+                        {/* SOLID GOOD Button */}
+                        <div
+                          className={`group relative aspect-[4/3] rounded-3xl overflow-hidden border-4 transition-all duration-300 hover:scale-[1.03] shadow-lg ${
+                            submitting
+                              ? 'opacity-50 pointer-events-none border-gray-300'
+                              : 'border-emerald-500 hover:shadow-emerald-500/40 cursor-pointer'
+                          } bg-white dark:bg-slate-800`}
+                        >
+                          <button
+                            onClick={handleGood}
+                            disabled={submitting || (actPtrn && prog[patterns.findIndex((p) => p.name === actPtrn.name)]?.completed)}
+                            className="absolute inset-0 w-full h-full flex flex-col items-center justify-center focus:outline-none"
+                          >
+                            {actPtrn.imgGood ? (
+                              <>
+                                <img
+                                  src={`${API_BASE_URL}/uploads/patterns/${actPtrn.imgGood}`}
+                                  alt="Good"
+                                  className="w-full h-full object-contain p-6 transition-transform group-hover:scale-105 duration-500 relative z-10"
+                                  onError={handleImgError}
+                                />
+                                <div className="hidden absolute inset-0 flex-col items-center justify-center bg-emerald-500 text-white z-20">
+                                  <ImageIcon size={48} className="mb-4 drop-shadow-md" />
+                                  <span className="font-black text-2xl tracking-widest drop-shadow-md">NO IMAGE</span>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-500 text-white transition-colors group-hover:bg-emerald-600">
+                                <ThumbsUp size={64} className="mb-4 drop-shadow-md" />
+                                <span className="font-black text-4xl tracking-widest drop-shadow-md">GOOD</span>
+                              </div>
+                            )}
+                          </button>
+                          {/* Solid Label Banner */}
+                          <div className="absolute bottom-0 left-0 right-0 bg-emerald-600 text-white p-4 font-black flex justify-between items-center z-30 group-hover:bg-emerald-700 transition-colors">
+                            <span className="uppercase tracking-widest text-sm">Accept Pattern</span>
+                            <CheckCircle size={20} />
+                          </div>
+                        </div>
 
-                      {/* SOLID NOT GOOD Button */}
-                      <div
-                        className={`group relative aspect-[4/3] rounded-3xl overflow-hidden border-4 transition-all duration-300 hover:scale-[1.03] shadow-lg ${
-                          submitting
-                            ? 'opacity-50 pointer-events-none border-gray-300'
-                            : 'border-rose-500 hover:shadow-rose-500/40 cursor-pointer'
-                        } bg-white dark:bg-slate-800`}
-                      >
-                        <button
-                          onClick={handleNg}
-                          disabled={submitting || (actPtrn && prog[patterns.findIndex((p) => p.name === actPtrn.name)]?.completed)}
-                          className="absolute inset-0 w-full h-full flex flex-col items-center justify-center focus:outline-none"
+                        {/* SOLID NOT GOOD Button */}
+                        <div
+                          className={`group relative aspect-[4/3] rounded-3xl overflow-hidden border-4 transition-all duration-300 hover:scale-[1.03] shadow-lg ${
+                            submitting
+                              ? 'opacity-50 pointer-events-none border-gray-300'
+                              : 'border-rose-500 hover:shadow-rose-500/40 cursor-pointer'
+                          } bg-white dark:bg-slate-800`}
                         >
-                          {actPtrn.imgNg ? (
-                            <>
-                              <img
-                                src={`${API_BASE_URL}/uploads/patterns/${actPtrn.imgNg}`}
-                                alt="NG"
-                                className="w-full h-full object-contain p-6 transition-transform group-hover:scale-105 duration-500 relative z-10"
-                                onError={handleImgError}
-                              />
-                              <div className="hidden absolute inset-0 flex-col items-center justify-center bg-rose-500 text-white z-20">
-                                <ImageOff size={48} className="mb-4 drop-shadow-md" />
-                                <span className="font-black text-2xl tracking-widest drop-shadow-md">NO IMAGE</span>
+                          <button
+                            onClick={handleNg}
+                            disabled={submitting || (actPtrn && prog[patterns.findIndex((p) => p.name === actPtrn.name)]?.completed)}
+                            className="absolute inset-0 w-full h-full flex flex-col items-center justify-center focus:outline-none"
+                          >
+                            {actPtrn.imgNg ? (
+                              <>
+                                <img
+                                  src={`${API_BASE_URL}/uploads/patterns/${actPtrn.imgNg}`}
+                                  alt="NG"
+                                  className="w-full h-full object-contain p-6 transition-transform group-hover:scale-105 duration-500 relative z-10"
+                                  onError={handleImgError}
+                                />
+                                <div className="hidden absolute inset-0 flex-col items-center justify-center bg-rose-500 text-white z-20">
+                                  <ImageOff size={48} className="mb-4 drop-shadow-md" />
+                                  <span className="font-black text-2xl tracking-widest drop-shadow-md">NO IMAGE</span>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="absolute inset-0 flex flex-col items-center justify-center bg-rose-500 text-white transition-colors group-hover:bg-rose-600">
+                                <AlertTriangle size={64} className="mb-4 drop-shadow-md" />
+                                <span className="font-black text-4xl tracking-widest drop-shadow-md">NOT GOOD</span>
                               </div>
-                            </>
-                          ) : (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-rose-500 text-white transition-colors group-hover:bg-rose-600">
-                              <AlertTriangle size={64} className="mb-4 drop-shadow-md" />
-                              <span className="font-black text-4xl tracking-widest drop-shadow-md">NOT GOOD</span>
-                            </div>
-                          )}
-                        </button>
-                        {/* Solid Label Banner */}
-                        <div className="absolute bottom-0 left-0 right-0 bg-rose-600 text-white p-4 font-black flex justify-between items-center z-30 group-hover:bg-rose-700 transition-colors">
-                          <span className="uppercase tracking-widest text-sm">Reject Pattern</span>
-                          <XCircle size={20} />
+                            )}
+                          </button>
+                          {/* Solid Label Banner */}
+                          <div className="absolute bottom-0 left-0 right-0 bg-rose-600 text-white p-4 font-black flex justify-between items-center z-30 group-hover:bg-rose-700 transition-colors">
+                            <span className="uppercase tracking-widest text-sm">Reject Pattern</span>
+                            <XCircle size={20} />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -1011,8 +1044,20 @@ export const CheckPanelView = ({
                   </button>
                 ))}
               </div>
+
+              {/* Input MANUAL: ketik jenis defect yang tidak ada di daftar */}
+              <div className="mt-6">
+                <label className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Atau ketik manual (jika tidak ada di daftar)</label>
+                <input
+                  type="text"
+                  value={ngReason}
+                  onChange={(e) => setNgReason(e.target.value)}
+                  placeholder="Ketik jenis defect reason..."
+                  className="mt-2 w-full px-4 py-3 rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-white focus:border-rose-500 outline-none"
+                />
+              </div>
             </div>
-            
+
             <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-4">
               <button
                 onClick={() => setNgOpen(false)}

@@ -140,6 +140,7 @@ export class ProductionPlanningService {
     const existingOps = await this.prisma.productionOrder.findMany({
       where: {
         status: 'WIP',
+        parentOpId: null, // hitung beban per OP induk (order), bukan per batch turunan
         ...(lineCode ? { line: { code: lineCode } } : {}),
       },
       select: {
@@ -217,6 +218,7 @@ export class ProductionPlanningService {
     const existingOps = await this.prisma.productionOrder.findMany({
       where: {
         status: 'WIP',
+        parentOpId: null, // satu bar Gantt per OP induk (order), bukan per batch
         createdAt: { lte: end },
         ...(lineCode ? { line: { code: lineCode } } : {}),
       },

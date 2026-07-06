@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body } from '@nestjs/common';
 import { CuttingEntanService } from './cutting-entan.service';
 
 @Controller('cutting-entan')
@@ -11,8 +11,13 @@ export class CuttingEntanController {
   }
 
   @Post('generate/:opNumber')
-  generate(@Param('opNumber') opNumber: string) {
-    return this.service.generateQR(opNumber);
+  generate(@Param('opNumber') opNumber: string, @Body() dto?: any) {
+    return this.service.generateQR(opNumber, dto);
+  }
+
+  @Get('op/:opNumber/dispatch-info')
+  getDispatchInfo(@Param('opNumber') opNumber: string) {
+    return this.service.getDispatchInfo(opNumber);
   }
 
   @Get('reprint/:batchId')

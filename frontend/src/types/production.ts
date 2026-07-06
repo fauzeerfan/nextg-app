@@ -305,9 +305,10 @@ export interface DashboardComprehensive {
     totalWip: number;
     overallEfficiency: number;
     defectRate: number;
-    onTimeDelivery: number;
     targetOutput: number;
     achievement: number;
+    totalGood: number;
+    totalNg: number;
   };
   hourlyProduction: Array<{ 
     hour: string; 

@@ -5,7 +5,7 @@ import {
   AlertCircle, Hash, Tag, Server, Settings
 } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 
 interface IotDevice {
   id: string;

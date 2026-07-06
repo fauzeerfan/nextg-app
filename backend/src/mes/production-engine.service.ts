@@ -31,139 +31,146 @@ export class ProductionEngineService {
     return { success: true };
   }
 
-// ================= CP SCAN (DHRISTI) =================
-async cpScan(qrCode: string, qty: number) {
-  const opNumber = qrCode.split('-')[1];
-  const op = await this.prisma.productionOrder.findUnique({
-    where: { opNumber },
-    include: { line: true },
-  });
-  if (!op) throw new NotFoundException('OP not found');
-  if (!op.readyForCP) {
-    throw new BadRequestException('OP is not ready for Check Panel');
-  }
-
-  // ✅ qty yang dikirim harus sama dengan setsReadyForSewing dari Pond
-  if (qty !== op.setsReadyForSewing) {
-    throw new BadRequestException(`Quantity mismatch: expected ${op.setsReadyForSewing}, got ${qty}`);
-  }
-
-  await this.prisma.productionOrder.update({
-    where: { id: op.id },
-    data: {
-      currentStation: StationCode.CP,
-      readyForCP: false,
-      qtyCP: op.setsReadyForSewing,  // ✅ SET qtyCP (dalam sets)
-      cpGoodQty: 0,                   // ✅ Reset inspection counters
-      cpNgQty: 0,
-    },
-  });
-
-  await this.prisma.productionLog.create({
-    data: {
-      opId: op.id,
-      station: StationCode.CP,
-      type: 'RECEIVED',
-      qty: op.setsReadyForSewing,
-      note: `Received from Pond via scan with qty ${qty} sets`,
-    },
-  });
-
-  return { success: true };
-}
-
-  // ================= SEND TO SEWING VIA SCANNER (PARSIAL) =================
-async sendToSewingFromScan(qrCode: string, qty: number) {
-  const parts = qrCode.split('-');
-  const opNumber = parts.length > 1 ? parts[1] : qrCode;
-
-  const op = await this.prisma.productionOrder.findUnique({
-    where: { opNumber },
-  });
-  if (!op) throw new NotFoundException('OP not found');
-
-  if (op.currentStation !== StationCode.CP) {
-    throw new BadRequestException('OP is not at Check Panel');
-  }
-
-  if ((op.setsReadyForSewing ?? 0) < qty) {
-    throw new BadRequestException(`Insufficient sets ready. Available: ${op.setsReadyForSewing}`);
-  }
-
-  return this.prisma.$transaction(async (tx) => {
-    const newSetsReady = (op.setsReadyForSewing ?? 0) - qty;
-    const updates: any = {
-      setsReadyForSewing: { decrement: qty },
-      qtySewingIn: { increment: qty },
-    };
-    // Jika semua set sudah dikirim, pindahkan OP ke Sewing
-    if (newSetsReady === 0) {
-      updates.currentStation = StationCode.SEWING;
+  // ================= CP SCAN (DHRISTI) =================
+  async cpScan(qrCode: string, qty: number) {
+    const op = await this.resolveScannedOp(qrCode);
+    if (!op) throw new NotFoundException('OP not found');
+    if (!op.readyForCP) {
+      throw new BadRequestException('OP is not ready for Check Panel');
     }
-    await tx.productionOrder.update({
-      where: { id: op.id },
-      data: updates,
-    });
 
-    await tx.productionLog.create({
+    // ✅ qty yang dikirim harus sama dengan setsReadyForSewing dari Pond
+    if (qty !== op.setsReadyForSewing) {
+      throw new BadRequestException(`Quantity mismatch: expected ${op.setsReadyForSewing}, got ${qty}`);
+    }
+
+    await this.prisma.productionOrder.update({
+      where: { id: op.id },
       data: {
-        opId: op.id,
-        station: StationCode.CP,
-        type: 'SEND_TO_SEWING',
-        qty,
-        note: `Sent ${qty} sets to Sewing via scan`,
+        currentStation: StationCode.CP,
+        readyForCP: false,
+        qtyCP: op.setsReadyForSewing,  // ✅ SET qtyCP (dalam sets)
+        cpGoodQty: 0,                   // ✅ Reset inspection counters
+        cpNgQty: 0,
       },
     });
 
-    return { success: true, remaining: newSetsReady };
-  });
-}
+    await this.prisma.productionLog.create({
+      data: {
+        opId: op.id,
+        station: StationCode.CP,
+        type: 'RECEIVED',
+        qty: op.setsReadyForSewing,
+        note: `Received from Pond via scan with qty ${qty} sets`,
+      },
+    });
+
+    return { success: true };
+  }
+
+  // ================= SEND TO SEWING VIA SCANNER (PARSIAL) =================
+  async sendToSewingFromScan(qrCode: string, qty: number) {
+    const op = await this.resolveScannedOp(qrCode);
+    if (!op) throw new NotFoundException('OP not found');
+
+    // Boleh kirim ke Sewing selama OP sudah pernah masuk Check Panel (qtyCP > 0),
+    // walaupun currentStation sudah maju (mis. sebagian set sudah di Packing).
+    // Gating utama tetap: jumlah set siap. Ini mendukung supply parsial berlanjut.
+    const reachedCP = (op.qtyCP ?? 0) > 0 || op.currentStation === StationCode.CP;
+    if (!reachedCP) {
+      throw new BadRequestException('OP is not at Check Panel');
+    }
+
+    if ((op.setsReadyForSewing ?? 0) < qty) {
+      throw new BadRequestException(`Insufficient sets ready. Available: ${op.setsReadyForSewing}`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const newSetsReady = (op.setsReadyForSewing ?? 0) - qty;
+      const updates: any = {
+        setsReadyForSewing: { decrement: qty },
+        qtySewingIn: { increment: qty },
+      };
+      // Pindahkan OP ke Sewing HANYA jika saat ini masih di CP (jangan mundurkan
+      // currentStation bila OP sudah maju ke QC/Packing/FG).
+      if (newSetsReady === 0 && op.currentStation === StationCode.CP) {
+        updates.currentStation = StationCode.SEWING;
+      }
+      await tx.productionOrder.update({
+        where: { id: op.id },
+        data: updates,
+      });
+
+      await tx.productionLog.create({
+        data: {
+          opId: op.id,
+          station: StationCode.CP,
+          type: 'SEND_TO_SEWING',
+          qty,
+          note: `Sent ${qty} sets to Sewing via scan`,
+        },
+      });
+
+      return { success: true, remaining: newSetsReady };
+    });
+  }
 
   // ================= SEWING START =================
   async sewingStart(deviceId: string, opId: string, qty: number) {
-  const device = await this.prisma.iotDevice.findUnique({ where: { deviceId } });
-  if (!device) throw new NotFoundException('Device not found');
+    const device = await this.prisma.iotDevice.findUnique({ where: { deviceId } });
+    if (!device) throw new NotFoundException('Device not found');
 
-  const op = await this.prisma.productionOrder.findUnique({
-    where: { id: opId },
-    include: { sewingStartProgress: true }
-  });
-  if (!op) throw new NotFoundException('OP not found');
-
-  // Tentukan startIndex dari device (fungsi extractIndexFromDevice sudah ada)
-  const startIndex = this.extractIndexFromDevice(device, 'start');
-  if (startIndex !== 1 && startIndex !== 2) {
-    throw new BadRequestException('Invalid start index for this device');
-  }
-
-  // Ambil nilai saat ini untuk startIndex tersebut
-  const startProgress = op.sewingStartProgress || [];
-  const currentStart = startProgress.find(s => s.startIndex === startIndex)?.qty || 0;
-
-  // Batas maksimum adalah qtySewingIn (dalam set utuh), karena setiap set utuh membutuhkan 1 setengah set dari start ini
-  if (currentStart + qty > op.qtySewingIn) {
-    throw new BadRequestException(`Cannot exceed available sets. Max: ${op.qtySewingIn - currentStart}`);
-  }
-
-  // Lakukan update dengan transaksi untuk menghindari race condition
-  return this.prisma.$transaction(async (tx) => {
-    // Lock baris start progress yang akan diupdate
-    await tx.$executeRaw`
-      SELECT * FROM "SewingStartProgress"
-      WHERE "opId" = ${opId} AND "startIndex" = ${startIndex}
-      FOR UPDATE
-    `;
-
-    await tx.sewingStartProgress.upsert({
-      where: { opId_startIndex: { opId, startIndex } },
-      update: { qty: { increment: qty } },
-      create: { opId, startIndex, qty },
+    const op = await this.prisma.productionOrder.findUnique({
+      where: { id: opId },
+      include: { sewingStartProgress: true }
     });
+    if (!op) throw new NotFoundException('OP not found');
 
-    // Tidak perlu mengupdate qtySewingIn karena itu hanya bertambah saat pengiriman dari Check Panel
-    return { success: true };
-  });
-}
+    // Tentukan startIndex dari device (fungsi extractIndexFromDevice sudah ada)
+    const startIndex = this.extractIndexFromDevice(device, 'start');
+    if (startIndex !== 1 && startIndex !== 2) {
+      throw new BadRequestException('Invalid start index for this device');
+    }
+
+    // Ambil nilai saat ini untuk startIndex tersebut
+    const startProgress = op.sewingStartProgress || [];
+    const currentStart = startProgress.find(s => s.startIndex === startIndex)?.qty || 0;
+
+    // Batas maksimum adalah qtySewingIn (dalam set utuh), karena setiap set utuh membutuhkan 1 setengah set dari start ini
+    if (currentStart + qty > op.qtySewingIn) {
+      throw new BadRequestException(`Cannot exceed available sets. Max: ${op.qtySewingIn - currentStart}`);
+    }
+
+    // Lakukan update dengan transaksi untuk menghindari race condition
+    return this.prisma.$transaction(async (tx) => {
+      // Lock baris start progress yang akan diupdate
+      await tx.$executeRaw`
+        SELECT * FROM "SewingStartProgress"
+        WHERE "opId" = ${opId} AND "startIndex" = ${startIndex}
+        FOR UPDATE
+      `;
+
+      await tx.sewingStartProgress.upsert({
+        where: { opId_startIndex: { opId, startIndex } },
+        update: { qty: { increment: qty } },
+        create: { opId, startIndex, qty },
+      });
+
+      // ✅ (Opsional) catat log SEWING_START untuk traceability & laporan.
+      await tx.productionLog.create({
+        data: {
+          opId,
+          station: StationCode.SEWING,
+          type: 'SEWING_START',
+          qty,
+          note: `Sewing start index ${startIndex} (+${qty})`,
+        },
+      });
+
+      // Tidak perlu mengupdate qtySewingIn karena itu hanya bertambah saat pengiriman dari Check Panel
+      return { success: true };
+    });
+  }
 
   // ================= SEWING FINISH (dengan row locking) =================
   async sewingFinish(deviceId: string, opId: string, qty: number) {
@@ -176,11 +183,15 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
 
       let finishIndex = this.extractIndexFromDevice(device, 'finish');
       let finishConfig = sewingConfig?.finishes?.find((f: any) => f.id === finishIndex);
-      if (!finishConfig && line?.code === 'K1YH') {
-        finishConfig = { inputStarts: [1, 2] };
-      }
       if (!finishConfig) {
-        throw new BadRequestException(`No configuration for finish index ${finishIndex} on line ${line?.code}`);
+        // ✅ Default universal (menggantikan hardcode khusus 'K1YH'): bila line belum
+        // mengonfigurasi finish ini, ambil dari semua start index pada sewingConfig.starts;
+        // bila belum ada konfigurasi sewing sama sekali, fallback ke [1, 2] (setup umum).
+        // Dengan ini LINE BARU langsung bisa menjahit tanpa perlu mengubah kode.
+        const configuredStarts = Array.isArray(sewingConfig?.starts)
+          ? sewingConfig.starts.map((s: any) => s?.id).filter((n: any) => typeof n === 'number')
+          : [];
+        finishConfig = { inputStarts: configuredStarts.length ? configuredStarts : [1, 2] };
       }
       const inputStartIndices = finishConfig.inputStarts;
 
@@ -219,6 +230,18 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
         await tx.productionOrder.update({
           where: { id: opId },
           data: { qtySewingOut: { increment: possibleSets } }
+        });
+
+        // ✅ FIX: catat log SEWING_FINISH agar Dashboard, Reports, dan AI
+        // bisa menghitung OUTPUT Sewing per rentang tanggal (real-time).
+        await tx.productionLog.create({
+          data: {
+            opId,
+            station: StationCode.SEWING,
+            type: 'SEWING_FINISH',
+            qty: possibleSets,
+            note: `Sewing finish index ${finishIndex} (+${possibleSets} set)`,
+          },
         });
       }
 
@@ -267,11 +290,7 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
 
   // ================= FG SCAN =================
   async fgScan(qrCode: string, qty: number) {
-    const opNumber = qrCode.split('-')[1];
-
-    const op = await this.prisma.productionOrder.findUnique({
-      where: { opNumber },
-    });
+    const op = await this.resolveScannedOp(qrCode);
 
     if (!op) throw new NotFoundException('OP not found');
 
@@ -291,14 +310,9 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
   // NEW METHOD - Transfer dari Cutting Pond ke Check Panel
   // =====================================================
   async pondToCPTransfer(qrCode: string, qty: number) {
-    // Extract OP number dari QR Code
-    const parts = qrCode.split('-');
-    const opNumber = parts.length > 1 ? parts[1] : qrCode;
-    
-    const op = await this.prisma.productionOrder.findUnique({
-      where: { opNumber },
-    });
-    
+    // Resolusi OP/batch dari QR (lihat resolveScannedOp)
+    const op = await this.resolveScannedOp(qrCode);
+
     if (!op) {
       throw new NotFoundException('OP not found');
     }
@@ -588,24 +602,33 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
       // Cek apakah semua pola selesai
       const allDone = currentOp.patterns.every(p => p.completed);
       if (allDone) {
-        // 🔥 FIX: Hitung setsReadyForSewing dari minimum good patterns
-        const setComplete = Math.min(...currentOp.patterns.map(p => p.good));
-        
-        await this.prisma.productionOrder.update({
-          where: { id: currentOp.id },
-          data: {
-            qtyPond: currentOp.qtyPond,        // Total pieces counted
-            qtyPondNg: currentOp.qtyPondNg,    // Total NG pieces
-            setsReadyForSewing: setComplete,   // ✅ Sets yang bisa dibentuk (MIN good)
-            allPatternsCompleted: true,        // ✅ Semua pattern selesai dicek
-            readyForCP: true,                  // ✅ Siap dipindah ke CP
-            // ❌ JANGAN UBAH currentStation - Tetap di CUTTING_POND
-            // currentStation: StationCode.CP,  // ❌ HAPUS INI
-          },
-        });
-        
-        console.log(`✅ Pond completed for OP ${currentOp.opNumber}: ${setComplete} sets ready for CP`);
-        
+        const gate = await this.isSetComplete(currentOp.id);
+        if (gate.isPartial && !gate.complete) {
+          // Belum semua pola di-dispatch atau belum semua selesai
+          await this.prisma.productionOrder.update({
+            where: { id: currentOp.id },
+            data: {
+              qtyPond: currentOp.qtyPond,
+              qtyPondNg: currentOp.qtyPondNg,
+            },
+          });
+          console.log(`⏳ Pond OP ${currentOp.opNumber}: pola selesai (${gate.dispatched}/${gate.total}) — menunggu pola lain sebelum ke Check Panel`);
+        } else {
+          const setComplete = gate.isPartial
+            ? gate.setComplete
+            : Math.min(...currentOp.patterns.map(p => p.good));
+          await this.prisma.productionOrder.update({
+            where: { id: currentOp.id },
+            data: {
+              qtyPond: currentOp.qtyPond,
+              qtyPondNg: currentOp.qtyPondNg,
+              setsReadyForSewing: setComplete,
+              allPatternsCompleted: true,
+              readyForCP: true,
+            },
+          });
+          console.log(`✅ Pond completed for OP ${currentOp.opNumber}: ${setComplete} sets ready for CP`);
+        }
         // Hapus OP dari session
         session.pondOps = session.pondOps.filter(o => o.id !== currentOp.id);
         if (session.pondOps.length === 0) {
@@ -728,7 +751,7 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
     return { line1: 'Ready', line2: '' };
   }
 
-  // ================= GET POND OPS =================
+  // ================= GET POND OPS (hanya pola yang di-dispatch) =================
   private async getPondOps(lineCode: string): Promise<PondOp[]> {
     const ops = await this.prisma.productionOrder.findMany({
       where: {
@@ -750,18 +773,29 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
       },
     });
 
-    console.log(`getPondOps for line ${lineCode} found ${ops.length} ops`);
-    ops.forEach(op => console.log(`- ${op.opNumber} station=${op.currentStation} readyForCP=${op.readyForCP}`));
+    // Ambil dispatches untuk mengetahui pola apa saja yang sudah di-dispatch per batch
+    const dispatches = await this.prisma.cuttingDispatch.findMany({
+      where: { batchOpId: { in: ops.map(o => o.id) } },
+      select: { batchOpId: true, patternIndexes: true },
+    });
+    const dispMap = new Map<string, Set<number>>();
+    for (const d of dispatches) {
+      let set = dispMap.get(d.batchOpId);
+      if (!set) { set = new Set<number>(); dispMap.set(d.batchOpId, set); }
+      (Array.isArray(d.patternIndexes) ? (d.patternIndexes as number[]) : []).forEach(i => set!.add(Number(i)));
+    }
 
     return ops.map(op => {
       const multiplier = op.line.patternMultiplier || 1;
       const patterns: PondPattern[] = [];
-
       const patternMaster = op.line.patterns?.[0];
       const progressMap = new Map(op.patternProgress?.map(p => [p.patternIndex, p]) || []);
+      const dispatched = dispMap.get(op.id);
+      const isPartial = !!dispatched && dispatched.size > 0;
 
       if (patternMaster && patternMaster.parts) {
         patternMaster.parts.forEach((part, idx) => {
+          if (isPartial && !dispatched!.has(idx)) return; // hanya pola yang di-dispatch
           const prog = progressMap.get(idx);
           patterns.push({
             index: idx,
@@ -775,6 +809,7 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
         });
       } else {
         for (let i = 0; i < multiplier; i++) {
+          if (isPartial && !dispatched!.has(i)) continue;
           const prog = progressMap.get(i);
           patterns.push({
             index: i,
@@ -795,11 +830,86 @@ async sendToSewingFromScan(qrCode: string, qty: number) {
         itemNumberFG: op.itemNumberFG,
         qtyEntan: op.qtyEntan,
         qtyPond: op.qtyPond,
-        qtyPondNg: op.qtyPondNg,  // 🔥 TAMBAH INI
+        qtyPondNg: op.qtyPondNg,
         multiplier,
         patterns,
       };
     });
+  }
+
+  // ================= IS SET COMPLETE (validasi semua pola selesai) =================
+  private async isSetComplete(opId: string): Promise<{
+    isPartial: boolean;
+    complete: boolean;
+    setComplete: number;
+    dispatched: number;
+    total: number;
+  }> {
+    const op = await this.prisma.productionOrder.findUnique({
+      where: { id: opId },
+      include: {
+        line: { include: { patterns: { include: { parts: true } } } },
+        patternProgress: true,
+      },
+    });
+    if (!op) {
+      return { isPartial: false, complete: true, setComplete: 0, dispatched: 0, total: 0 };
+    }
+    const totalStylePatterns =
+      op.line?.patterns?.[0]?.parts?.length || op.line?.patternMultiplier || 1;
+
+    const dispatches = await this.prisma.cuttingDispatch.findMany({
+      where: { batchOpId: opId },
+      select: { patternIndexes: true },
+    });
+    const dispatchedSet = new Set<number>();
+    for (const d of dispatches) {
+      (Array.isArray(d.patternIndexes) ? (d.patternIndexes as number[]) : []).forEach(i =>
+        dispatchedSet.add(Number(i)),
+      );
+    }
+    const isPartial = dispatchedSet.size > 0;
+    const progress = op.patternProgress || [];
+
+    if (!isPartial) {
+      return {
+        isPartial: false,
+        complete: true,
+        setComplete: progress.length ? Math.min(...progress.map(p => p.good)) : 0,
+        dispatched: progress.length,
+        total: totalStylePatterns,
+      };
+    }
+
+    const goods = [...dispatchedSet].map(
+      idx => progress.find(p => p.patternIndex === idx)?.good || 0,
+    );
+    const allDispatchedCompleted = [...dispatchedSet].every(
+      idx => progress.find(p => p.patternIndex === idx)?.completed === true,
+    );
+    const complete = dispatchedSet.size >= totalStylePatterns && allDispatchedCompleted;
+
+    return {
+      isPartial: true,
+      complete,
+      setComplete: goods.length ? Math.min(...goods) : 0,
+      dispatched: dispatchedSet.size,
+      total: totalStylePatterns,
+    };
+  }
+
+  // ============ UTIL: Resolusi OP/Batch dari hasil scan QR ============
+  // QR memuat batchCode setelah prefix FG, mis. "LAS0100044-K1YH260062-B2".
+  // Urutan: batchCode -> opNumber(kandidat) -> opNumber(segmen ke-2, utk QR lama).
+  private async resolveScannedOp(qrCode: string) {
+    const parts = qrCode.split('-');
+    const candidate = parts.length > 1 ? parts.slice(1).join('-') : qrCode;
+    let op = await this.prisma.productionOrder.findFirst({ where: { batchCode: candidate } });
+    if (!op) op = await this.prisma.productionOrder.findUnique({ where: { opNumber: candidate } });
+    if (!op && parts.length > 1) {
+      op = await this.prisma.productionOrder.findUnique({ where: { opNumber: parts[1] } });
+    }
+    return op;
   }
 
   // ================= UTILITY: Ekstrak index dari device =================

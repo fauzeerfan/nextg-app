@@ -7,5 +7,6 @@ import { PrismaModule } from '../prisma/prisma.module';
   imports: [PrismaModule],
   controllers: [ManpowerController],
   providers: [ManpowerService],
+  exports: [ManpowerService], // dipakai IotModule untuk check-in absensi via Dhristi
 })
 export class ManpowerModule {}

@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ManpowerService } from '../manpower/manpower.service';
 
 @Injectable()
 export class IotService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private manpower: ManpowerService,
+  ) {}
 
   //////////////////////////////////////////////////////
   // REGISTER DEVICE (ESP pertama kali connect)
@@ -130,5 +134,59 @@ export class IotService {
     const existing = await this.prisma.iotDevice.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Device not found');
     return this.prisma.iotDevice.delete({ where: { id } });
+  }
+
+  //////////////////////////////////////////////////////
+  // DHRISTI CHECK-IN ABSENSI (sumber data = Employee Management)
+  // Dipakai perangkat Dhristi Sewing (menu ke-2) untuk scan nametag karyawan.
+  //////////////////////////////////////////////////////
+
+  // Resolusi karyawan dari hasil scan nametag (isi QR = NIK).
+  async resolveEmployeeForAttendance(code: string) {
+    const nik = (code || '').trim();
+    if (!nik) return { found: false, message: 'KODE KOSONG' };
+    const emp = await this.prisma.employee.findUnique({ where: { nik } });
+    if (!emp) return { found: false, nik, message: 'NIK TIDAK ADA' };
+    return {
+      found: true,
+      nik: emp.nik,
+      fullName: emp.fullName,
+      lineCode: emp.lineCode,
+      station: emp.station,
+      jobTitle: emp.jobTitle,
+      section: emp.section,
+      department: emp.department,
+    };
+  }
+
+  // Check-in absensi via Dhristi. Memakai ManpowerService.checkIn yang sama
+  // dengan menu Manpower Control, sehingga data masuk & tampil di Manpower
+  // Monitoring persis seperti input manual. line/station default dari master
+  // karyawan (Employee Management), sama seperti auto-fill di Manpower Control.
+  async deviceCheckIn(body: {
+    deviceId?: string;
+    nik: string;
+    lineCode?: string;
+    station?: string;
+  }) {
+    const nik = (body?.nik || '').trim();
+    if (!nik) return { success: false, message: 'NIK KOSONG' };
+
+    const emp = await this.prisma.employee.findUnique({ where: { nik } });
+    if (!emp) return { success: false, message: 'NIK TIDAK ADA' };
+
+    const lineCode = (body.lineCode && body.lineCode.trim()) || emp.lineCode;
+    const station = (body.station && body.station.trim()) || emp.station;
+
+    await this.manpower.checkIn({ nik: emp.nik, lineCode, station });
+
+    return {
+      success: true,
+      message: 'OK',
+      nik: emp.nik,
+      fullName: emp.fullName,
+      lineCode,
+      station,
+    };
   }
 }

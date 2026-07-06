@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart3, AlertTriangle, TrendingUp, Calendar, Loader2 } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('nextg_token');

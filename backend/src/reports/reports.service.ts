@@ -28,6 +28,7 @@ export class ReportsService {
     const ops = await this.prisma.productionOrder.findMany({
       where: {
         status: 'WIP',
+        level: { not: 'PARENT' }, // hanya unit produksi (batch/OP lama), bukan induk
         OR: [
           { qtyEntan: { gt: 0 } },
           { qtyPond: { gt: 0 } },
@@ -551,6 +552,7 @@ export class ReportsService {
         const ops = await this.prisma.productionOrder.findMany({
           where: {
             lineId: line.id,
+            level: { not: 'PARENT' }, // hitung unit produksi (batch/OP lama), bukan induk
             ...(filter.startDate && filter.endDate
               ? { createdAt: { gte: filter.startDate, lte: filter.endDate } }
               : {}),
@@ -681,6 +683,15 @@ export class ReportsService {
     };
 
     const opWhere = await getOpFilter();
+
+    // ✅ FIX batch: hindari double-count.
+    //  - Cutting Entan: unit kerja = OP induk (akumulasi cutting) -> tampilkan induk/OP lama.
+    //  - Stasiun lain: produksi terjadi pada BATCH -> tampilkan batch/OP lama (kecualikan induk).
+    if (station === 'CUTTING_ENTAN') {
+      opWhere.parentOpId = null;
+    } else {
+      opWhere.level = { not: 'PARENT' };
+    }
 
     // Ambil semua OP yang relevan (untuk menampilkan data OP)
 const ops = await this.prisma.productionOrder.findMany({

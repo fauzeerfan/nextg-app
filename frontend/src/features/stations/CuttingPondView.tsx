@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Activity, Wifi, RefreshCw, Scissors, Layers, Target, TrendingUp, Package, AlertCircle, CheckSquare, XSquare, CheckCircle } from 'lucide-react';
 import type { ProductionOrder } from '../../types/production';
 import { TargetSummaryCard } from '../../components/ui/TargetSummaryCard';
-
-const API_BASE_URL = 'http://localhost:3000';
+import { API_BASE_URL } from '../../lib/api';
 
 interface PatternProgress {
   index: number; name: string; target: number; good: number; ng: number; current: number; completed: boolean;
@@ -156,7 +155,12 @@ const JobCard = ({ op, lastUpdated }: { op: ProductionOrderWithLine; lastUpdated
   }
 
   const mul = op.line?.patternMultiplier || 1;
-  const targ = op.qtyEntan * mul;
+  // FIX BATCH PARSIAL: target Pond berbasis JUMLAH POLA yang sudah di-dispatch ke
+  // batch ini, bukan selalu full multiplier. Batch penuh -> op.patterns kosong
+  // sebelum counting -> fallback ke mul (semua pola). Batch parsial -> op.patterns
+  // hanya berisi pola yang sudah masuk -> target = qtyEntan * jumlah pola tsb.
+  const patternCount = (op.patterns && op.patterns.length) ? op.patterns.length : mul;
+  const targ = op.qtyEntan * patternCount;
   const cut = op.qtyPond || 0;
   const prog = targ > 0 ? (cut / targ) * 100 : 0;
   const remain = Math.max(0, targ - cut);
@@ -260,7 +264,10 @@ export const CuttingPondView = () => {
   useEffect(() => { fetchOps(); const i = setInterval(fetchOps, 3000); return () => clearInterval(i); }, [fetchOps]);
 
   // ✅ FIX 3A: Header Metrics - Hitung pieces dan sets
-  const totalSupplyPieces = ops.reduce((sum, o) => sum + (o.qtyEntan * (o.line?.patternMultiplier || 1)), 0);
+  // FIX BATCH PARSIAL: pakai jumlah pola yang sudah di-dispatch per OP (bukan full multiplier).
+  const patCount = (o: ProductionOrderWithLine) =>
+    (o.patterns && o.patterns.length) ? o.patterns.length : (o.line?.patternMultiplier || 1);
+  const totalSupplyPieces = ops.reduce((sum, o) => sum + (o.qtyEntan * patCount(o)), 0);
   const totalCutPieces = ops.reduce((sum, o) => sum + (o.qtyPond || 0), 0);
   const totalNgPieces = ops.reduce((sum, o) => sum + (o.qtyPondNg || 0), 0);
 
@@ -369,7 +376,7 @@ export const CuttingPondView = () => {
           </div>
         </div>
         <div className="px-6 pb-6">
-          <TargetSummaryCard lineCode="K1YH" station="CUTTING_POND" />
+          <TargetSummaryCard lineCode={ops[0]?.line?.code || 'K1YH'} station="CUTTING_POND" />
         </div>
       </div>
 

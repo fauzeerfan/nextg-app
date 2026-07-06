@@ -11,8 +11,12 @@ import {
   Calendar
 } from 'lucide-react';
 import type { DashboardComprehensive } from '../../types/production';
+import {
+  ResponsiveContainer, ComposedChart, Bar, Line, AreaChart, Area,
+  PieChart, Pie, Cell, BarChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+} from 'recharts';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 
 // ==========================================
 // COLOR PALETTE
@@ -384,13 +388,197 @@ const StationFlow = ({ data }: { data: Array<{
 };
 
 // ==========================================
+// ANALYTICS: KPI + CHARTS + LISTS (recharts)
+// ==========================================
+const STATUS_COLORS: Record<string, string> = { WIP: '#3b82f6', DONE: '#10b981', HOLD: '#f59e0b' };
+const axisColor = (d: boolean) => (d ? '#94a3b8' : '#64748b');
+const gridColor = (d: boolean) => (d ? '#334155' : '#e2e8f0');
+const tipStyle = (d: boolean): React.CSSProperties => ({
+  backgroundColor: d ? '#1e293b' : '#ffffff',
+  border: `1px solid ${d ? '#334155' : '#e2e8f0'}`,
+  borderRadius: 12,
+  fontSize: 12,
+  color: d ? '#f1f5f9' : '#0f172a',
+});
+
+const StatCard = ({ icon: Icon, label, value, suffix, accent, sub }: any) => (
+  <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-4 2xl:p-5 shadow-sm flex items-center gap-4">
+    <div className={`w-12 h-12 2xl:w-14 2xl:h-14 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-md ${accent}`}>
+      <Icon size={24} strokeWidth={2.5} />
+    </div>
+    <div className="min-w-0">
+      <p className="text-[10px] 2xl:text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">{label}</p>
+      <div className="flex items-baseline gap-1.5 mt-0.5">
+        <span className="text-2xl 2xl:text-3xl font-black text-slate-900 dark:text-white leading-none">
+          {typeof value === 'number' ? value.toLocaleString() : value}
+        </span>
+        {suffix && <span className="text-xs font-bold text-slate-400 dark:text-slate-500">{suffix}</span>}
+      </div>
+      {sub && <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 mt-1 truncate">{sub}</p>}
+    </div>
+  </div>
+);
+
+const ChartCard = ({ title, icon: Icon, children, className = '' }: any) => (
+  <div className={`bg-white dark:bg-slate-800 rounded-3xl border-2 border-slate-200 dark:border-slate-700 p-5 shadow-sm flex flex-col ${className}`}>
+    <div className="flex items-center gap-2 mb-4">
+      {Icon && <Icon size={18} className="text-blue-500" strokeWidth={2.5} />}
+      <h3 className="text-sm font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">{title}</h3>
+    </div>
+    <div className="flex-1 min-h-0">{children}</div>
+  </div>
+);
+
+const EmptyChart = ({ label = 'Belum ada data' }: any) => (
+  <div className="h-full min-h-[180px] flex flex-col items-center justify-center text-slate-300 dark:text-slate-600">
+    <Activity size={32} strokeWidth={1.5} />
+    <p className="text-xs font-bold mt-2">{label}</p>
+  </div>
+);
+
+const KpiRow = ({ kpi }: { kpi?: DashboardComprehensive['kpi'] }) => {
+  if (!kpi) return null;
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6 relative z-10">
+      {/* Output aktual periode (dari Packing/FG yang CLOSED) */}
+      <StatCard icon={Package} label="Output (Periode)" value={kpi.todayOutput} suffix="pcs"
+        accent="bg-emerald-600 shadow-emerald-600/30" sub="Finished / Packing" />
+      {/* WIP aktual + total OP tercatat */}
+      <StatCard icon={Layers} label="Total WIP" value={kpi.totalWip} suffix="OP"
+        accent="bg-amber-500 shadow-amber-500/30" sub={`${kpi.totalOps.toLocaleString()} OP total`} />
+      {/* Hasil lolos inspeksi (nyata dari CP + QC) */}
+      <StatCard icon={CheckSquare} label="Lolos (Good)" value={kpi.totalGood} suffix="pcs"
+        accent="bg-teal-600 shadow-teal-600/30" sub="Inspeksi CP + QC" />
+      {/* Defect rate nyata + jumlah NG */}
+      <StatCard icon={Percent} label="Defect Rate" value={kpi.defectRate} suffix="%"
+        accent="bg-rose-600 shadow-rose-600/30" sub={`${kpi.totalNg.toLocaleString()} pcs NG`} />
+      {/* Pencapaian terhadap target (target = estimasi kapasitas line aktif) */}
+      <StatCard icon={TrendingUp} label="Pencapaian Target" value={kpi.achievement} suffix="%"
+        accent="bg-blue-600 shadow-blue-600/30" sub={`Target ${kpi.targetOutput.toLocaleString()} pcs`} />
+    </div>
+  );
+};
+
+const TopCharts = ({ data, dark }: { data: DashboardComprehensive | null; dark: boolean }) => {
+  const hourly = data?.hourlyProduction || [];
+  const status = (data?.statusDistribution || []).filter((x) => x.count > 0);
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-6 relative z-10">
+      <ChartCard title="Produksi per Jam" icon={Clock} className="xl:col-span-2">
+        {hourly.length === 0 ? <EmptyChart /> : (
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={hourly} margin={{ top: 6, right: 8, left: -12, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={gridColor(dark)} vertical={false} />
+              <XAxis dataKey="hour" tick={{ fontSize: 11, fill: axisColor(dark) }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: axisColor(dark) }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={tipStyle(dark)} cursor={{ fill: dark ? 'rgba(51,65,85,0.3)' : '#f1f5f9' }} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="output" name="Output" fill="#3b82f6" radius={[6, 6, 0, 0]} maxBarSize={34} />
+              <Line type="monotone" dataKey="target" name="Target" stroke="#f59e0b" strokeWidth={2.5} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
+      </ChartCard>
+      <ChartCard title="Status OP" icon={Layers}>
+        {status.length === 0 ? <EmptyChart /> : (
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart>
+              <Pie data={status} dataKey="count" nameKey="status" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3}>
+                {status.map((sd, i) => <Cell key={i} fill={STATUS_COLORS[sd.status] || '#64748b'} />)}
+              </Pie>
+              <Tooltip contentStyle={tipStyle(dark)} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        )}
+      </ChartCard>
+    </div>
+  );
+};
+
+const BottomPanels = ({ data, dark }: { data: DashboardComprehensive | null; dark: boolean }) => {
+  const quality = data?.qualityTrend || [];
+  const lines = data?.lineSummaries || [];
+  const slow = data?.slowMovingOps || [];
+  const recent = data?.recentActivities || [];
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mt-6 relative z-10">
+      <ChartCard title="Tren Kualitas (7 Hari)" icon={Percent}>
+        {quality.length === 0 ? <EmptyChart /> : (
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={quality} margin={{ top: 6, right: 8, left: -12, bottom: 0 }}>
+              <defs>
+                <linearGradient id="qtGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.35} />
+                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={gridColor(dark)} vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: axisColor(dark) }} axisLine={false} tickLine={false} />
+              <YAxis unit="%" tick={{ fontSize: 11, fill: axisColor(dark) }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={tipStyle(dark)} />
+              <Area type="monotone" dataKey="defectRate" name="Defect %" stroke="#ef4444" strokeWidth={2.5} fill="url(#qtGrad)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </ChartCard>
+      <ChartCard title="Performa per Line" icon={Factory}>
+        {lines.length === 0 ? <EmptyChart /> : (
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={lines} margin={{ top: 6, right: 8, left: -12, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={gridColor(dark)} vertical={false} />
+              <XAxis dataKey="lineCode" tick={{ fontSize: 11, fill: axisColor(dark) }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: axisColor(dark) }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={tipStyle(dark)} cursor={{ fill: dark ? 'rgba(51,65,85,0.3)' : '#f1f5f9' }} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="output" name="Output" fill="#10b981" radius={[6, 6, 0, 0]} maxBarSize={40} />
+              <Bar dataKey="target" name="Target" fill="#cbd5e1" radius={[6, 6, 0, 0]} maxBarSize={40} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </ChartCard>
+      <ChartCard title="OP Lambat / Tertahan" icon={AlertTriangle}>
+        <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
+          {slow.length === 0 ? <EmptyChart label="Tidak ada OP tertahan" /> : slow.map((op, i) => (
+            <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-100 dark:border-slate-700">
+              <div className="min-w-0">
+                <p className="font-mono font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{op.opNumber}</p>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase">{op.currentStation}</p>
+              </div>
+              <span className={`text-xs font-black px-2.5 py-1 rounded-lg shrink-0 ${op.hoursInStation >= 24 ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>{op.hoursInStation} jam</span>
+            </div>
+          ))}
+        </div>
+      </ChartCard>
+      <ChartCard title="Aktivitas Terbaru" icon={Activity}>
+        <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
+          {recent.length === 0 ? <EmptyChart label="Belum ada aktivitas" /> : recent.map((a, i) => (
+            <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-100 dark:border-slate-700">
+              <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
+                  <span className="font-mono">{a.opNumber}</span>
+                  <span className="text-slate-400 dark:text-slate-500 font-normal"> · {a.station} · {a.action}</span>
+                </p>
+                <p className="text-[10px] text-slate-400">{new Date(a.time).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</p>
+              </div>
+              <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 shrink-0">+{a.qty}</span>
+            </div>
+          ))}
+        </div>
+      </ChartCard>
+    </div>
+  );
+};
+
+// ==========================================
 // MAIN DASHBOARD COMPONENT
 // ==========================================
 export const DashboardView = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardComprehensive | null>(null);
   const [lastUpdate, setLastUpdate] = useState('');
-  const [selectedLine, setSelectedLine] = useState('K1YH');
+  const [selectedLine, setSelectedLine] = useState(''); // '' = Semua Line
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -409,10 +597,16 @@ export const DashboardView = () => {
   const fetchData = useCallback(async () => {
     setRefreshing(true);
     try {
-      let url = `${API_BASE_URL}/production-orders/dashboard-comprehensive`;
+      const params = new URLSearchParams();
       if (startDate && endDate) {
-        url += `?startDate=${startDate}&endDate=${endDate}`;
+        params.set('startDate', startDate);
+        params.set('endDate', endDate);
       }
+      if (selectedLine) {
+        params.set('lineCode', selectedLine);
+      }
+      const qs = params.toString();
+      const url = `${API_BASE_URL}/production-orders/dashboard-comprehensive${qs ? `?${qs}` : ''}`;
       const res = await fetch(url);
       if (res.ok) {
         const json: DashboardComprehensive = await res.json();
@@ -425,7 +619,7 @@ export const DashboardView = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedLine]); // <-- selectedLine ditambahkan agar ganti line => refetch
 
   useEffect(() => {
     fetchData();
@@ -457,7 +651,7 @@ export const DashboardView = () => {
   // RENDER
   // ==========================================
   return (
-    <div className={`relative w-full min-h-screen bg-slate-50 dark:bg-slate-900 transition-all duration-500 overflow-hidden flex flex-col font-poppins ${isFullscreen ? 'p-4 2xl:p-6' : 'p-4 md:p-6 2xl:p-8'}`}>
+    <div className={`relative w-full bg-slate-50 dark:bg-slate-900 transition-all duration-500 overflow-x-hidden flex flex-col font-poppins ${isFullscreen ? 'h-screen overflow-y-auto p-4 2xl:p-6' : 'min-h-screen p-4 md:p-6 2xl:p-8'}`}>
       
       <style>
         {`
@@ -525,13 +719,10 @@ export const DashboardView = () => {
                 onChange={(e) => setSelectedLine(e.target.value)}
                 className="appearance-none bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl pl-5 pr-11 py-2.5 text-sm font-bold text-slate-800 dark:text-white focus:outline-none focus:border-blue-500 shadow-sm cursor-pointer hover:border-blue-400 transition-colors min-w-[130px]"
               >
-                {data?.lineSummaries && data.lineSummaries.length > 0 ? (
-                  data.lineSummaries.map(line => (
-                    <option key={line.lineCode} value={line.lineCode}>{line.lineCode}</option>
-                  ))
-                ) : (
-                  <option value="K1YH">Line K1YH</option>
-                )}
+                <option value="">Semua Line</option>
+                {data?.lineSummaries?.map(line => (
+                  <option key={line.lineCode} value={line.lineCode}>{line.lineCode}</option>
+                ))}
               </select>
               <Filter size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" strokeWidth={2.5} />
             </div>
@@ -570,14 +761,19 @@ export const DashboardView = () => {
         </div>
       ) : (
         <>
-          {/* KPI cards removed */}
+          {/* ===== KPI ROW ===== */}
+          <KpiRow kpi={data?.kpi} />
 
-          {/* ==========================================
-              MAIN CONTENT: STATION FLOW
-          ========================================== */}
-          <div className="relative z-10 flex-grow min-h-0 flex flex-col pb-4">
+          {/* ===== TOP CHARTS: hourly + status ===== */}
+          <TopCharts data={data} dark={isDarkMode} />
+
+          {/* ===== STATION FLOW (pipeline) ===== */}
+          <div className="relative z-10 flex flex-col pb-2">
             <StationFlow data={data?.stationFlow || []} />
           </div>
+
+          {/* ===== BOTTOM PANELS: quality, line, slow, recent ===== */}
+          <BottomPanels data={data} dark={isDarkMode} />
         </>
       )}
 

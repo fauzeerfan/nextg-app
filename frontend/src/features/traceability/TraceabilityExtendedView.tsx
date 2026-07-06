@@ -6,7 +6,7 @@ import {
   Scissors, Shirt, QrCode, Grid, Activity, Hash
 } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 
 // Types
 interface BcDocument {
@@ -779,7 +779,7 @@ export const TraceabilityExtendedView = () => {
     } catch (err: any) {
       console.error('Fetch error details:', err);
       if (err.message === 'Failed to fetch') {
-        setError('Tidak dapat terhubung ke server. Pastikan backend berjalan di http://localhost:3000');
+        setError('Tidak dapat terhubung ke server. Pastikan backend berjalan di http://202.52.15.30:4000');
       } else {
         setError(`Network error: ${err.message}`);
       }

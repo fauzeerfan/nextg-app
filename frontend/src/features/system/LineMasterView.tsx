@@ -7,7 +7,7 @@ import {
   Activity, Zap, Target, Settings, Cpu as CpuIcon
 } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 
 interface BackendStation { id: string; lineId: string; station: string; required: boolean; order: number; }
 interface FrontendStation { code: string; name: string; required: boolean; deviceType: string; }

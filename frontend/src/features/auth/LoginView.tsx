@@ -112,7 +112,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
     setErrorMessage('');
 
     try {
-      const response = await fetch('http://localhost:3000/auth/login', {
+      const response = await fetch('http://202.52.15.30:4000/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -162,7 +162,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
 
     try {
       for (const mu of multiUsers) {
-        const response = await fetch('http://localhost:3000/auth/login', {
+        const response = await fetch('http://202.52.15.30:4000/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: mu.username, password: mu.password }),

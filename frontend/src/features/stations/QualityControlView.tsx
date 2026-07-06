@@ -3,21 +3,15 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle, XCircle, RefreshCw, AlertTriangle,
   ClipboardCheck, ThumbsUp, Layers, Package, ArrowLeft, Eye, Award,
-  Shield, Info
+  Shield, Info, Maximize2, Minimize2
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { ProductionOrder } from '../../types/production';
 import { TargetSummaryCard } from '../../components/ui/TargetSummaryCard';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 const STORAGE_KEY_OP = 'nextg_qc_active_op';
 
-interface QcInspection {
-  id: string;
-  good: number;
-  ng: number;
-  ngReasons: string[];
-  createdAt: string;
-}
 
 interface QcOp extends ProductionOrder {
   inspected: number;
@@ -36,7 +30,7 @@ const MetricCard = ({
 }: {
   title: string;
   value: number | string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   color?: 'amber' | 'emerald' | 'rose' | 'blue';
   subtitle?: string;
   suffix?: string;
@@ -90,11 +84,12 @@ const MetricCard = ({
   );
 };
 
-export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: string, type: any) => void; onNavigate: (tab: string) => void; }) => {
+export const QualityControlView = ({ addLog, onNavigate: _onNavigate }: { addLog: (msg: string, type: any) => void; onNavigate: (tab: string) => void; }) => {
   const [ops, setOps] = useState<QcOp[]>([]);
   const [actOp, setActOp] = useState<QcOp | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [lastUpd, setLastUpd] = useState('');
+  const [fullscreen, setFullscreen] = useState(false);
+const [, setLastUpd] = useState('');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [ngReason, setNgReason] = useState('');
   const [ngOpen, setNgOpen] = useState(false);
@@ -417,253 +412,285 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
         </div>
       </div>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
-        
-        {/* Left Column - OP List */}
-        <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden h-full flex flex-col">
-            <div className="p-4 border-b border-slate-100 dark:border-slate-700">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md text-white ${
-                    actOp ? 'bg-purple-600 shadow-purple-600/30' : 'bg-amber-500 shadow-amber-500/30'
-                  }`}>
-                    {actOp ? <Layers size={18} /> : <ClipboardCheck size={18} />}
-                  </div>
-                  <div>
-                    <h3 className="font-black text-slate-900 dark:text-white text-sm">Production Orders</h3>
-                    <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{totalOps} orders ready</p>
-                  </div>
-                </div>
-                <div className="px-2.5 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs font-black text-slate-700 dark:text-slate-200">
-                  {totalOps}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3 flex-1 overflow-y-auto max-h-[calc(100vh-280px)] custom-scrollbar">
-              {totalOps === 0 ? (
-                <div className="text-center py-10">
-                  <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <CheckCircle size={28} className="text-slate-300 dark:text-slate-600" />
-                  </div>
-                  <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">No Orders</h4>
-                  <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Waiting for incoming orders...</p>
-                </div>
-              ) : (
-                ops.map((op) => (
-                  <div
-                    key={op.id}
-                    className={`group p-3 rounded-xl border-2 transition-all duration-300 cursor-pointer mb-2 ${
-                      actOp?.id === op.id
-                        ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30 shadow-md ring-1 ring-amber-500'
-                        : 'border-slate-200 dark:border-slate-700 hover:border-amber-400 hover:shadow-sm bg-white dark:bg-slate-800'
-                    }`}
-                    onClick={() => selectOp(op)}
-                  >
-                    <div className="flex items-start justify-between mb-1">
-                      <div>
-                        <div className="font-mono font-black text-[13px] text-slate-900 dark:text-white">{op.opNumber}</div>
-                        <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Style: {op.styleCode}</div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between mt-2">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
-                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide">Rem: {op.remaining}</span>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-black text-slate-900 dark:text-white leading-none">{op.qtySewingOut || 0}</div>
-                        <div className="text-[10px] font-medium text-slate-500 mt-1">sets</div>
-                      </div>
-                    </div>
-
-                    <div className="mt-2.5">
-                      <div className="flex justify-between text-[10px] font-bold mb-1">
-                        <span className="text-slate-500 uppercase tracking-wider">Progress</span>
-                        <span className="text-slate-700 dark:text-slate-300">{op.progress}%</span>
-                      </div>
-                      <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
-                        <div className="h-full bg-amber-500 rounded-full transition-all duration-500" style={{ width: `${op.progress}%` }} />
-                      </div>
-                    </div>
-
-                    <div className="mt-2 flex justify-between text-[11px] font-bold">
-                      <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md">G: {op.qtyQC || 0}</span>
-                      <span className="text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/40 px-2 py-0.5 rounded-md">NG: {op.qcNgQty || 0}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+      {/* Fullscreen wrapper */}
+      <div
+        className={
+          fullscreen
+            ? 'fixed inset-0 z-[200] bg-white dark:bg-slate-900 overflow-auto p-4'
+            : ''
+        }
+      >
+        {fullscreen && (
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={() => setFullscreen(false)}
+              className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              title="Keluar fullscreen"
+            >
+              <Minimize2 size={20} className="text-slate-600 dark:text-slate-300" />
+            </button>
           </div>
-        </div>
+        )}
 
-        {/* Right Column - Inspection Interface */}
-        <div className="lg:col-span-4">
-          {!actOp ? (
-            <div className="h-full flex flex-col items-center justify-center bg-white dark:bg-slate-800 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 p-8 shadow-sm">
-              <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Eye size={36} className="text-amber-500 dark:text-amber-400" />
-              </div>
-              <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">Select an Order to Inspect</h3>
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400 text-center mb-6 max-w-md mx-auto leading-relaxed">
-                Select a production order from the queue on the left panel to start set inspection.
-              </p>
-              <div className="flex items-center gap-2 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-4 py-2 rounded-full uppercase tracking-wider">
-                <div className="w-2 h-2 bg-amber-500 dark:bg-amber-400 rounded-full animate-pulse"></div>
-                Waiting for selection...
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4 h-full flex flex-col">
-              
-              {/* OP Info Header */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex-1 flex flex-col">
-                <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={back}
-                        className="group p-2.5 bg-white dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-slate-600 transition-all shadow-sm"
-                        title="Back to queue"
-                      >
-                        <ArrowLeft size={18} className="text-slate-600 dark:text-slate-300 group-hover:text-amber-600 dark:group-hover:text-amber-400" />
-                      </button>
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shadow-md shadow-amber-500/30">
-                          <Shield size={22} className="text-white" />
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-0.5">Active Inspection</div>
-                          <h2 className="text-xl font-black text-slate-900 dark:text-white leading-none">{actOp.opNumber}</h2>
-                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">{actOp.styleCode}</p>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-1 md:flex-none w-full md:w-auto items-center gap-5 bg-white dark:bg-slate-700 px-5 py-3 rounded-xl border border-slate-200 dark:border-slate-600 shadow-sm justify-between md:justify-end">
-                      <div className="text-center">
-                        <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Inspected</div>
-                        <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none mt-1">{actOp.inspected}</div>
-                      </div>
-                      <div className="w-px h-8 bg-slate-200 dark:bg-slate-600"></div>
-                      <div className="text-center">
-                        <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Remaining</div>
-                        <div className="text-xl font-black text-amber-600 dark:text-amber-400 leading-none mt-1">{actOp.remaining}</div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 bg-white dark:bg-slate-700 p-3 rounded-xl border border-slate-100 dark:border-slate-600">
-                    <div className="flex justify-between text-[10px] font-bold mb-1.5">
-                      <span className="text-slate-500 dark:text-slate-400 uppercase tracking-wider">Inspection Progress</span>
-                      <span className="text-slate-900 dark:text-white">{actOp.progress}%</span>
-                    </div>
-                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
-                      <div className="h-full bg-amber-500 rounded-full transition-all duration-500" style={{ width: `${actOp.progress}%` }} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-6 flex-1 flex flex-col">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shadow-md shadow-purple-600/30">
-                      <Eye size={20} className="text-white" />
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
+          
+          {/* Left Column - OP List */}
+          <div className="lg:col-span-1">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden h-full flex flex-col">
+              <div className="p-4 border-b border-slate-100 dark:border-slate-700">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md text-white ${
+                      actOp ? 'bg-purple-600 shadow-purple-600/30' : 'bg-amber-500 shadow-amber-500/30'
+                    }`}>
+                      {actOp ? <Layers size={18} /> : <ClipboardCheck size={18} />}
                     </div>
                     <div>
-                      <h3 className="text-xl font-black text-slate-900 dark:text-white leading-tight">Set Inspection</h3>
-                      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">Select GOOD or NOT GOOD to record result</p>
+                      <h3 className="font-black text-slate-900 dark:text-white text-sm">Production Orders</h3>
+                      <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{totalOps} orders ready</p>
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 items-center">
-                    
-                    {/* SOLID GOOD Button */}
-                    <div
-                      className={`group relative aspect-[4/3] rounded-3xl overflow-hidden border-4 transition-all duration-300 hover:scale-[1.03] shadow-lg ${
-                        submitting || actOp.remaining === 0
-                          ? 'opacity-50 pointer-events-none border-gray-300'
-                          : 'border-emerald-500 hover:shadow-emerald-500/40 cursor-pointer'
-                      } bg-white dark:bg-slate-800`}
-                    >
-                      <button
-                        onClick={handleGood}
-                        disabled={submitting || actOp.remaining === 0}
-                        className="absolute inset-0 w-full h-full flex flex-col items-center justify-center focus:outline-none"
-                      >
-                        {setGoodImg ? (
-                          <>
-                            <img
-                              src={`${API_BASE_URL}/uploads/patterns/${setGoodImg}`}
-                              alt="Good Set"
-                              className="w-full h-full object-contain p-6 transition-transform group-hover:scale-105 duration-500 relative z-10"
-                              onError={handleImgError}
-                            />
-                            <div className="hidden absolute inset-0 flex-col items-center justify-center bg-emerald-500 text-white z-20">
-                              <CheckCircle size={48} className="mb-4 drop-shadow-md" />
-                              <span className="font-black text-2xl tracking-widest drop-shadow-md">NO IMAGE</span>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-500 text-white transition-colors group-hover:bg-emerald-600">
-                            <ThumbsUp size={64} className="mb-4 drop-shadow-md" />
-                            <span className="font-black text-4xl tracking-widest drop-shadow-md">GOOD</span>
-                          </div>
-                        )}
-                      </button>
-                      <div className="absolute bottom-0 left-0 right-0 bg-emerald-600 text-white p-4 font-black flex justify-between items-center z-30 group-hover:bg-emerald-700 transition-colors">
-                        <span className="uppercase tracking-widest text-sm">Accept Set</span>
-                        <CheckCircle size={20} />
-                      </div>
-                    </div>
-
-                    {/* SOLID NOT GOOD Button */}
-                    <div
-                      className={`group relative aspect-[4/3] rounded-3xl overflow-hidden border-4 transition-all duration-300 hover:scale-[1.03] shadow-lg ${
-                        submitting || actOp.remaining === 0
-                          ? 'opacity-50 pointer-events-none border-gray-300'
-                          : 'border-rose-500 hover:shadow-rose-500/40 cursor-pointer'
-                      } bg-white dark:bg-slate-800`}
-                    >
-                      <button
-                        onClick={handleNg}
-                        disabled={submitting || actOp.remaining === 0}
-                        className="absolute inset-0 w-full h-full flex flex-col items-center justify-center focus:outline-none"
-                      >
-                        {setNgImg ? (
-                          <>
-                            <img
-                              src={`${API_BASE_URL}/uploads/patterns/${setNgImg}`}
-                              alt="NG Set"
-                              className="w-full h-full object-contain p-6 transition-transform group-hover:scale-105 duration-500 relative z-10"
-                              onError={handleImgError}
-                            />
-                            <div className="hidden absolute inset-0 flex-col items-center justify-center bg-rose-500 text-white z-20">
-                              <XCircle size={48} className="mb-4 drop-shadow-md" />
-                              <span className="font-black text-2xl tracking-widest drop-shadow-md">NO IMAGE</span>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-rose-500 text-white transition-colors group-hover:bg-rose-600">
-                            <AlertTriangle size={64} className="mb-4 drop-shadow-md" />
-                            <span className="font-black text-4xl tracking-widest drop-shadow-md">NOT GOOD</span>
-                          </div>
-                        )}
-                      </button>
-                      <div className="absolute bottom-0 left-0 right-0 bg-rose-600 text-white p-4 font-black flex justify-between items-center z-30 group-hover:bg-rose-700 transition-colors">
-                        <span className="uppercase tracking-widest text-sm">Reject Set</span>
-                        <XCircle size={20} />
-                      </div>
-                    </div>
-                    
+                  <div className="px-2.5 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs font-black text-slate-700 dark:text-slate-200">
+                    {totalOps}
                   </div>
                 </div>
               </div>
+
+              <div className="p-3 flex-1 overflow-y-auto max-h-[calc(100vh-280px)] custom-scrollbar">
+                {totalOps === 0 ? (
+                  <div className="text-center py-10">
+                    <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <CheckCircle size={28} className="text-slate-300 dark:text-slate-600" />
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">No Orders</h4>
+                    <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Waiting for incoming orders...</p>
+                  </div>
+                ) : (
+                  ops.map((op) => (
+                    <div
+                      key={op.id}
+                      className={`group p-3 rounded-xl border-2 transition-all duration-300 cursor-pointer mb-2 ${
+                        actOp?.id === op.id
+                          ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30 shadow-md ring-1 ring-amber-500'
+                          : 'border-slate-200 dark:border-slate-700 hover:border-amber-400 hover:shadow-sm bg-white dark:bg-slate-800'
+                      }`}
+                      onClick={() => selectOp(op)}
+                    >
+                      <div className="flex items-start justify-between mb-1">
+                        <div>
+                          <div className="font-mono font-black text-[13px] text-slate-900 dark:text-white">{op.opNumber}</div>
+                          <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Style: {op.styleCode}</div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+                          <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide">Rem: {op.remaining}</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-black text-slate-900 dark:text-white leading-none">{op.qtySewingOut || 0}</div>
+                          <div className="text-[10px] font-medium text-slate-500 mt-1">sets</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-2.5">
+                        <div className="flex justify-between text-[10px] font-bold mb-1">
+                          <span className="text-slate-500 uppercase tracking-wider">Progress</span>
+                          <span className="text-slate-700 dark:text-slate-300">{op.progress}%</span>
+                        </div>
+                        <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                          <div className="h-full bg-amber-500 rounded-full transition-all duration-500" style={{ width: `${op.progress}%` }} />
+                        </div>
+                      </div>
+
+                      <div className="mt-2 flex justify-between text-[11px] font-bold">
+                        <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md">G: {op.qtyQC || 0}</span>
+                        <span className="text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/40 px-2 py-0.5 rounded-md">NG: {op.qcNgQty || 0}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-          )}
+          </div>
+
+          {/* Right Column - Inspection Interface */}
+          <div className="lg:col-span-4">
+            {!actOp ? (
+              <div className="h-full flex flex-col items-center justify-center bg-white dark:bg-slate-800 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 p-8 shadow-sm">
+                <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Eye size={36} className="text-amber-500 dark:text-amber-400" />
+                </div>
+                <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">Select an Order to Inspect</h3>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400 text-center mb-6 max-w-md mx-auto leading-relaxed">
+                  Select a production order from the queue on the left panel to start set inspection.
+                </p>
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-4 py-2 rounded-full uppercase tracking-wider">
+                  <div className="w-2 h-2 bg-amber-500 dark:bg-amber-400 rounded-full animate-pulse"></div>
+                  Waiting for selection...
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 h-full flex flex-col">
+                
+                {/* OP Info Header */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex-1 flex flex-col">
+                  <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div className="flex items-center gap-4">
+                        <button
+                          onClick={back}
+                          className="group p-2.5 bg-white dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-slate-600 transition-all shadow-sm"
+                          title="Back to queue"
+                        >
+                          <ArrowLeft size={18} className="text-slate-600 dark:text-slate-300 group-hover:text-amber-600 dark:group-hover:text-amber-400" />
+                        </button>
+                        <button
+                          onClick={() => setFullscreen(!fullscreen)}
+                          className="group p-2.5 bg-white dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-slate-600 transition-all shadow-sm"
+                          title={fullscreen ? 'Keluar fullscreen' : 'Fullscreen'}
+                        >
+                          {fullscreen ? (
+                            <Minimize2 size={18} className="text-slate-600 dark:text-slate-300 group-hover:text-amber-600 dark:group-hover:text-amber-400" />
+                          ) : (
+                            <Maximize2 size={18} className="text-slate-600 dark:text-slate-300 group-hover:text-amber-600 dark:group-hover:text-amber-400" />
+                          )}
+                        </button>
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shadow-md shadow-amber-500/30">
+                            <Shield size={22} className="text-white" />
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-0.5">Active Inspection</div>
+                            <h2 className="text-xl font-black text-slate-900 dark:text-white leading-none">{actOp.opNumber}</h2>
+                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">{actOp.styleCode}</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-1 md:flex-none w-full md:w-auto items-center gap-5 bg-white dark:bg-slate-700 px-5 py-3 rounded-xl border border-slate-200 dark:border-slate-600 shadow-sm justify-between md:justify-end">
+                        <div className="text-center">
+                          <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Inspected</div>
+                          <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none mt-1">{actOp.inspected}</div>
+                        </div>
+                        <div className="w-px h-8 bg-slate-200 dark:bg-slate-600"></div>
+                        <div className="text-center">
+                          <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Remaining</div>
+                          <div className="text-xl font-black text-amber-600 dark:text-amber-400 leading-none mt-1">{actOp.remaining}</div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-4 bg-white dark:bg-slate-700 p-3 rounded-xl border border-slate-100 dark:border-slate-600">
+                      <div className="flex justify-between text-[10px] font-bold mb-1.5">
+                        <span className="text-slate-500 dark:text-slate-400 uppercase tracking-wider">Inspection Progress</span>
+                        <span className="text-slate-900 dark:text-white">{actOp.progress}%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                        <div className="h-full bg-amber-500 rounded-full transition-all duration-500" style={{ width: `${actOp.progress}%` }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-6 flex-1 flex flex-col">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shadow-md shadow-purple-600/30">
+                        <Eye size={20} className="text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-black text-slate-900 dark:text-white leading-tight">Set Inspection</h3>
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">Select GOOD or NOT GOOD to record result</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 items-center">
+                      
+                      {/* SOLID GOOD Button */}
+                      <div
+                        className={`group relative aspect-[4/3] rounded-3xl overflow-hidden border-4 transition-all duration-300 hover:scale-[1.03] shadow-lg ${
+                          submitting || actOp.remaining === 0
+                            ? 'opacity-50 pointer-events-none border-gray-300'
+                            : 'border-emerald-500 hover:shadow-emerald-500/40 cursor-pointer'
+                        } bg-white dark:bg-slate-800`}
+                      >
+                        <button
+                          onClick={handleGood}
+                          disabled={submitting || actOp.remaining === 0}
+                          className="absolute inset-0 w-full h-full flex flex-col items-center justify-center focus:outline-none"
+                        >
+                          {setGoodImg ? (
+                            <>
+                              <img
+                                src={`${API_BASE_URL}/uploads/patterns/${setGoodImg}`}
+                                alt="Good Set"
+                                className="w-full h-full object-contain p-6 transition-transform group-hover:scale-105 duration-500 relative z-10"
+                                onError={handleImgError}
+                              />
+                              <div className="hidden absolute inset-0 flex-col items-center justify-center bg-emerald-500 text-white z-20">
+                                <CheckCircle size={48} className="mb-4 drop-shadow-md" />
+                                <span className="font-black text-2xl tracking-widest drop-shadow-md">NO IMAGE</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-500 text-white transition-colors group-hover:bg-emerald-600">
+                              <ThumbsUp size={64} className="mb-4 drop-shadow-md" />
+                              <span className="font-black text-4xl tracking-widest drop-shadow-md">GOOD</span>
+                            </div>
+                          )}
+                        </button>
+                        <div className="absolute bottom-0 left-0 right-0 bg-emerald-600 text-white p-4 font-black flex justify-between items-center z-30 group-hover:bg-emerald-700 transition-colors">
+                          <span className="uppercase tracking-widest text-sm">Accept Set</span>
+                          <CheckCircle size={20} />
+                        </div>
+                      </div>
+
+                      {/* SOLID NOT GOOD Button */}
+                      <div
+                        className={`group relative aspect-[4/3] rounded-3xl overflow-hidden border-4 transition-all duration-300 hover:scale-[1.03] shadow-lg ${
+                          submitting || actOp.remaining === 0
+                            ? 'opacity-50 pointer-events-none border-gray-300'
+                            : 'border-rose-500 hover:shadow-rose-500/40 cursor-pointer'
+                        } bg-white dark:bg-slate-800`}
+                      >
+                        <button
+                          onClick={handleNg}
+                          disabled={submitting || actOp.remaining === 0}
+                          className="absolute inset-0 w-full h-full flex flex-col items-center justify-center focus:outline-none"
+                        >
+                          {setNgImg ? (
+                            <>
+                              <img
+                                src={`${API_BASE_URL}/uploads/patterns/${setNgImg}`}
+                                alt="NG Set"
+                                className="w-full h-full object-contain p-6 transition-transform group-hover:scale-105 duration-500 relative z-10"
+                                onError={handleImgError}
+                              />
+                              <div className="hidden absolute inset-0 flex-col items-center justify-center bg-rose-500 text-white z-20">
+                                <XCircle size={48} className="mb-4 drop-shadow-md" />
+                                <span className="font-black text-2xl tracking-widest drop-shadow-md">NO IMAGE</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-rose-500 text-white transition-colors group-hover:bg-rose-600">
+                              <AlertTriangle size={64} className="mb-4 drop-shadow-md" />
+                              <span className="font-black text-4xl tracking-widest drop-shadow-md">NOT GOOD</span>
+                            </div>
+                          )}
+                        </button>
+                        <div className="absolute bottom-0 left-0 right-0 bg-rose-600 text-white p-4 font-black flex justify-between items-center z-30 group-hover:bg-rose-700 transition-colors">
+                          <span className="uppercase tracking-widest text-sm">Reject Set</span>
+                          <XCircle size={20} />
+                        </div>
+                      </div>
+                      
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -702,8 +729,20 @@ export const QualityControlView = ({ addLog, onNavigate }: { addLog: (msg: strin
                   </button>
                 ))}
               </div>
+
+              {/* Input MANUAL: ketik jenis defect yang tidak ada di daftar */}
+              <div className="mt-6">
+                <label className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Atau ketik manual (jika tidak ada di daftar)</label>
+                <input
+                  type="text"
+                  value={ngReason}
+                  onChange={(e) => setNgReason(e.target.value)}
+                  placeholder="Ketik jenis defect reason..."
+                  className="mt-2 w-full px-4 py-3 rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-white focus:border-rose-500 outline-none"
+                />
+              </div>
             </div>
-            
+
             <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-4">
               <button
                 onClick={() => setNgOpen(false)}

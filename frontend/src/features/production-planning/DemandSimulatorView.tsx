@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Save, X, Search, Download, Upload, Loader2, Calendar as CalendarIcon, AlertCircle, CheckCircle, TrendingUp } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 
 interface PlannedOrder {
   id: string;

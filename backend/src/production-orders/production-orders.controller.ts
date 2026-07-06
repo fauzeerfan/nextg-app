@@ -51,8 +51,9 @@ export class ProductionOrdersController {
   async getDashboardComprehensive(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('lineCode') lineCode?: string,
   ) {
-    return this.productionOrdersService.getDashboardComprehensive(startDate, endDate);
+    return this.productionOrdersService.getDashboardComprehensive(startDate, endDate, lineCode);
   }
 
   @Get()

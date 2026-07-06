@@ -24,6 +24,8 @@ import { ProductionPlanningModule } from './production-planning/production-plann
 import { InboundWarehouseModule } from './inbound-warehouse/inbound-warehouse.module';
 import { ChatModule } from './chat/chat.module';
 import { SupportModule } from './support/support.module';
+import { CuttingReportModule } from './cutting-report/cutting-report.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -51,6 +53,8 @@ import { SupportModule } from './support/support.module';
     InboundWarehouseModule,
     ChatModule,
     SupportModule,
+    CuttingReportModule,
+    SettingsModule,
   ],
   controllers: [AppController],
 })

@@ -84,8 +84,8 @@ export const IOT_DEVICE_LAYOUTS: IoTDeviceLayout[] = [
   // CUTTING POND: Sparsha (Tetap 1)
   { id: 'dev_pnd_01', name: 'Sparsha IoT Device', type: 'sparsha', stationId: 'CUTTING_POND', positionOffset: [0, 1.2, 1.8] },
 
-  // CHECK PANEL: Dhristi & Sparsha
-  { id: 'dev_cp_dhr', name: 'Dhristi Cam IoT', type: 'dhristi', stationId: 'CP', positionOffset: [-0.7, 1.2, 1.8] },
+  // CHECK PANEL: Dhristi & Tablet
+  { id: 'dev_cp_dhr', name: 'CP Tablet Mobile', type: 'tablet', stationId: 'CP', positionOffset: [-0.7, 1.2, 1.8] },
   { id: 'dev_cp_spr', name: 'Sparsha Sensor IoT', type: 'sparsha', stationId: 'CP', positionOffset: [0.7, 1.2, 1.8] },
 
   // SEWING: Dhristi & Sparsha

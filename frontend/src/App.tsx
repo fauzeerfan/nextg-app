@@ -1,43 +1,102 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { NavigationProvider } from './context/NavigationContext'; // <-- tambah import
-import { useNavigation } from './context/NavigationContext'; // <-- tambah import
+import { NavigationProvider } from './context/NavigationContext';
+import { useNavigation } from './context/NavigationContext';
 import { LoginView } from './features/auth/LoginView';
 import { AppRouter } from './routes/AppRouter';
 import { Sidebar } from './components/layout/Sidebar';
 import { SplashPopup } from './components/ui/SplashPopup';
 import { FebyWidget } from './components/ui/FebyWidget';
 
-type UserData = {
-  id: number;
-  username: string;
-  email: string;
-  role: string;
-  lineCode?: string;
-  fullName: string;
-  permissions: string[];
-};
-
 const AppContent = () => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user, token, isAuthenticated, login, logout, sessionType, users } = useAuth();
-  const { activeTab, setActiveTab } = useNavigation(); // <-- gunakan context
+  const { user, isAuthenticated, login, logout, sessionType, users } = useAuth();
+  const { activeTab, setActiveTab } = useNavigation();
 
   const [isLoading, setIsLoading] = useState(true);
-  // Hapus state activeTab lokal
-  const [isSidebarOpen, setSidebarOpen] = useState(true);
+
+useEffect(() => {
+  const decodeJwt = (token: string): any => {
+    try {
+      const base64url = token.split('.')[1];
+      const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+      const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+      return JSON.parse(atob(base64 + padding));
+    } catch { return null; }
+  };
+
+  const checkSessionExpiry = () => {
+    const sessionType = localStorage.getItem('sessionType');
+    if (!sessionType) return;
+
+    let expired = false;
+    const now = Date.now();
+
+    // Cara 1: cek nextg_session_expires yang disimpan saat login
+    const expiresAt = localStorage.getItem('nextg_session_expires');
+    if (expiresAt) {
+      expired = now > parseInt(expiresAt, 10);
+    }
+
+    // Cara 2: fallback — decode JWT langsung (untuk sesi lama tanpa nextg_session_expires)
+    if (!expired && !expiresAt) {
+      const token = localStorage.getItem('nextg_token');
+      if (token) {
+        const payload = decodeJwt(token);
+        if (payload?.exp) expired = now > payload.exp * 1000;
+        else if (!payload) expired = true;
+      }
+
+      const multiRaw = localStorage.getItem('multiUsers');
+      if (multiRaw && !localStorage.getItem('nextg_token')) {
+        try {
+          const multiUsers = JSON.parse(multiRaw);
+          expired = multiUsers.every((u: any) => {
+            const p = decodeJwt(u.token);
+            return p?.exp ? now > p.exp * 1000 : true;
+          });
+        } catch { expired = true; }
+      }
+    }
+
+    if (expired) {
+      console.log('[Session] Expired — clearing and reloading');
+      localStorage.removeItem('sessionType');
+      localStorage.removeItem('nextg_token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('multiUsers');
+      localStorage.removeItem('nextg_session_expires');
+      window.location.reload();
+    }
+  };
+
+  // 🔥 Panggil segera saat komponen dimuat
+  checkSessionExpiry();
+
+  const interval = setInterval(checkSessionExpiry, 60 * 1000);
+  window.addEventListener('focus', checkSessionExpiry);
+  document.addEventListener('visibilitychange', checkSessionExpiry);
+  return () => {
+    clearInterval(interval);
+    window.removeEventListener('focus', checkSessionExpiry);
+    document.removeEventListener('visibilitychange', checkSessionExpiry);
+  };
+}, []);
+  // ───────────────────────────────────────────────────────────────────────
+  const [isSidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 768;
+    }
+    return true;
+  });
   const [isMobile, setIsMobile] = useState(false);
   const [showSplashPopup, setShowSplashPopup] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      if (mobile) setSidebarOpen(false);
-      else setSidebarOpen(true);
+      setIsMobile(window.innerWidth < 768);
     };
     handleResize();
     window.addEventListener('resize', handleResize);
@@ -45,8 +104,6 @@ const AppContent = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // HAPUS useEffect pertama (navigate berdasarkan activeTab)
-  
   // Pertahankan useEffect sinkronisasi path ke tab (untuk back/forward)
   useEffect(() => {
     const pathToTab: Record<string, string> = {
@@ -85,8 +142,6 @@ const AppContent = () => {
     }
   }, [location.pathname, activeTab, setActiveTab]);
 
-  // HAPUS useEffect ketiga (penyimpanan localStorage terpisah)
-
   const handleLogin = (userData: any, token: string, sessionType?: 'single' | 'multi', additionalUsers?: any[]) => {
     if (sessionType === 'multi') {
       const primaryUser = { ...userData, id: Number(userData.id) };
@@ -95,7 +150,7 @@ const AppContent = () => {
     } else {
       login(token, { ...userData, id: Number(userData.id) }, 'single');
     }
-    setActiveTab('dashboard'); // ganti dari setActiveTab lokal ke context
+    setActiveTab('dashboard');
     setShowSplashPopup(true);
   };
 
@@ -119,7 +174,6 @@ const AppContent = () => {
     return <LoginView onLogin={handleLogin} />;
   }
 
-  // Determine currentUserForSidebar untuk menu (single user atau multi user ambil user pertama)
   let currentUserForSidebar = null;
   if (sessionType === 'single' && user) {
     currentUserForSidebar = {
@@ -127,17 +181,20 @@ const AppContent = () => {
       fullName: user.fullName,
       role: user.role,
       lineCode: user.lineCode,
-      allowedStations: user.allowedStations
+      allowedStations: user.allowedStations,
+      // PENTING: sertakan allowedMenus agar Sidebar memfilter menu sesuai
+      // "Menu Access Rights". Tanpa ini, menu yang dicentang tidak muncul.
+      allowedMenus: user.allowedMenus,
     };
   } else if (sessionType === 'multi' && users.length > 0) {
-    // Gunakan user pertama untuk menentukan menu (karena semua user punya allowedStations sama)
     const firstUser = users[0].user;
     currentUserForSidebar = {
       username: firstUser.username,
       fullName: firstUser.fullName,
       role: firstUser.role,
       lineCode: firstUser.lineCode,
-      allowedStations: firstUser.allowedStations
+      allowedStations: firstUser.allowedStations,
+      allowedMenus: firstUser.allowedMenus,
     };
   }
 
@@ -146,7 +203,8 @@ const AppContent = () => {
     fullName: u.user.fullName,
     role: u.user.role,
     lineCode: u.user.lineCode,
-    allowedStations: u.user.allowedStations
+    allowedStations: u.user.allowedStations,
+    allowedMenus: u.user.allowedMenus,
   })) : [];
 
   return (
@@ -155,7 +213,6 @@ const AppContent = () => {
       <div className="flex min-h-screen font-sans transition-colors duration-300 bg-slate-100 dark:bg-slate-950 text-black dark:text-white">
         <div className="hidden md:block">
           <Sidebar 
-
             isMobile={isMobile}
             isOpen={isSidebarOpen}
             toggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
@@ -171,7 +228,6 @@ const AppContent = () => {
         {isMobile && (
           <div className={`fixed inset-y-0 left-0 z-50 md:hidden transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <Sidebar 
-
               isMobile={isMobile}
               isOpen={isSidebarOpen}
               toggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
@@ -195,7 +251,14 @@ const AppContent = () => {
           </main>
         </div>
       </div>
-      <FebyWidget />
+      {/* Widget Feby hanya muncul jika user memiliki menu akses 'ai_chat' atau role ADMINISTRATOR */}
+      {(() => {
+        // Cek dari user primary (sesi single atau multi)
+        const hasFebyAccess =
+          user?.role === 'ADMINISTRATOR' ||
+          (user?.allowedMenus && user.allowedMenus.includes('ai_chat'));
+        return hasFebyAccess ? <FebyWidget /> : null;
+      })()}
     </>
   );
 };
@@ -205,7 +268,7 @@ export default function NextGApp() {
     <ThemeProvider>
       <Router>
         <AuthProvider>
-          <NavigationProvider>   {/* <-- tambahkan */}
+          <NavigationProvider>
             <AppContent />
           </NavigationProvider>
         </AuthProvider>

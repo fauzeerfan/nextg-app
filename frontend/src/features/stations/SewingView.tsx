@@ -3,7 +3,7 @@ import { Shirt, Activity, RefreshCw, Target, Package, Layers, ArrowRight, CheckC
 import type { ProductionOrder } from '../../types/production';
 import { TargetSummaryCard } from '../../components/ui/TargetSummaryCard';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 
 interface SewingStartProgress {
   startIndex: number;

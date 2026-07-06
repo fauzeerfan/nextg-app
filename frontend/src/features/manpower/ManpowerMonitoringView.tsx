@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Calendar, RefreshCw, Loader2, Search, Activity, TrendingUp, FilterX, AlertCircle, Users, Clock, CheckCircle2 } from 'lucide-react';
 import SankeyChart from '../../components/ui/SankeyChart';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://202.52.15.30:4000';
 
 interface AttendanceRecord {
   id: string;
@@ -220,7 +220,7 @@ const fetchFlowData = useCallback(async () => {
   } catch (err: any) {
     console.error('Fetch error:', err);
     if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-      setError('Tidak dapat terhubung ke server. Pastikan backend berjalan di http://localhost:3000');
+      setError('Tidak dapat terhubung ke server. Pastikan backend berjalan di http://202.52.15.30:4000');
     } else {
       setError(err.message || 'Gagal mengambil data');
     }
