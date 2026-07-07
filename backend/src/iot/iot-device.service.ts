@@ -28,11 +28,12 @@ export interface DeviceSession {
   station: StationCode;
   line: string;
   // Pond specific
-  pondState?: 'SELECT_OP' | 'SELECT_PATTERN' | 'CONFIRM_PATTERN' | 'COUNTING';
+  pondState?: 'SELECT_OP' | 'SELECT_PATTERN' | 'SELECT_COUNT' | 'CONFIRM_PATTERN' | 'COUNTING';
   pondOps?: PondOp[];
   pondOpIndex?: number;
   pondSelectedOpId?: string; // <-- tambahkan
   pondPatternIndex?: number;
+  pondCountStep?: number; // langkah count fleksibel di Cutting Pond: 1/10/50/100 (default 1)
   pondConfirmChoice?: 'YES' | 'BACK';
   lastRefresh?: number;
   // Sewing specific (can be extended)

@@ -4,6 +4,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IotDeviceService, PondOp, PondPattern } from '../iot/iot-device.service';
 import { StationCode } from '@prisma/client';
 
+// Cutting Pond: langkah count fleksibel. Satu klik GOOD/NG bisa menambah
+// +1/+10/+50/+100 sesuai pilihan operator pada state SELECT_COUNT.
+const POND_COUNT_STEPS = [1, 10, 50, 100];
+const nextPondStep = (cur?: number): number => {
+  const i = POND_COUNT_STEPS.indexOf(cur ?? 1);
+  return POND_COUNT_STEPS[(i + 1) % POND_COUNT_STEPS.length];
+};
+
 @Injectable()
 export class ProductionEngineService {
   constructor(
@@ -483,6 +491,28 @@ export class ProductionEngineService {
       } else if (button === 'RED') {
         session.pondPatternIndex = (session.pondPatternIndex! + 1) % availablePatterns.length;
       } else if (button === 'GREEN') {
+        // Lanjut ke pemilihan langkah count (SELECT_COUNT) sebelum counting.
+        session.pondState = 'SELECT_COUNT';
+        if (!session.pondCountStep) session.pondCountStep = 1;
+      }
+    }
+
+    // ===== SELECT COUNT (langkah +1/+10/+50/+100) =====
+    else if (session.pondState === 'SELECT_COUNT') {
+      const availablePatterns = currentOp.patterns.filter(p => !p.completed);
+      if (availablePatterns.length === 0) {
+        session.pondState = 'SELECT_OP';
+        return this.handlePondButton(deviceId, button);
+      }
+      if (!session.pondCountStep) session.pondCountStep = 1;
+      if (button === 'YELLOW') {
+        // kembali ke pemilihan pola
+        session.pondState = 'SELECT_PATTERN';
+      } else if (button === 'RED') {
+        // ganti langkah: 1 -> 10 -> 50 -> 100 -> 1
+        session.pondCountStep = nextPondStep(session.pondCountStep);
+      } else if (button === 'GREEN') {
+        // konfirmasi langkah -> mulai counting
         session.pondState = 'COUNTING';
       }
     }
@@ -497,20 +527,26 @@ export class ProductionEngineService {
       }
       const pattern = availablePatterns[idx];
 
-      if (button === 'GREEN') {
-        // GOOD
+      // Langkah count fleksibel (default 1). Increment dibatasi agar tidak
+      // melebihi sisa target pola (good+ng tidak akan lebih dari target batch).
+      const step = session.pondCountStep && session.pondCountStep > 0 ? session.pondCountStep : 1;
+      const remaining = Math.max(0, pattern.target - pattern.current);
+      const inc = Math.min(step, remaining);
+
+      if (button === 'GREEN' && inc > 0) {
+        // GOOD (+inc)
         await this.prisma.$transaction([
           this.prisma.productionOrder.update({
             where: { id: currentOp.id },
-            data: { qtyPond: { increment: 1 } },
+            data: { qtyPond: { increment: inc } },
           }),
           this.prisma.productionLog.create({
             data: {
               opId: currentOp.id,
               station: StationCode.CUTTING_POND,
               type: 'GOOD',
-              qty: 1,
-              note: `Pattern: ${pattern.name}`,
+              qty: inc,
+              note: `Pattern: ${pattern.name} (+${inc})`,
             },
           }),
           this.prisma.patternProgress.upsert({
@@ -521,7 +557,7 @@ export class ProductionEngineService {
               },
             },
             update: {
-              good: { increment: 1 },
+              good: { increment: inc },
               ng: pattern.ng,
               completed: pattern.completed,
             },
@@ -530,15 +566,15 @@ export class ProductionEngineService {
               patternIndex: pattern.index,
               patternName: pattern.name,
               target: pattern.target,
-              good: 1,
+              good: inc,
               ng: 0,
               completed: false,
             },
           }),
         ]);
-        pattern.good++;
-        pattern.current++;
-        currentOp.qtyPond++;
+        pattern.good += inc;
+        pattern.current += inc;
+        currentOp.qtyPond += inc;
 
         if (pattern.current >= pattern.target) {
           pattern.completed = true;
@@ -554,20 +590,20 @@ export class ProductionEngineService {
           session.pondState = 'SELECT_PATTERN';
           session.pondPatternIndex = 0;
         }
-      } else if (button === 'RED') {
-        // NOT GOOD
+      } else if (button === 'RED' && inc > 0) {
+        // NOT GOOD (+inc)
         await this.prisma.$transaction([
           this.prisma.productionOrder.update({
             where: { id: currentOp.id },
-            data: { qtyPondNg: { increment: 1 } },
+            data: { qtyPondNg: { increment: inc } },
           }),
           this.prisma.productionLog.create({
             data: {
               opId: currentOp.id,
               station: StationCode.CUTTING_POND,
               type: 'NG',
-              qty: 1,
-              note: `Pattern: ${pattern.name}`,
+              qty: inc,
+              note: `Pattern: ${pattern.name} (+${inc})`,
             },
           }),
           this.prisma.patternProgress.upsert({
@@ -578,7 +614,7 @@ export class ProductionEngineService {
               },
             },
             update: {
-              ng: { increment: 1 },
+              ng: { increment: inc },
               good: pattern.good,
               completed: pattern.completed,
             },
@@ -588,15 +624,33 @@ export class ProductionEngineService {
               patternName: pattern.name,
               target: pattern.target,
               good: 0,
-              ng: 1,
+              ng: inc,
               completed: false,
             },
           }),
         ]);
-        pattern.ng++;
-        pattern.current++;
+        pattern.ng += inc;
+        pattern.current += inc;
+
+        // Pola dianggap selesai bila total inspeksi (good+ng) mencapai target,
+        // sama seperti jalur GOOD, agar tidak macet saat set dipenuhi via NG.
+        if (pattern.current >= pattern.target) {
+          pattern.completed = true;
+          await this.prisma.patternProgress.update({
+            where: {
+              opId_patternIndex: {
+                opId: currentOp.id,
+                patternIndex: pattern.index,
+              },
+            },
+            data: { completed: true },
+          });
+          session.pondState = 'SELECT_PATTERN';
+          session.pondPatternIndex = 0;
+        }
       } else if (button === 'YELLOW') {
-        session.pondState = 'SELECT_PATTERN';
+        // kembali ke pemilihan langkah count (bisa ubah +1/+10/+50/+100)
+        session.pondState = 'SELECT_COUNT';
       }
 
       // Cek apakah semua pola selesai
@@ -663,12 +717,20 @@ export class ProductionEngineService {
       let line2 = `G:${pattern.good} NG:${pattern.ng} S:${pattern.target - pattern.current}`;
       if (line2.length > 16) line2 = line2.substring(0, 13) + '...';
       return { line1, line2 };
+    } else if (session.pondState === 'SELECT_COUNT') {
+      const step = session.pondCountStep && session.pondCountStep > 0 ? session.pondCountStep : 1;
+      let line1 = `COUNT: +${step}`;
+      if (line1.length > 16) line1 = line1.substring(0, 16);
+      let line2 = `RED ubah/GRN ok`;
+      if (line2.length > 16) line2 = line2.substring(0, 16);
+      return { line1, line2 };
     } else if (session.pondState === 'COUNTING') {
+      const step = session.pondCountStep && session.pondCountStep > 0 ? session.pondCountStep : 1;
       const pattern = availablePatterns[session.pondPatternIndex ?? 0];
       const remaining = pattern.target - pattern.current;
-      let line1 = `${op.opNumber} +${pattern.good + pattern.ng}`;
+      let line1 = `${op.opNumber} x${step}`;
       if (line1.length > 16) line1 = line1.substring(0, 13) + '...';
-      let line2 = `${pattern.name} sisa ${remaining}`;
+      let line2 = `${pattern.name.replace('Pola ', 'P')} sisa ${remaining}`;
       if (line2.length > 16) line2 = line2.substring(0, 13) + '...';
       return { line1, line2 };
     }
@@ -738,12 +800,20 @@ export class ProductionEngineService {
       let line2 = `G:${pattern.good} NG:${pattern.ng} S:${pattern.target - pattern.current}`;
       if (line2.length > 16) line2 = line2.substring(0, 13) + '...';
       return { line1, line2 };
+    } else if (session.pondState === 'SELECT_COUNT') {
+      const step = session.pondCountStep && session.pondCountStep > 0 ? session.pondCountStep : 1;
+      let line1 = `COUNT: +${step}`;
+      if (line1.length > 16) line1 = line1.substring(0, 16);
+      let line2 = `RED ubah/GRN ok`;
+      if (line2.length > 16) line2 = line2.substring(0, 16);
+      return { line1, line2 };
     } else if (session.pondState === 'COUNTING') {
+      const step = session.pondCountStep && session.pondCountStep > 0 ? session.pondCountStep : 1;
       const pattern = availablePatterns[session.pondPatternIndex ?? 0];
       const remaining = pattern.target - pattern.current;
-      let line1 = `${op.opNumber} +${pattern.good + pattern.ng}`;
+      let line1 = `${op.opNumber} x${step}`;
       if (line1.length > 16) line1 = line1.substring(0, 13) + '...';
-      let line2 = `${pattern.name} sisa ${remaining}`;
+      let line2 = `${pattern.name.replace('Pola ', 'P')} sisa ${remaining}`;
       if (line2.length > 16) line2 = line2.substring(0, 13) + '...';
       return { line1, line2 };
     }
