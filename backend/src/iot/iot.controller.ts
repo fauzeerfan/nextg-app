@@ -114,6 +114,12 @@ export class IotController {
     return this.iot.deviceCheckIn(body);
   }
 
+  // Check-out absensi via Dhristi (sama seperti tombol check-out Manpower Control).
+  @Post('attendance/checkout')
+  async attendanceCheckout(@Body() body: { deviceId?: string; nik: string }) {
+    return this.iot.deviceCheckOut(body);
+  }
+
   // ========== NEW CRUD ENDPOINTS ==========
   @Get('device/:id')
   async getDevice(@Param('id') id: string) {

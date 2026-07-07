@@ -9,6 +9,8 @@ interface AttendanceRecord {
   lineCode: string;
   station: string;
   scanTime: string;
+  checkOut?: string | null;
+  source?: string;
   employee: {
     fullName: string;
     jobTitle: string;
@@ -193,6 +195,33 @@ export const ManpowerControlView = () => {
       setMessage({ type: 'error', text: 'Network error' });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Check-out: menandai record absen aktif karyawan -> tidak lagi dihitung
+  // sebagai manpower aktif (target menyesuaikan). Record tetap tersimpan.
+  const [checkingOut, setCheckingOut] = useState<string | null>(null);
+  const handleCheckOut = async (nik: string, fullName: string) => {
+    if (!confirm(`Check-out ${fullName} (${nik})? Karyawan tidak lagi dihitung sebagai manpower aktif hari ini.`)) return;
+    setCheckingOut(nik);
+    setMessage(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/manpower/checkout`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ nik }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: 'success', text: `Check-out berhasil untuk ${fullName}` });
+        fetchToday();
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Check-out gagal' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Network error' });
+    } finally {
+      setCheckingOut(null);
     }
   };
 
@@ -395,11 +424,30 @@ export const ManpowerControlView = () => {
                         </div>
                       </div>
                       
-                      <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t-2 sm:border-t-0 sm:border-l-2 border-slate-100 dark:border-slate-700 pt-3 sm:pt-0 sm:pl-5 mt-2 sm:mt-0 min-w-[100px]">
-                        <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">Scanned</span>
-                        <span className="font-extrabold text-sm text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm">
-                          {new Date(att.scanTime).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}
-                        </span>
+                      <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t-2 sm:border-t-0 sm:border-l-2 border-slate-100 dark:border-slate-700 pt-3 sm:pt-0 sm:pl-5 mt-2 sm:mt-0 min-w-[120px] gap-2">
+                        <div className="flex flex-col items-center sm:items-end">
+                          <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">
+                            {att.source === 'AUTO' ? 'Auto In' : 'Scanned'}
+                          </span>
+                          <span className="font-extrabold text-sm text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm">
+                            {new Date(att.scanTime).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}
+                          </span>
+                        </div>
+                        {att.checkOut ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-extrabold text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-900/40 px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800">
+                            Out {new Date(att.checkOut).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleCheckOut(att.nik, att.employee.fullName)}
+                            disabled={checkingOut === att.nik}
+                            className="inline-flex items-center gap-1.5 text-xs font-extrabold text-white bg-rose-500 hover:bg-rose-600 disabled:opacity-60 px-3 py-1.5 rounded-lg border border-rose-600 shadow-sm transition-colors"
+                            title="Check-out karyawan ini"
+                          >
+                            {checkingOut === att.nik ? <Loader2 size={13} className="animate-spin" /> : <AlertCircle size={13} />}
+                            Check-out
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

@@ -60,6 +60,93 @@ async checkIn(dto: CreateAttendanceDto) {
   return attendance;
 }
 
+  // =====================================================
+  // CHECK-OUT (Manpower Control + Dhristi Sewing)
+  // =====================================================
+  // Menandai record absen AKTIF terakhir hari ini sebagai check-out. Karyawan
+  // yang sudah check-out TIDAK lagi dihitung sebagai manpower aktif (target
+  // menyesuaikan di target-monitoring), tetapi record tetap tersimpan sehingga
+  // tetap muncul di Manpower Monitoring, tabel detail, dan Sankey (dengan tanda).
+  async checkOut(dto: { nik: string }) {
+    const nik = (dto?.nik || '').trim();
+    if (!nik) throw new BadRequestException('NIK wajib diisi');
+    const employee = await this.prisma.employee.findUnique({ where: { nik } });
+    if (!employee) throw new NotFoundException('Employee not found');
+
+    const todayUTC = new Date();
+    todayUTC.setUTCHours(0, 0, 0, 0);
+
+    // Record absen AKTIF (belum check-out) paling akhir hari ini.
+    const open = await this.prisma.manpowerAttendance.findFirst({
+      where: { nik, tanggal: todayUTC, checkOut: null },
+      orderBy: { scanTime: 'desc' },
+    });
+    if (!open) {
+      throw new BadRequestException(
+        'Tidak ada check-in aktif hari ini untuk karyawan ini',
+      );
+    }
+
+    const updated = await this.prisma.manpowerAttendance.update({
+      where: { id: open.id },
+      data: { checkOut: new Date() },
+      include: { employee: true },
+    });
+    this.logger.log(`Check-out NIK ${nik} @ ${updated.lineCode}/${updated.station}`);
+    return updated;
+  }
+
+  // =====================================================
+  // AUTO CHECK-IN NON-SEWING (dipanggil scheduler harian 07:30)
+  // =====================================================
+  // Membuat check-in otomatis untuk SEMUA karyawan non-sewing dari Employee
+  // Management. Idempoten: karyawan yang sudah punya absen hari ini dilewati,
+  // jadi aman dijalankan berkali-kali. Setelah dibuat, penempatan masih bisa
+  // diubah/dipindah lewat Manpower Control (scan berikutnya = line change).
+  async autoCheckInNonSewing(dateStr?: string) {
+    const day = dateStr ? this.parseDateToUTC(dateStr) : new Date();
+    if (!day) throw new BadRequestException('Tanggal tidak valid');
+    day.setUTCHours(0, 0, 0, 0);
+    const next = new Date(day);
+    next.setUTCDate(next.getUTCDate() + 1);
+
+    const employees = await this.prisma.employee.findMany();
+    // Non-sewing = station BUKAN SEWING (case-insensitive). Karyawan sewing
+    // tetap check-in manual lewat Dhristi Sewing di station.
+    const nonSewing = employees.filter(
+      (e) => (e.station || '').trim().toUpperCase() !== 'SEWING',
+    );
+
+    const existing = await this.prisma.manpowerAttendance.findMany({
+      where: { tanggal: { gte: day, lt: next } },
+      select: { nik: true },
+    });
+    const already = new Set(existing.map((a) => a.nik));
+
+    const toCreate = nonSewing
+      .filter((e) => !already.has(e.nik))
+      .map((e) => ({
+        nik: e.nik,
+        tanggal: day,
+        lineCode: e.lineCode,
+        station: e.station,
+        source: 'AUTO',
+      }));
+
+    if (toCreate.length > 0) {
+      await this.prisma.manpowerAttendance.createMany({ data: toCreate });
+    }
+    this.logger.log(
+      `Auto check-in non-sewing ${day.toISOString().slice(0, 10)}: created ${toCreate.length}, skipped ${nonSewing.length - toCreate.length}`,
+    );
+    return {
+      date: day.toISOString().slice(0, 10),
+      totalNonSewing: nonSewing.length,
+      created: toCreate.length,
+      skipped: nonSewing.length - toCreate.length,
+    };
+  }
+
   async getTodayAttendance() {
     const todayUTC = new Date();
     todayUTC.setUTCHours(0, 0, 0, 0);
@@ -417,6 +504,8 @@ async checkIn(dto: CreateAttendanceDto) {
           id: att.id,
           tanggal: att.tanggal,
           scanTime: att.scanTime,
+          checkOut: att.checkOut,
+          source: att.source,
           nik: att.nik,
           fullName: att.employee.fullName,
           lineCode: att.lineCode,

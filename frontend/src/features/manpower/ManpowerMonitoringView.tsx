@@ -720,6 +720,7 @@ const fetchFlowData = useCallback(async () => {
                     <th className="py-4 px-5 text-left text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Area / Line</th>
                     <th className="py-4 px-5 text-left text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Stasiun</th>
                     <th className="py-4 px-5 text-left text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Waktu Scan</th>
+                    <th className="py-4 px-5 text-left text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50 bg-white dark:bg-slate-800">
@@ -743,7 +744,21 @@ const fetchFlowData = useCallback(async () => {
                         <div className="flex items-center gap-1.5">
                           <Clock size={14} className="text-slate-400" />
                           {new Date(item.scanTime).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}
+                          {item.source === 'AUTO' && (
+                            <span className="ml-1 text-[10px] font-extrabold text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-900/40 px-1.5 py-0.5 rounded" title="Auto check-in 07:30">AUTO</span>
+                          )}
                         </div>
+                      </td>
+                      <td className="py-4 px-5">
+                        {item.checkOut ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-extrabold text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-900/40 px-2.5 py-1 rounded-lg border border-rose-200 dark:border-rose-800">
+                            Check-out {new Date(item.checkOut).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-extrabold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                            Aktif
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}

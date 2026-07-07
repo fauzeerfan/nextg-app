@@ -663,4 +663,169 @@ export class CuttingReportService {
       qtyEntan: nextEntan,
     };
   }
+
+  // =====================================================
+  // #2: KIRIM KE PRODUKSI PER-ENTAN (1 entan = 1 batch)
+  // =====================================================
+  // Jumlah SET LENGKAP dari SATU entan = MIN, di antara material BOM AUT, dari
+  // total potong (totalSetOrPcs) material tsb DI ENTAN INI. Material BOM AUT yang
+  // belum dipotong di entan ini => 0 => set = 0 (belum lengkap). Konsisten dengan
+  // logika set lengkap di postToProduction, tetapi dihitung per-entan.
+  private async computeEntanSets(
+    entanId: string,
+  ): Promise<{ entanSets: number; op: any; entan: any }> {
+    const entan = await this.prisma.cuttingEntan.findUnique({
+      where: { id: entanId },
+      include: {
+        formOp: { include: { materials: true } },
+        details: true,
+      },
+    });
+    if (!entan) throw new NotFoundException('Entan tidak ditemukan');
+
+    const bom = entan.formOp.materials.filter(
+      (m: any) => m.variant === 'AUT' && (m.qtyRequirement || 0) > 0,
+    );
+    if (bom.length === 0) return { entanSets: 0, op: entan.formOp, entan };
+
+    const sumByMaterial = new Map<string, number>();
+    for (const d of entan.details as any[]) {
+      if (d.variant !== 'AUT') continue;
+      sumByMaterial.set(
+        d.materialId,
+        (sumByMaterial.get(d.materialId) || 0) + (d.totalSetOrPcs || 0),
+      );
+    }
+    const entanSets = Math.min(...bom.map((m: any) => sumByMaterial.get(m.id) || 0));
+    return { entanSets: Math.max(0, Math.trunc(entanSets)), op: entan.formOp, entan };
+  }
+
+  // Info untuk dialog "Kirim ke Produksi" per-entan (set tersedia, sudah dikirim,
+  // sisa yang bisa dikirim, dan batchCode bila sudah pernah dikirim).
+  async getEntanPostInfo(entanId: string) {
+    const { entanSets, op, entan } = await this.computeEntanSets(entanId);
+    const posted = entan.postedQty || 0;
+    return {
+      entanId: entan.id,
+      entanKe: entan.entanKe,
+      opNumber: op.opNumber,
+      itemNumberFG: op.itemNumberFG,
+      itemNameFG: op.itemNameFG,
+      batchCode: entan.batchCode,
+      entanSets,
+      postedQty: posted,
+      remaining: Math.max(0, entanSets - posted),
+    };
+  }
+
+  // Kirim SET dari SATU entan ke produksi. Bisa berulang (incremental): tiap
+  // panggilan menambah qty (dibatasi <= sisa set entan). batchCode diinput sekali
+  // (pengiriman pertama) lalu disimpan di entan & dipakai otomatis di dispatch.
+  async postEntanToProduction(
+    entanId: string,
+    dto: { batchCode?: string; qty?: number },
+  ) {
+    const { entanSets, op, entan } = await this.computeEntanSets(entanId);
+
+    if (!op.itemNumberFG) {
+      throw new BadRequestException(
+        'Item Number FG kosong; tidak bisa dikirim ke produksi',
+      );
+    }
+    const styleCode = op.opNumber.substring(0, 4).toUpperCase();
+    if (!EXECUTION_STYLES.includes(styleCode)) {
+      throw new BadRequestException(
+        `Style ${styleCode} tidak termasuk daftar eksekusi (${EXECUTION_STYLES.join(', ')}). ` +
+          `Hasil cutting tetap tersimpan, tetapi tidak dikirim ke produksi.`,
+      );
+    }
+
+    const posted = entan.postedQty || 0;
+    const remaining = Math.max(0, entanSets - posted);
+    if (remaining <= 0) {
+      throw new BadRequestException(
+        `Tidak ada set lengkap baru untuk dikirim dari entan ini ` +
+          `(set tersedia ${entanSets}, sudah dikirim ${posted}). ` +
+          `Pastikan semua material BOM sudah dipotong.`,
+      );
+    }
+
+    // Dispatch/kirim dibatasi <= sisa set laporan entan (tidak boleh melebihi).
+    const reqQty = Number(dto?.qty);
+    const qty = reqQty > 0 ? Math.min(Math.trunc(reqQty), remaining) : remaining;
+
+    // batchCode: pakai yang tersimpan; kalau belum ada, WAJIB dari input awal.
+    let batchCode = (entan.batchCode || '').trim();
+    if (!batchCode) {
+      batchCode = (dto?.batchCode || '').trim();
+      if (!batchCode) {
+        throw new BadRequestException(
+          'ID batch wajib diisi pada pengiriman pertama entan ini',
+        );
+      }
+    }
+
+    let line = await this.prisma.lineMaster.findUnique({ where: { code: styleCode } });
+    if (!line) {
+      line = await this.prisma.lineMaster.create({
+        data: { code: styleCode, name: `Line ${styleCode}`, patternMultiplier: 4 },
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.productionOrder.findUnique({
+        where: { opNumber: op.opNumber },
+        select: { id: true },
+      });
+      if (existing) {
+        await tx.productionOrder.update({
+          where: { opNumber: op.opNumber },
+          data: {
+            itemNumberFG: op.itemNumberFG,
+            itemNameFG: op.itemNameFG ?? undefined,
+            qtyOp: op.qtyOp,
+            qtyEntan: { increment: qty }, // akumulasi qty kiriman entan
+            cuttingSource: 'INTERNAL',
+          },
+        });
+      } else {
+        await tx.productionOrder.create({
+          data: {
+            opNumber: op.opNumber,
+            styleCode,
+            lineId: line!.id,
+            itemNumberFG: op.itemNumberFG,
+            itemNameFG: op.itemNameFG,
+            qtyOp: op.qtyOp,
+            qtyEntan: qty,
+            currentStation: StationCode.CUTTING_ENTAN,
+            status: ProductionStatus.WIP,
+            level: OpLevel.PARENT,
+            cuttingSource: 'INTERNAL',
+          },
+        });
+      }
+
+      await tx.cuttingEntan.update({
+        where: { id: entan.id },
+        data: {
+          batchCode,
+          postedQty: { increment: qty },
+          finishAt: entan.finishAt ?? new Date(),
+        },
+      });
+    });
+
+    return {
+      success: true,
+      opNumber: op.opNumber,
+      lineCode: styleCode,
+      entanKe: entan.entanKe,
+      batchCode,
+      qtySent: qty,
+      postedQty: posted + qty,
+      entanSets,
+      remaining: Math.max(0, entanSets - (posted + qty)),
+    };
+  }
 }

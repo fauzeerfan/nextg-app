@@ -127,7 +127,7 @@ export class CuttingEntanService {
   // =====================================================
   async dispatchPatterns(
     parent: any,
-    dto: { qty?: number; patternIndexes?: number[]; batchNumber?: number; batchTarget?: string },
+    dto: { qty?: number; patternIndexes?: number[]; batchNumber?: number; batchTarget?: string; batchCode?: string },
   ) {
     const patternIndexes = [
       ...new Set((dto.patternIndexes || []).map((x) => Math.trunc(Number(x)))),
@@ -225,7 +225,8 @@ export class CuttingEntanService {
         data: {
           productionOrderId: parent.id,
           batchOpId: batch.id,
-          batchLabel: batch.batchCode || batch.opNumber,
+          // Utamakan ID batch dari entan (carried) sebagai label bila ada.
+          batchLabel: (dto.batchCode && dto.batchCode.trim()) || batch.batchCode || batch.opNumber,
           qty: batch.qtyEntan,
           patternIndexes,
         },
@@ -257,6 +258,7 @@ export class CuttingEntanService {
         createdAt: new Date(),
         patternIndexes,
         isNewBatch,
+        entanBatchCode: (dto.batchCode && dto.batchCode.trim()) || null,
       };
     });
   }
@@ -283,6 +285,28 @@ export class CuttingEntanService {
       ? parts.map((p, i) => ({ index: i, name: p.name }))
       : Array.from({ length: multiplier }, (_, i) => ({ index: i, name: `Pola ${i + 1}` }));
 
+    // #2: Entan yang sudah "Kirim ke Produksi" (postedQty>0) beserta identitas
+    // batch-nya. Dipakai frontend untuk MENGISI OTOMATIS nomor & ID batch saat
+    // dispatch (tanpa input ulang). entanKe dipakai sebagai nomor batch stabil
+    // (unik per OP), batchCode = ID batch yang diinput operator saat kirim.
+    const formOps = await this.prisma.cuttingFormOp.findMany({
+      where: { opNumber: op.opNumber },
+      include: {
+        entans: {
+          where: { postedQty: { gt: 0 } },
+          orderBy: { entanKe: 'asc' },
+          select: { id: true, entanKe: true, batchCode: true, postedQty: true },
+        },
+      },
+    });
+    const postedEntans = formOps
+      .flatMap((f) => f.entans)
+      .map((e) => ({
+        entanKe: e.entanKe,
+        batchCode: e.batchCode,
+        postedQty: e.postedQty,
+      }));
+
     return {
       opNumber: op.opNumber,
       styleCode: op.styleCode,
@@ -290,6 +314,7 @@ export class CuttingEntanService {
       pending: op.qtyEntan - op.qtySentToPond,
       totalPatterns: patterns.length,
       patterns,
+      postedEntans,
       batches: op.batches.map((b: any) => ({
         id: b.id,
         batchNumber: b.batchNumber,

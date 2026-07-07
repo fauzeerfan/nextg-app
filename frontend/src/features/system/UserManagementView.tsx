@@ -26,9 +26,23 @@ const jobOpts = [
 ];
 
 // --- MENU OPTIONS ---
+// Harus MENCAKUP SEMUA menu yang ada di Sidebar (id-nya WAJIB sama persis dengan
+// item.id di Sidebar), agar "Menu Access Rights" bisa memberi akses ke menu apa pun.
 const menuOptions = [
+  // Core / Home
   { id: 'dashboard', label: 'Dashboard', category: 'Core' },
+  { id: 'automation_island', label: 'Automation Island', category: 'Core' },
   { id: 'ai_chat', label: 'Widget Feby', category: 'Core' },
+  // Inventory Management
+  { id: 'inbound_receiving', label: 'Inbound Receiving', category: 'Inventory' },
+  { id: 'inspection_storage', label: 'Inspection & Storage', category: 'Inventory' },
+  { id: 'inventory_control', label: 'Inventory Control', category: 'Inventory' },
+  // Production Planning
+  { id: 'demand_simulator', label: 'Demand Simulator', category: 'Planning' },
+  { id: 'capacity_dashboard', label: 'Capacity Dashboard', category: 'Planning' },
+  { id: 'gantt_simulation', label: 'Planning Gantt', category: 'Planning' },
+  { id: 'plan_vs_actual', label: 'Plan vs Actual', category: 'Planning' },
+  // Production Execution
   { id: 'cutting_entan', label: 'Cutting Entan', category: 'Production' },
   { id: 'cutting_pond', label: 'Cutting Pond', category: 'Production' },
   { id: 'cp', label: 'Check Panel', category: 'Production' },
@@ -36,12 +50,15 @@ const menuOptions = [
   { id: 'qc', label: 'Quality Control', category: 'Production' },
   { id: 'packing', label: 'Packing', category: 'Production' },
   { id: 'fg', label: 'Finished Goods', category: 'Production' },
+  // Production Monitoring
   { id: 'target_monitoring', label: 'Target Monitoring', category: 'Monitoring' },
   { id: 'manpower_monitoring', label: 'Manpower Monitoring', category: 'Monitoring' },
+  { id: 'manpower_control', label: 'Manpower Control', category: 'Monitoring' },
   { id: 'login_monitoring', label: 'Login Monitoring', category: 'Monitoring' },
-  { id: 'manpower_control', label: 'Manpower Control', category: 'Manpower' },
+  // Reports & Traceability
   { id: 'reports', label: 'Reports', category: 'Reports' },
   { id: 'traceability', label: 'Traceability', category: 'Reports' },
+  // System & Master Data
   { id: 'line_master', label: 'Line Master', category: 'Master Data' },
   { id: 'user_management', label: 'User Management', category: 'Master Data' },
   { id: 'employee_management', label: 'Employee Management', category: 'Master Data' },

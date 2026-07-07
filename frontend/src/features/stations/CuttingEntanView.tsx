@@ -103,6 +103,7 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
   const [dispLoading, setDispLoading] = useState(false);
   const [selPatterns, setSelPatterns] = useState<number[]>([]);
   const [batchNumberInput, setBatchNumberInput] = useState<string>(''); // nomor batch MANUAL
+  const [carriedBatchCode, setCarriedBatchCode] = useState<string>('');  // #2: ID batch dari entan (Cutting Report)
   const [dispQty, setDispQty] = useState<number>(0);
 
   // SWITCH sumber data: INTERNAL (Cutting Report NextG) | EXTERNAL (API lama)
@@ -219,6 +220,7 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
     setDispInfo(null);
     setSelPatterns([]);
     setBatchNumberInput(''); // nomor batch WAJIB diisi manual oleh operator
+    setCarriedBatchCode(''); // #2: reset ID batch terbawa
     setDispLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/cutting-entan/op/${selOp.opNumber}/dispatch-info`);
@@ -264,6 +266,7 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
     try {
       const body: any = { patternIndexes: pats, batchNumber: bn };
       if (!isExistingBatch) body.qty = dispQty; // qty hanya untuk batch baru
+      if (carriedBatchCode) body.batchCode = carriedBatchCode; // #2: ID batch dari entan (label)
       const res = await fetch(`${API_BASE_URL}/cutting-entan/generate/${selOp.opNumber}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -597,10 +600,35 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
               ) : (
                 <>
                   <div>
-                    <div className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">1. Nomor Batch (INPUT MANUAL)</div>
+                    {/* #2: Batch dari Cutting Report (kirim per-entan). Klik untuk
+                        mengisi otomatis nomor & ID batch tanpa input ulang. */}
+                    {(dispInfo.postedEntans || []).length > 0 && (
+                      <div className="mb-4">
+                        <div className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-2">Batch dari Cutting Report (klik untuk pakai)</div>
+                        <div className="flex flex-wrap gap-2">
+                          {(dispInfo.postedEntans || []).map((pe: any, i: number) => {
+                            const active = carriedBatchCode === pe.batchCode && parseInt(batchNumberInput, 10) === pe.entanKe;
+                            return (
+                              <button key={i} type="button"
+                                onClick={() => { setBatchNumberInput(String(pe.entanKe)); setCarriedBatchCode(pe.batchCode || ''); }}
+                                className={`px-3 py-2 rounded-lg border-2 text-left text-xs transition ${active ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-emerald-300'}`}>
+                                <div className="font-black text-slate-900 dark:text-white">Batch {pe.batchCode || `#${pe.entanKe}`}</div>
+                                <div className="text-slate-500 dark:text-slate-400">Entan ke-{pe.entanKe} · {pe.postedQty} set</div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    <div className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">1. Nomor Batch (otomatis dari entan / manual)</div>
+                    {carriedBatchCode && (
+                      <div className="mb-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3 py-2">
+                        ID batch dari Cutting Report: <b>{carriedBatchCode}</b> (Entan ke-{batchNumberInput})
+                      </div>
+                    )}
                     <input
                       type="number" min={1} value={batchNumberInput}
-                      onChange={(e) => setBatchNumberInput(e.target.value.replace(/[^0-9]/g, ''))}
+                      onChange={(e) => { setBatchNumberInput(e.target.value.replace(/[^0-9]/g, '')); setCarriedBatchCode(''); }}
                       placeholder="Ketik nomor batch, mis. 1, 2, 3"
                       className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-black text-lg text-slate-900 dark:text-white focus:border-orange-500 outline-none"
                     />

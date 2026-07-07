@@ -50,6 +50,8 @@ interface PackedBox {
   id: string;
   fgNumber: string;
   totalQty: number;
+  itemNumberFG?: string;
+  itemNameFG?: string | null;
   items: { opNumber: string; qty: number }[];
   qrCode: string;
   createdAt: string;
@@ -452,24 +454,30 @@ const [, setLastUpdate] = useState('');
     }
   }, []);
 
-  // Effect untuk pack size
-  useEffect(() => {
-    if (activeSession && activeSession.items && activeSession.items.length > 0) {
-      const firstOp = activeSession.items[0].op;
-      if (firstOp && firstOp.lineCode) {
-        fetch(`${API_BASE_URL}/line-masters/${firstOp.lineCode}/packing-config`, {
+  // Ambil qty-per-box (packSize) dari Packing Master untuk line aktif.
+  // Dipakai baik saat session berubah maupun pada polling agar perubahan
+  // di master langsung tercermin di station (real-time, <=10 dtk).
+  const fetchPackSize = useCallback(async () => {
+    const firstOp = activeSession?.items?.[0]?.op;
+    if (firstOp && firstOp.lineCode) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/line-masters/${firstOp.lineCode}/packing-config`, {
           headers: getAuthHeaders(),
-        })
-          .then(res => res.ok ? res.json() : { packSize: 50 })
-          .then(data => setPackSize(data.packSize))
-          .catch(() => setPackSize(50));
-      } else {
+        });
+        const data = res.ok ? await res.json() : { packSize: 50 };
+        setPackSize(typeof data.packSize === 'number' ? data.packSize : 50);
+      } catch {
         setPackSize(50);
       }
     } else {
       setPackSize(50);
     }
   }, [activeSession]);
+
+  // Effect untuk pack size (refresh saat session aktif berubah)
+  useEffect(() => {
+    fetchPackSize();
+  }, [fetchPackSize]);
 
   // Initial fetch dan interval
   useEffect(() => {
@@ -482,9 +490,10 @@ const [, setLastUpdate] = useState('');
       fetchOps(false);
       fetchActiveSession(false);
       fetchPackedBoxes(false);
+      fetchPackSize(); // real-time propagate packing-master packSize
     }, 10000);
     return () => clearInterval(interval);
-  }, [fetchOps, fetchActiveSession, fetchHistory, fetchPackedBoxes]);
+  }, [fetchOps, fetchActiveSession, fetchHistory, fetchPackedBoxes, fetchPackSize]);
 
   // ========== FILTER OPS HANYA BERDASARKAN SESSION AKTIF ==========
   const filteredOpsByFGSession = useMemo(() => {
@@ -682,11 +691,13 @@ const removeItem = async (_itemId: string) => {
   const reprintPackedBox = (qrCode: string) => {
     const box = packedBoxes.find(b => b.qrCode === qrCode);
     if (!box) return;
+    // Reprint label identik dengan cetak pertama: QR = qrCode asli tersimpan,
+    // itemNameFG dari OP asli (bukan lagi gabungan nomor OP).
     setQr({
       code: box.qrCode,
       opNumbers: box.items.map(i => i.opNumber).join(', '),
-      itemNumberFG: box.fgNumber,
-      itemNameFG: box.items.map(i => i.opNumber).join(', '), // Approximation since itemNameFG might not be fully stored in box
+      itemNumberFG: box.itemNumberFG || box.fgNumber,
+      itemNameFG: box.itemNameFG || '-',
       qtyOp: box.totalQty,
       createdAt: box.createdAt
     });

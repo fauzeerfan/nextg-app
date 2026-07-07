@@ -123,6 +123,7 @@ export const CuttingReportView = () => {
   const [opResolving, setOpResolving] = useState(false);
   const [postModal, setPostModal] = useState<any | null>(null);
   const [postQty, setPostQty] = useState<number>(0);
+  const [postBatchCode, setPostBatchCode] = useState<string>(''); // #2: ID batch per-entan
   const [postLoading, setPostLoading] = useState(false); // ← BARU: loading state kirim produksi
   const [editingDetailId, setEditingDetailId] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null); // ← BARU: loading untuk copy/delete
@@ -491,37 +492,61 @@ export const CuttingReportView = () => {
     }
   };
 
-  const openPostModal = (op: any) => {
-    // Set lengkap = dibatasi material AUT dengan hasil paling sedikit (MIN),
-    // konsisten dengan backend & app lama (grandTotalCutting = MIN(totalCutting)).
-    const setMaterials = (op.materials || []).filter(
-      (m: any) => (m.variant || 'AUT') === 'AUT' && Number(m.qtyRequirement || 0) > 0,
-    );
-    const suggested = setMaterials.length
-      ? Math.min(...setMaterials.map((m: any) => Number(m.qtySetPcs || 0)))
-      : 0;
-    setPostQty(suggested);
-    setPostModal({ op, suggested });
+  // #2: Kirim ke Produksi PER-ENTAN. Ambil info entan (set tersedia, sudah
+  // dikirim, sisa, batchCode) dari backend lalu buka modal.
+  const openPostModal = async (op: any, en: any) => {
+    setPostModal({ op, entan: en, info: null, loadingInfo: true });
+    setPostQty(0);
+    setPostBatchCode('');
+    try {
+      const res = await apiFetch(`${API_BASE_URL}/cutting-report/entans/${en.id}/post-info`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        const info = await res.json();
+        setPostQty(Number(info.remaining || 0));
+        setPostBatchCode(info.batchCode || '');
+        setPostModal({ op, entan: en, info, loadingInfo: false });
+      } else {
+        const msg = await readErrMsg(res, 'Gagal memuat info entan');
+        setPostModal(null);
+        alert(msg);
+      }
+    } catch (e: any) {
+      setPostModal(null);
+      alert(`Gagal terhubung ke server:\n${e.message}`);
+    }
   };
 
-  // FIX: Tambah postLoading + try/catch
+  // #2: Kirim PER-ENTAN. 1 entan = 1 batch, ID batch diinput sekali lalu dipakai
+  // otomatis saat dispatch. Bisa berulang (incremental) dibatasi <= sisa set entan.
   const confirmPostToProduction = async () => {
-    if (!postModal) return;
+    if (!postModal || !postModal.entan) return;
     if (postLoading) return;
     const qty = Math.trunc(Number(postQty) || 0);
     if (qty <= 0) { alert('Jumlah set harus lebih dari 0.'); return; }
+    const batchCode = (postBatchCode || '').trim();
+    // ID batch wajib pada pengiriman pertama (kalau entan belum punya batchCode).
+    if (!postModal.entan.batchCode && !batchCode) {
+      alert('ID batch wajib diisi pada pengiriman pertama entan ini.');
+      return;
+    }
     setPostLoading(true);
     try {
-      const res = await apiFetch(`${API_BASE_URL}/cutting-report/ops/${postModal.op.id}/post-to-production`, {
+      const res = await apiFetch(`${API_BASE_URL}/cutting-report/entans/${postModal.entan.id}/post-to-production`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ qtyEntan: qty }),
+        body: JSON.stringify({ batchCode, qty }),
       });
       if (res.ok) {
         const r = await res.json();
         setPostModal(null);
         if (selected) await openForm(selected.id);
-        alert(`Terkirim ke Produksi.\nOP ${r.opNumber} — qtyEntan = ${r.qtyEntan} set (Line ${r.lineCode}).\nMuncul di tab "Generate QR / Dispatch" bila style termasuk eksekusi (default K1YH).`);
+        alert(
+          `Terkirim ke Produksi.\nOP ${r.opNumber} · Entan ke-${r.entanKe} · Batch ${r.batchCode}\n` +
+          `Dikirim ${r.qtySent} set (total entan ini: ${r.postedQty}, sisa ${r.remaining}).\n` +
+          `ID batch akan terisi otomatis saat dispatch di Cutting Entan.`,
+        );
       } else {
         const msg = await readErrMsg(res, 'Gagal mengirim ke produksi');
         alert(msg);
@@ -592,9 +617,7 @@ export const CuttingReportView = () => {
                 <button onClick={() => addEntan(op.id)} className="px-3 py-2 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 font-bold text-xs flex items-center gap-1.5 hover:bg-blue-200 transition-colors">
                   <Plus size={14} /> Entan
                 </button>
-                <button onClick={() => openPostModal(op)} className="px-3 py-2 rounded-lg bg-emerald-600 text-white font-bold text-xs flex items-center gap-1.5 hover:bg-emerald-700 transition-colors">
-                  <Package size={14} /> Kirim ke Produksi
-                </button>
+                {/* #2: tombol "Kirim ke Produksi" kini per-entan (lihat tiap entan di bawah) */}
               </div>
             </div>
 
@@ -619,10 +642,21 @@ export const CuttingReportView = () => {
             <div className="space-y-3">
               {(op.entans || []).map((en: any) => (
                 <div key={en.id} className="rounded-2xl border-2 border-slate-100 dark:border-slate-700 p-3 bg-slate-50/30 dark:bg-slate-700/20">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
                     <span className="text-xs font-black text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded-lg">Entan ke-{en.entanKe}</span>
                     <span className="text-[10px] text-slate-400">{fmtDate(en.startAt)}</span>
                     {en.approved && <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1"><CheckCircle2 size={12} /> Approved</span>}
+                    {en.batchCode && (
+                      <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                        Batch {en.batchCode} · terkirim {en.postedQty || 0}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => openPostModal(op, en)}
+                      className="ml-auto px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold text-[11px] flex items-center gap-1.5 hover:bg-emerald-700 transition-colors"
+                    >
+                      <Package size={13} /> Kirim ke Produksi
+                    </button>
                   </div>
                   {/* Tombol input per material: AUT (potong utama) + Turunan/NAT */}
                   <div className="flex flex-wrap gap-2 mb-2">
@@ -851,25 +885,74 @@ export const CuttingReportView = () => {
           </Modal>
         )}
 
-        {/* Post to Production Modal */}
+        {/* Post to Production Modal — PER ENTAN (#2) */}
         {postModal && (
-          <Modal title={`Kirim ke Produksi - ${postModal.op.opNumber}`} onClose={() => setPostModal(null)}>
+          <Modal
+            title={`Kirim ke Produksi — ${postModal.op.opNumber} · Entan ke-${postModal.entan?.entanKe}`}
+            onClose={() => setPostModal(null)}
+          >
             <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
-              Masukkan <b>jumlah SET lengkap</b> yang siap dikirim ke eksekusi (jadi <b>qtyEntan</b> induk untuk dispatch ke Cutting Pond).
+              1 entan = 1 <b>batch</b>. Masukkan <b>ID batch</b> (sekali saja) dan jumlah <b>SET lengkap</b> yang dikirim.
+              Pengiriman bisa diulang saat material dipotong bertahap; ID batch dipakai otomatis saat dispatch di Cutting Entan.
             </p>
-            <div className="mb-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-700 text-xs font-bold text-slate-500">
-              Saran = set lengkap (material AUT paling sedikit): <span className="text-blue-600">{postModal.suggested}</span>
-            </div>
-            <Field label="Jumlah Set">
-              <input type="number" min={1} className={inputCls} value={postQty} onChange={(e) => setPostQty(Number(e.target.value))} />
-            </Field>
-            <div className="flex justify-end gap-2 mt-5">
-              <button onClick={() => setPostModal(null)} disabled={postLoading} className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 font-bold text-sm disabled:opacity-50">Batal</button>
-              <button onClick={confirmPostToProduction} disabled={postLoading} className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm flex items-center gap-2 disabled:opacity-50">
-                {postLoading ? <Loader2 size={16} className="animate-spin" /> : <SendHorizontal size={16} />}
-                {postLoading ? 'Mengirim...' : 'Kirim'}
-              </button>
-            </div>
+            {postModal.loadingInfo ? (
+              <div className="py-8 flex items-center justify-center text-slate-400">
+                <Loader2 size={22} className="animate-spin" /> <span className="ml-2 font-bold">Memuat info entan…</span>
+              </div>
+            ) : (
+              <>
+                <div className="mb-3 grid grid-cols-3 gap-2 text-center">
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-700">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">Set Tersedia</div>
+                    <div className="text-lg font-black text-slate-700 dark:text-slate-200">{postModal.info?.entanSets ?? 0}</div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-700">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">Sudah Dikirim</div>
+                    <div className="text-lg font-black text-blue-600">{postModal.info?.postedQty ?? 0}</div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                    <div className="text-[10px] font-bold text-emerald-500 uppercase">Sisa</div>
+                    <div className="text-lg font-black text-emerald-600">{postModal.info?.remaining ?? 0}</div>
+                  </div>
+                </div>
+                <Field label="ID Batch">
+                  <input
+                    type="text"
+                    className={inputCls}
+                    placeholder="mis. B1, LOT-A, dsb"
+                    value={postBatchCode}
+                    disabled={!!postModal.entan?.batchCode}
+                    onChange={(e) => setPostBatchCode(e.target.value)}
+                  />
+                </Field>
+                {postModal.entan?.batchCode && (
+                  <p className="text-[11px] font-semibold text-slate-400 -mt-2 mb-2">
+                    ID batch entan ini sudah ditetapkan & dikunci: <b>{postModal.entan.batchCode}</b>
+                  </p>
+                )}
+                <Field label="Jumlah Set (dikirim sekarang)">
+                  <input
+                    type="number"
+                    min={1}
+                    max={postModal.info?.remaining ?? undefined}
+                    className={inputCls}
+                    value={postQty}
+                    onChange={(e) => setPostQty(Number(e.target.value))}
+                  />
+                </Field>
+                <div className="flex justify-end gap-2 mt-5">
+                  <button onClick={() => setPostModal(null)} disabled={postLoading} className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 font-bold text-sm disabled:opacity-50">Batal</button>
+                  <button
+                    onClick={confirmPostToProduction}
+                    disabled={postLoading || (postModal.info?.remaining ?? 0) <= 0}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {postLoading ? <Loader2 size={16} className="animate-spin" /> : <SendHorizontal size={16} />}
+                    {postLoading ? 'Mengirim...' : 'Kirim'}
+                  </button>
+                </div>
+              </>
+            )}
           </Modal>
         )}
 

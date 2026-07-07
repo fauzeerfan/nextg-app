@@ -23,6 +23,34 @@ export class ManpowerController {
     }
   }
 
+  @Post('checkout')
+  async checkOut(@Body() dto: { nik: string }) {
+    this.logger.log(`Check-out request: ${JSON.stringify(dto)}`);
+    try {
+      return await this.manpowerService.checkOut(dto);
+    } catch (error: any) {
+      this.logger.error(`Check-out error: ${error.message}`);
+      throw new HttpException(
+        error.message || 'Internal server error',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  // Jalankan auto check-in non-sewing secara manual (mis. backfill hari ini).
+  // Scheduler harian 07:30 memanggil logika yang sama secara otomatis.
+  @Post('auto-checkin/run')
+  async runAutoCheckIn(@Body() body: { date?: string }) {
+    try {
+      return await this.manpowerService.autoCheckInNonSewing(body?.date);
+    } catch (error: any) {
+      throw new HttpException(
+        error.message || 'Internal server error',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Get('today')
   getToday() {
     return this.manpowerService.getTodayAttendance();

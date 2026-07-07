@@ -189,4 +189,30 @@ export class IotService {
       station,
     };
   }
+
+  // Check-out absensi via Dhristi. Memakai ManpowerService.checkOut yang sama
+  // dengan menu Manpower Control. Menandai record absen aktif terakhir hari ini
+  // sebagai check-out -> headcount aktif berkurang & target menyesuaikan.
+  async deviceCheckOut(body: { deviceId?: string; nik: string }) {
+    const nik = (body?.nik || '').trim();
+    if (!nik) return { success: false, message: 'NIK KOSONG' };
+
+    const emp = await this.prisma.employee.findUnique({ where: { nik } });
+    if (!emp) return { success: false, message: 'NIK TIDAK ADA' };
+
+    try {
+      const att = await this.manpower.checkOut({ nik: emp.nik });
+      return {
+        success: true,
+        message: 'OK',
+        nik: emp.nik,
+        fullName: emp.fullName,
+        lineCode: att.lineCode,
+        station: att.station,
+      };
+    } catch (e: any) {
+      // mis. belum check-in hari ini
+      return { success: false, message: (e?.message || 'GAGAL').toUpperCase() };
+    }
+  }
 }

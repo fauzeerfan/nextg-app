@@ -136,7 +136,7 @@ export class PackingService {
       include: {
         items: {
           include: {
-            op: { select: { opNumber: true } },
+            op: { select: { opNumber: true, itemNumberFG: true, itemNameFG: true } },
           },
         },
       },
@@ -147,6 +147,9 @@ export class PackingService {
       id: session.id,
       fgNumber: session.fgNumber,
       totalQty: session.totalQty,
+      // Identitas FG asli agar label reprint per-box identik dengan cetak pertama
+      itemNumberFG: session.items[0]?.op?.itemNumberFG ?? session.fgNumber,
+      itemNameFG: session.items[0]?.op?.itemNameFG ?? null,
       items: session.items.map(item => ({
         opNumber: item.op.opNumber,
         qty: item.qty,
@@ -165,7 +168,7 @@ export class PackingService {
       include: {
         items: {
           include: {
-            op: { select: { opNumber: true, styleCode: true } }
+            op: { select: { opNumber: true, styleCode: true, itemNumberFG: true, itemNameFG: true } }
           }
         }
       }
@@ -177,6 +180,8 @@ export class PackingService {
       id: session.id,
       fgNumber: session.fgNumber,
       totalQty: session.totalQty,
+      itemNumberFG: session.items[0]?.op?.itemNumberFG ?? session.fgNumber,
+      itemNameFG: session.items[0]?.op?.itemNameFG ?? null,
       items: session.items.map(item => ({
         opNumber: item.op.opNumber,
         qty: item.qty

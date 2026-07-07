@@ -480,7 +480,8 @@ const [, setLastUpd] = useState('');
                       <div className="flex items-start justify-between mb-1">
                         <div>
                           <div className="font-mono font-black text-[13px] text-slate-900 dark:text-white">{op.opNumber}</div>
-                          <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Style: {op.styleCode}</div>
+                          <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">{op.styleCode}{op.itemNumberFG ? ` · FG ${op.itemNumberFG}` : ''}</div>
+                          {op.itemNameFG && (<div className="text-[10px] font-medium text-slate-400 dark:text-slate-500 truncate max-w-[190px]">{op.itemNameFG}</div>)}
                         </div>
                       </div>
                       
@@ -565,7 +566,12 @@ const [, setLastUpd] = useState('');
                           <div>
                             <div className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-0.5">Active Inspection</div>
                             <h2 className="text-xl font-black text-slate-900 dark:text-white leading-none">{actOp.opNumber}</h2>
-                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">{actOp.styleCode}</p>
+                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
+                              {actOp.styleCode}{actOp.itemNumberFG ? ` · FG ${actOp.itemNumberFG}` : ''}
+                            </p>
+                            {actOp.itemNameFG && (
+                              <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-0.5 truncate max-w-[280px]">{actOp.itemNameFG}</p>
+                            )}
                           </div>
                         </div>
                       </div>

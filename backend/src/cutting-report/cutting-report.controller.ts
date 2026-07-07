@@ -64,7 +64,7 @@ export class CuttingReportController {
     return this.service.removeOp(opId);
   }
 
-  // FASE 5: kirim hasil cutting report ini ke produksi (induk OP)
+  // FASE 5: kirim hasil cutting report ini ke produksi (induk OP) — legacy per-OP
   @Post('ops/:opId/post-to-production')
   postToProduction(@Param('opId') opId: string, @Body() dto: any) {
     return this.service.postToProduction(opId, dto);
@@ -74,6 +74,21 @@ export class CuttingReportController {
   @Post('ops/:opId/entans')
   addEntan(@Param('opId') opId: string) {
     return this.service.addEntan(opId);
+  }
+
+  // #2: Info kirim-produksi per-entan (set tersedia, sudah dikirim, sisa, batchCode)
+  @Get('entans/:entanId/post-info')
+  getEntanPostInfo(@Param('entanId') entanId: string) {
+    return this.service.getEntanPostInfo(entanId);
+  }
+
+  // #2: Kirim ke Produksi PER-ENTAN (1 entan = 1 batch). Body: { batchCode?, qty? }
+  @Post('entans/:entanId/post-to-production')
+  postEntanToProduction(
+    @Param('entanId') entanId: string,
+    @Body() dto: { batchCode?: string; qty?: number },
+  ) {
+    return this.service.postEntanToProduction(entanId, dto);
   }
 
   @Patch('entans/:entanId/approve')

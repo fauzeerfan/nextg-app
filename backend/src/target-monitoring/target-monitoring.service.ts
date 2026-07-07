@@ -54,12 +54,16 @@ export class TargetMonitoringService {
 
     const indexValue = targetSetting.indexValue;
 
-    // 2. Hitung total MP (sama seperti sebelumnya)
+    // 2. Hitung total MP AKTIF. Karyawan yang sudah check-out (checkOut != null)
+    //    TIDAK dihitung sebagai manpower aktif, sehingga target menyesuaikan
+    //    (headcount aktif berkurang -> target turun). Record tetap ada untuk
+    //    Monitoring/Sankey, hanya tidak masuk hitungan target.
     const manpowerCount = await this.prisma.manpowerAttendance.count({
       where: {
         lineCode,
         station,
         tanggal: { gte: startOfDay, lt: endOfDay },
+        checkOut: null,
       },
     });
     const totalMP = manpowerCount;

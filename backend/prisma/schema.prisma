@@ -507,6 +507,12 @@ model ManpowerAttendance {
   lineCode   String
   station    String
   scanTime   DateTime @default(now())
+  // Waktu check-out. null = masih aktif (dihitung sebagai headcount aktif untuk
+  // target). Terisi = karyawan sudah check-out hari itu -> tidak lagi dihitung
+  // sebagai manpower aktif sehingga target menyesuaikan. Record tetap tersimpan.
+  checkOut   DateTime? @map("check_out")
+  // Cara pembuatan record: SCAN (Dhristi/Manpower Control), AUTO (scheduler 07:30).
+  source     String   @default("SCAN")
   employee   Employee @relation(fields: [nik], references: [nik], onDelete: Cascade)
 
   // Unique constraint dihapus agar satu karyawan bisa check-in multiple kali di hari yang sama
@@ -875,6 +881,16 @@ model CuttingEntan {
   approved   Boolean   @default(false)
   approvedAt DateTime?
   createdAt  DateTime  @default(now())
+
+  // ===== Kirim ke Produksi per-entan (1 entan = 1 batch) =====
+  // batchCode: identitas batch yang diinput saat pertama "Kirim ke Produksi".
+  //   Disimpan di sini agar dikenali otomatis saat dispatch di Cutting Entan
+  //   (tanpa input ulang nomor batch).
+  // postedQty: akumulasi jumlah SET yang sudah dikirim ke produksi dari entan ini.
+  //   Karena material bisa dipotong bertahap, kirim bisa berulang; postedQty
+  //   mencegah dobel hitung & membatasi total dispatch <= qty laporan entan.
+  batchCode  String?
+  postedQty  Int       @default(0)
 
   formOp  CuttingFormOp   @relation(fields: [formOpId], references: [id], onDelete: Cascade)
   details CuttingDetail[]
