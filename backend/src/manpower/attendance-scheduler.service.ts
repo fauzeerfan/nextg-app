@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { ManpowerService } from './manpower/manpower.service';
+import { ManpowerService } from './manpower.service';
 
 /**
  * Scheduler harian TANPA dependensi eksternal.

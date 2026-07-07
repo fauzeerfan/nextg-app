@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ManpowerService } from './manpower.service';
 import { ManpowerController } from './manpower.controller';
-import { AttendanceSchedulerService } from '../attendance-scheduler.service';
+import { AttendanceSchedulerService } from './attendance-scheduler.service';
 import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({

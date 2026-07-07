@@ -454,14 +454,27 @@ const [, setLastUpdate] = useState('');
     }
   }, []);
 
-  // Ambil qty-per-box (packSize) dari Packing Master untuk line aktif.
-  // Dipakai baik saat session berubah maupun pada polling agar perubahan
-  // di master langsung tercermin di station (real-time, <=10 dtk).
+  // Ref agar fetchPackSize bisa membaca daftar OP tanpa memicu re-subscribe interval.
+  const allQcOpsRef = useRef<ProductionOrder[]>([]);
+  useEffect(() => { allQcOpsRef.current = allQcOps; }, [allQcOps]);
+
+  // Ambil qty-per-box (packSize) dari Packing Master untuk LINE terkait.
+  // PENTING: ProductionOrder TIDAK punya kolom lineCode, hanya relasi `line`;
+  // di sistem ini line.code == styleCode. Resolusi line: dari OP sesi aktif,
+  // atau (saat sesi belum ada item) dari OP milik FG yang dipilih. Sebelumnya
+  // dipakai firstOp.lineCode yang selalu undefined -> packSize selalu jatuh ke 50.
+  // Dipanggil saat sesi/FG berubah & pada polling agar perubahan master real-time.
   const fetchPackSize = useCallback(async () => {
-    const firstOp = activeSession?.items?.[0]?.op;
-    if (firstOp && firstOp.lineCode) {
+    const firstOp: any = activeSession?.items?.[0]?.op;
+    let lineForConfig: string | undefined =
+      firstOp?.line?.code || firstOp?.styleCode || firstOp?.lineCode;
+    if (!lineForConfig && selectedFG) {
+      const opForFg: any = allQcOpsRef.current.find((o: any) => o.itemNumberFG === selectedFG);
+      lineForConfig = opForFg?.line?.code || opForFg?.styleCode || opForFg?.lineCode;
+    }
+    if (lineForConfig) {
       try {
-        const res = await fetch(`${API_BASE_URL}/line-masters/${firstOp.lineCode}/packing-config`, {
+        const res = await fetch(`${API_BASE_URL}/line-masters/${lineForConfig}/packing-config`, {
           headers: getAuthHeaders(),
         });
         const data = res.ok ? await res.json() : { packSize: 50 };
@@ -472,7 +485,7 @@ const [, setLastUpdate] = useState('');
     } else {
       setPackSize(50);
     }
-  }, [activeSession]);
+  }, [activeSession, selectedFG]);
 
   // Effect untuk pack size (refresh saat session aktif berubah)
   useEffect(() => {

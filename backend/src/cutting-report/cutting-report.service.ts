@@ -711,7 +711,8 @@ export class CuttingReportService {
       opNumber: op.opNumber,
       itemNumberFG: op.itemNumberFG,
       itemNameFG: op.itemNameFG,
-      batchCode: entan.batchCode,
+      // ID batch standar (otomatis) = B + nomor urut entan.
+      batchCode: entan.batchCode || `B${entan.entanKe}`,
       entanSets,
       postedQty: posted,
       remaining: Math.max(0, entanSets - posted),
@@ -754,16 +755,12 @@ export class CuttingReportService {
     const reqQty = Number(dto?.qty);
     const qty = reqQty > 0 ? Math.min(Math.trunc(reqQty), remaining) : remaining;
 
-    // batchCode: pakai yang tersimpan; kalau belum ada, WAJIB dari input awal.
-    let batchCode = (entan.batchCode || '').trim();
-    if (!batchCode) {
-      batchCode = (dto?.batchCode || '').trim();
-      if (!batchCode) {
-        throw new BadRequestException(
-          'ID batch wajib diisi pada pengiriman pertama entan ini',
-        );
-      }
-    }
+    // #2: ID batch DISTANDARKAN = "B" + nomor urut entan (B1, B2, B3, ...).
+    // Otomatis & konsisten, tidak perlu input manual. Nilai ini juga dipakai
+    // sebagai identitas batch saat dispatch di Cutting Entan. Parameter
+    // dto.batchCode diabaikan (dipertahankan agar kompatibel dengan pemanggil lama).
+    const batchCode = `B${entan.entanKe}`;
+    void dto?.batchCode;
 
     let line = await this.prisma.lineMaster.findUnique({ where: { code: styleCode } });
     if (!line) {

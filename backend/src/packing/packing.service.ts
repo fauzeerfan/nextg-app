@@ -105,9 +105,14 @@ export class PackingService {
   }
 
   async getActiveSession() {
+    // Sertakan kode line pada OP (op tidak punya kolom lineCode, hanya relasi
+    // line). Dipakai frontend untuk mengambil packSize per-line dari Packing
+    // Master. line.code == styleCode di sistem ini.
     return this.prisma.packingSession.findFirst({
       where: { status: 'OPEN' },
-      include: { items: { include: { op: true } } },
+      include: {
+        items: { include: { op: { include: { line: { select: { code: true } } } } } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

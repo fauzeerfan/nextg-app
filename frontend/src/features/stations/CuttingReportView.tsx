@@ -525,12 +525,8 @@ export const CuttingReportView = () => {
     if (postLoading) return;
     const qty = Math.trunc(Number(postQty) || 0);
     if (qty <= 0) { alert('Jumlah set harus lebih dari 0.'); return; }
+    // ID batch otomatis (B + nomor entan) dari server; tidak perlu input manual.
     const batchCode = (postBatchCode || '').trim();
-    // ID batch wajib pada pengiriman pertama (kalau entan belum punya batchCode).
-    if (!postModal.entan.batchCode && !batchCode) {
-      alert('ID batch wajib diisi pada pengiriman pertama entan ini.');
-      return;
-    }
     setPostLoading(true);
     try {
       const res = await apiFetch(`${API_BASE_URL}/cutting-report/entans/${postModal.entan.id}/post-to-production`, {
@@ -915,21 +911,12 @@ export const CuttingReportView = () => {
                     <div className="text-lg font-black text-emerald-600">{postModal.info?.remaining ?? 0}</div>
                   </div>
                 </div>
-                <Field label="ID Batch">
-                  <input
-                    type="text"
-                    className={inputCls}
-                    placeholder="mis. B1, LOT-A, dsb"
-                    value={postBatchCode}
-                    disabled={!!postModal.entan?.batchCode}
-                    onChange={(e) => setPostBatchCode(e.target.value)}
-                  />
+                <Field label="ID Batch (otomatis)">
+                  <div className="flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
+                    <span className="text-lg font-black text-emerald-700 dark:text-emerald-300">{postBatchCode || `B${postModal.entan?.entanKe}`}</span>
+                    <span className="text-[11px] font-semibold text-slate-500">standar: B + nomor entan</span>
+                  </div>
                 </Field>
-                {postModal.entan?.batchCode && (
-                  <p className="text-[11px] font-semibold text-slate-400 -mt-2 mb-2">
-                    ID batch entan ini sudah ditetapkan & dikunci: <b>{postModal.entan.batchCode}</b>
-                  </p>
-                )}
                 <Field label="Jumlah Set (dikirim sekarang)">
                   <input
                     type="number"
