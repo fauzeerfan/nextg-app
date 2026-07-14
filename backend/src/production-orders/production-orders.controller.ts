@@ -56,6 +56,17 @@ export class ProductionOrdersController {
     return this.productionOrdersService.getDashboardComprehensive(startDate, endDate, lineCode);
   }
 
+  // Analitik dashboard per-station. Rentang: today | 7d | 30d, ATAU custom (startDate & endDate). Read-only.
+  @Get('dashboard-analytics')
+  getDashboardAnalytics(
+    @Query('range') range?: string,
+    @Query('lineCode') lineCode?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.productionOrdersService.getDashboardAnalytics(range, lineCode, startDate, endDate);
+  }
+
   @Get()
   findAll(
     @Query('station') station?: string,
@@ -71,6 +82,30 @@ export class ProductionOrdersController {
     }
 
     return this.productionOrdersService.findAll();
+  }
+
+  // =========================================================
+  // 3b. STATION HISTORY (per-hari per-OP) — READ ONLY
+  // Didefinisikan SEBELUM ':id' agar tidak tertangkap route dinamis.
+  // =========================================================
+  @Get('history/cutting-pond')
+  getCuttingPondHistory(@Query('days') days?: string) {
+    return this.productionOrdersService.getCuttingPondHistory(days ? Number(days) : undefined);
+  }
+
+  @Get('history/check-panel')
+  getCheckPanelHistory(@Query('days') days?: string) {
+    return this.productionOrdersService.getCheckPanelHistory(days ? Number(days) : undefined);
+  }
+
+  @Get('history/sewing')
+  getSewingHistory(@Query('days') days?: string) {
+    return this.productionOrdersService.getSewingHistory(days ? Number(days) : undefined);
+  }
+
+  @Get('history/quality-control')
+  getQualityControlHistory(@Query('days') days?: string) {
+    return this.productionOrdersService.getQualityControlHistory(days ? Number(days) : undefined);
   }
 
   @Get(':id')

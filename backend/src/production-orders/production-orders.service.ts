@@ -335,6 +335,460 @@ if (station === 'CP') {
   }
 
   // ======================================================
+  // STATION HISTORY (per-hari per-OP) — READ ONLY
+  // Dibangun sepenuhnya dari data yang SUDAH ada (ProductionLog & QcInspection).
+  // Tidak mengubah alur tulis maupun skema database apa pun.
+  // ======================================================
+
+  /** Kunci tanggal lokal (YYYY-MM-DD) mengikuti waktu server. */
+  private historyDayKey(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  /** Batas awal rentang riwayat (default 90 hari terakhir). */
+  private historySince(days?: number): Date {
+    const d = new Date();
+    d.setDate(d.getDate() - (days && days > 0 ? days : 90));
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  /**
+   * Agregasi item (ProductionLog / QcInspection) menjadi baris per-hari per-OP.
+   * metricsFn menentukan kontribusi angka tiap item (mis. { good, ng, qty }).
+   */
+  private aggregateDailyByOp(
+    items: any[],
+    metricsFn: (item: any) => Record<string, number>,
+  ) {
+    const map = new Map<string, any>();
+    for (const it of items) {
+      const created: Date = it.createdAt;
+      const dateKey = this.historyDayKey(created);
+      const key = `${dateKey}|${it.opId}`;
+      let row = map.get(key);
+      if (!row) {
+        row = {
+          date: dateKey,
+          opId: it.opId,
+          opNumber: it.op?.opNumber ?? '-',
+          styleCode: it.op?.styleCode ?? '-',
+          lineCode: it.op?.line?.code ?? null,
+          itemNumberFG: it.op?.itemNumberFG ?? '-',
+          itemNameFG: it.op?.itemNameFG ?? null,
+          events: 0,
+          firstAt: created.toISOString(),
+          lastAt: created.toISOString(),
+        };
+        map.set(key, row);
+      }
+      const metrics = metricsFn(it);
+      for (const [k, v] of Object.entries(metrics)) {
+        row[k] = (row[k] || 0) + (v || 0);
+      }
+      row.events += 1;
+      const iso = created.toISOString();
+      if (iso < row.firstAt) row.firstAt = iso;
+      if (iso > row.lastAt) row.lastAt = iso;
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1; // tanggal desc
+      return a.opNumber < b.opNumber ? -1 : 1;
+    });
+  }
+
+  // ----- CUTTING POND -----
+  // Bagian 1: pengecekan per-hari per-OP (log GOOD / NG di Cutting Pond)
+  // Bagian 2: pengiriman ke station selanjutnya (log TRANSFER_TO_CP)
+  async getCuttingPondHistory(days?: number) {
+    const since = this.historySince(days);
+    const opInclude = {
+      op: {
+        select: {
+          opNumber: true,
+          styleCode: true,
+          itemNumberFG: true,
+          itemNameFG: true,
+          line: { select: { code: true } },
+        },
+      },
+    };
+
+    const checkLogs = await this.prisma.productionLog.findMany({
+      where: {
+        station: StationCode.CUTTING_POND,
+        type: { in: ['GOOD', 'NG'] },
+        createdAt: { gte: since },
+      },
+      include: opInclude,
+      orderBy: { createdAt: 'asc' },
+    });
+    const checks = this.aggregateDailyByOp(checkLogs, (l) => ({
+      good: l.type === 'GOOD' ? l.qty : 0,
+      ng: l.type === 'NG' ? l.qty : 0,
+      qty: l.qty,
+    }));
+
+    const shipLogs = await this.prisma.productionLog.findMany({
+      where: {
+        station: StationCode.CUTTING_POND,
+        type: 'TRANSFER_TO_CP',
+        createdAt: { gte: since },
+      },
+      include: opInclude,
+      orderBy: { createdAt: 'asc' },
+    });
+    const shipments = this.aggregateDailyByOp(shipLogs, (l) => ({ qty: l.qty }));
+
+    return { station: 'CUTTING_POND', target: 'Check Panel', checks, shipments };
+  }
+
+  // ----- CHECK PANEL -----
+  // Bagian 1: pengecekan per-hari per-OP (log INSPECT di Check Panel)
+  // Bagian 2: pengiriman ke station selanjutnya (log SEND_TO_SEWING)
+  async getCheckPanelHistory(days?: number) {
+    const since = this.historySince(days);
+    const opInclude = {
+      op: {
+        select: {
+          opNumber: true,
+          styleCode: true,
+          itemNumberFG: true,
+          itemNameFG: true,
+          line: { select: { code: true } },
+        },
+      },
+    };
+
+    const inspectLogs = await this.prisma.productionLog.findMany({
+      where: {
+        station: StationCode.CP,
+        type: 'INSPECT',
+        createdAt: { gte: since },
+      },
+      include: opInclude,
+      orderBy: { createdAt: 'asc' },
+    });
+    // Setiap inspeksi Check Panel = 1 pola. Submit GOOD tidak menulis catatan,
+    // submit NG selalu menulis catatan (note). Dari sini good/ng per hari bisa
+    // diturunkan tanpa perlu mengubah skema atau alur tulis yang ada.
+    const checks = this.aggregateDailyByOp(inspectLogs, (l) => {
+      const isNg = !!(l.note && String(l.note).trim() !== '');
+      return { good: isNg ? 0 : l.qty, ng: isNg ? l.qty : 0, qty: l.qty };
+    });
+
+    const shipLogs = await this.prisma.productionLog.findMany({
+      where: {
+        station: StationCode.CP,
+        type: 'SEND_TO_SEWING',
+        createdAt: { gte: since },
+      },
+      include: opInclude,
+      orderBy: { createdAt: 'asc' },
+    });
+    const shipments = this.aggregateDailyByOp(shipLogs, (l) => ({ qty: l.qty }));
+
+    return { station: 'CP', target: 'Sewing', checks, shipments };
+  }
+
+  // ----- SEWING -----
+  // Pengerjaan sewing start & sewing finish per-hari per-OP
+  async getSewingHistory(days?: number) {
+    const since = this.historySince(days);
+
+    const logs = await this.prisma.productionLog.findMany({
+      where: {
+        station: StationCode.SEWING,
+        type: { in: ['SEWING_START', 'SEWING_FINISH'] },
+        createdAt: { gte: since },
+      },
+      include: {
+        op: {
+          select: {
+            opNumber: true,
+            styleCode: true,
+            itemNumberFG: true,
+            itemNameFG: true,
+            line: { select: { code: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    const records = this.aggregateDailyByOp(logs, (l) => ({
+      start: l.type === 'SEWING_START' ? l.qty : 0,
+      finish: l.type === 'SEWING_FINISH' ? l.qty : 0,
+      qty: l.qty,
+    }));
+
+    return { station: 'SEWING', records };
+  }
+
+  // ----- QUALITY CONTROL -----
+  // Pengecekan per-hari per-OP (dari tabel QcInspection yang menyimpan good & ng)
+  async getQualityControlHistory(days?: number) {
+    const since = this.historySince(days);
+
+    const inspections = await this.prisma.qcInspection.findMany({
+      where: { createdAt: { gte: since } },
+      include: {
+        op: {
+          select: {
+            opNumber: true,
+            styleCode: true,
+            itemNumberFG: true,
+            itemNameFG: true,
+            line: { select: { code: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    const checks = this.aggregateDailyByOp(inspections, (i) => ({
+      good: i.good || 0,
+      ng: i.ng || 0,
+      qty: (i.good || 0) + (i.ng || 0),
+    }));
+
+    return { station: 'QC', checks };
+  }
+
+  // ======================================================
+  // DASHBOARD ANALYTICS (per-station, rentang bisa dipilih) — READ ONLY
+  // range: 'today' (per jam) | '7d' | '30d' (per hari). Semua dari data existing,
+  // tanpa perubahan skema / alur tulis / migrasi.
+  // ======================================================
+  private analyticsWindow(range?: string, startDate?: string, endDate?: string): { start: Date; end: Date; mode: 'hour' | 'day' } {
+    // Custom range: tanggal awal & akhir dipilih manual.
+    if (startDate && endDate) {
+      const start = new Date(startDate); start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate); end.setHours(23, 59, 59, 999);
+      const sameDay =
+        start.getFullYear() === end.getFullYear() &&
+        start.getMonth() === end.getMonth() &&
+        start.getDate() === end.getDate();
+      return { start, end, mode: sameDay ? 'hour' : 'day' };
+    }
+    const now = new Date();
+    if (range === 'today') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return { start, end: now, mode: 'hour' };
+    }
+    const days = range === '30d' ? 30 : 7;
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    start.setDate(start.getDate() - (days - 1));
+    return { start, end: now, mode: 'day' };
+  }
+
+  private analyticsBuckets(win: { start: Date; end: Date; mode: 'hour' | 'day' }) {
+    const buckets: { key: string; label: string }[] = [];
+    if (win.mode === 'hour') {
+      const endHour = win.end.getHours();
+      for (let h = 0; h <= endHour; h++) {
+        buckets.push({ key: `H${h}`, label: `${String(h).padStart(2, '0')}:00` });
+      }
+    } else {
+      const d = new Date(win.start);
+      const last = new Date(win.end.getFullYear(), win.end.getMonth(), win.end.getDate());
+      while (d <= last) {
+        buckets.push({
+          key: this.historyDayKey(d),
+          label: d.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit' }),
+        });
+        d.setDate(d.getDate() + 1);
+      }
+    }
+    return buckets;
+  }
+
+  private analyticsBucketKey(date: Date, win: { mode: 'hour' | 'day' }): string {
+    return win.mode === 'hour' ? `H${date.getHours()}` : this.historyDayKey(date);
+  }
+
+  async getDashboardAnalytics(range?: string, lineCode?: string, startDate?: string, endDate?: string) {
+    const win = this.analyticsWindow(range, startDate, endDate);
+    const buckets = this.analyticsBuckets(win);
+    const idxByKey = new Map<string, number>(buckets.map((b, i) => [b.key, i] as [string, number]));
+    const hasLine = !!lineCode && lineCode.trim() !== '';
+    const opLineWhere: any = hasLine ? { op: { line: { code: lineCode } } } : {};
+    const timeWhere: any = { createdAt: { gte: win.start, lte: win.end } };
+    const round1 = (n: number) => Math.round(n * 10) / 10;
+    const rate = (part: number, total: number) => (total > 0 ? round1((part / total) * 100) : 0);
+
+    // Rate NG per Komponen/Pola: kelompokkan per patternIndex (urutan pola yang stabil),
+    // pakai NAMA POLA TERBARU. Baris diurutkan updatedAt asc sehingga nama dari record
+    // terbaru yang menang -> menyatukan data lama (pola 1..4) & baru (pola 3..6) tanpa dobel.
+    const ngByComponent = (rows: { patternIndex: number; patternName: string; good: number; ng: number }[]) => {
+      const map = new Map<number, { name: string; good: number; ng: number }>();
+      for (const r of rows) {
+        const cur = map.get(r.patternIndex) || { name: r.patternName || '-', good: 0, ng: 0 };
+        cur.good += r.good; cur.ng += r.ng;
+        if (r.patternName) cur.name = r.patternName;
+        map.set(r.patternIndex, cur);
+      }
+      return Array.from(map.entries())
+        .sort((a, b) => a[0] - b[0]) // urut per index pola (pola pertama, kedua, ...)
+        .map(([, v]) => ({ name: v.name, good: v.good, ng: v.ng, total: v.good + v.ng, ngRate: rate(v.ng, v.good + v.ng) }));
+    };
+
+    // ---------- CUTTING ENTAN & POND ----------
+    const [entanLogs, pondGoodLogs, pondNgLogs] = await Promise.all([
+      this.prisma.productionLog.findMany({
+        where: { station: StationCode.CUTTING_ENTAN, type: 'QR_GENERATED', ...timeWhere, ...opLineWhere },
+        select: { qty: true, createdAt: true },
+      }),
+      this.prisma.productionLog.findMany({
+        where: { station: StationCode.CUTTING_POND, type: 'GOOD', ...timeWhere, ...opLineWhere },
+        select: { qty: true, createdAt: true },
+      }),
+      this.prisma.productionLog.findMany({
+        where: { station: StationCode.CUTTING_POND, type: 'NG', ...timeWhere, ...opLineWhere },
+        select: { qty: true, createdAt: true },
+      }),
+    ]);
+    // Entan tab: produktivitas Entan & Pond (gabungan). Pond tab: Good vs NG per periode.
+    const cuttingProductivity = buckets.map((b) => ({ label: b.label, entan: 0, pond: 0 }));
+    const pondProductivity = buckets.map((b) => ({ label: b.label, good: 0, ng: 0 }));
+    let totalEntan = 0, pondGood = 0, pondNg = 0;
+    for (const l of entanLogs) {
+      const i = idxByKey.get(this.analyticsBucketKey(l.createdAt, win));
+      if (i != null) cuttingProductivity[i].entan += l.qty;
+      totalEntan += l.qty;
+    }
+    for (const l of pondGoodLogs) {
+      const i = idxByKey.get(this.analyticsBucketKey(l.createdAt, win));
+      if (i != null) { cuttingProductivity[i].pond += l.qty; pondProductivity[i].good += l.qty; }
+      pondGood += l.qty;
+    }
+    for (const l of pondNgLogs) {
+      const i = idxByKey.get(this.analyticsBucketKey(l.createdAt, win));
+      if (i != null) pondProductivity[i].ng += l.qty;
+      pondNg += l.qty;
+    }
+    const pondTotal = pondGood + pondNg;
+    const patternRows = await this.prisma.patternProgress.findMany({
+      where: { updatedAt: { gte: win.start, lte: win.end }, ...(hasLine ? { op: { line: { code: lineCode } } } : {}) },
+      select: { patternIndex: true, patternName: true, good: true, ng: true },
+      orderBy: { updatedAt: 'asc' },
+    });
+    const cuttingNgPerComponent = ngByComponent(patternRows);
+
+    // ---------- CHECK PANEL ----------
+    const cpInspectLogs = await this.prisma.productionLog.findMany({
+      where: { station: StationCode.CP, type: 'INSPECT', ...timeWhere, ...opLineWhere },
+      select: { qty: true, note: true, createdAt: true },
+    });
+    const cpTrend = buckets.map((b) => ({ label: b.label, good: 0, ng: 0, ngRate: 0, qualityRate: 0 }));
+    let cpGood = 0, cpNg = 0;
+    for (const l of cpInspectLogs) {
+      const isNg = !!(l.note && String(l.note).trim() !== '');
+      const i = idxByKey.get(this.analyticsBucketKey(l.createdAt, win));
+      if (i != null) { if (isNg) cpTrend[i].ng += l.qty; else cpTrend[i].good += l.qty; }
+      if (isNg) cpNg += l.qty; else cpGood += l.qty;
+    }
+    for (const t of cpTrend) {
+      const tot = t.good + t.ng;
+      t.ngRate = tot > 0 ? round1((t.ng / tot) * 100) : 0;
+      t.qualityRate = tot > 0 ? round1((t.good / tot) * 100) : 0;
+    }
+    const cpTotal = cpGood + cpNg;
+    // Rate NG per Komponen/Pola (dari CheckPanelInspection, dikelompokkan per patternIndex + nama terbaru)
+    const cpInspRows = await this.prisma.checkPanelInspection.findMany({
+      where: { updatedAt: { gte: win.start, lte: win.end }, ...(hasLine ? { op: { line: { code: lineCode } } } : {}) },
+      select: { patternIndex: true, patternName: true, good: true, ng: true },
+      orderBy: { updatedAt: 'asc' },
+    });
+    const cpNgPerComponent = ngByComponent(cpInspRows);
+
+    // ---------- SEWING ----------
+    const sewingLogs = await this.prisma.productionLog.findMany({
+      where: { station: StationCode.SEWING, type: { in: ['SEWING_START', 'SEWING_FINISH'] }, ...timeWhere, ...opLineWhere },
+      select: { type: true, qty: true, createdAt: true },
+    });
+    const sewingProductivity = buckets.map((b) => ({ label: b.label, start: 0, finish: 0 }));
+    let totalStart = 0, totalFinish = 0;
+    for (const l of sewingLogs) {
+      const i = idxByKey.get(this.analyticsBucketKey(l.createdAt, win));
+      if (l.type === 'SEWING_START') { if (i != null) sewingProductivity[i].start += l.qty; totalStart += l.qty; }
+      else { if (i != null) sewingProductivity[i].finish += l.qty; totalFinish += l.qty; }
+    }
+    const sewingTrend = sewingProductivity.map((s) => ({ label: s.label, output: s.finish }));
+
+    // ---------- QUALITY CONTROL ----------
+    const qcRows = await this.prisma.qcInspection.findMany({
+      where: { ...timeWhere, ...(hasLine ? { op: { line: { code: lineCode } } } : {}) },
+      select: { good: true, ng: true, ngReasons: true, createdAt: true },
+    });
+    const qcTrend = buckets.map((b) => ({ label: b.label, good: 0, ng: 0, ngRate: 0, qualityRate: 0 }));
+    let qcGood = 0, qcNg = 0;
+    const qcCatMap = new Map<string, number>();
+    for (const r of qcRows) {
+      const i = idxByKey.get(this.analyticsBucketKey(r.createdAt, win));
+      if (i != null) { qcTrend[i].good += r.good; qcTrend[i].ng += r.ng; }
+      qcGood += r.good; qcNg += r.ng;
+      let reasons: any = r.ngReasons;
+      if (typeof reasons === 'string') { try { reasons = JSON.parse(reasons); } catch { reasons = [reasons]; } }
+      if (Array.isArray(reasons)) {
+        for (const rs of reasons) {
+          const key = String(rs || '').trim();
+          if (!key) continue;
+          qcCatMap.set(key, (qcCatMap.get(key) || 0) + 1);
+        }
+      }
+    }
+    for (const t of qcTrend) {
+      const tot = t.good + t.ng;
+      t.ngRate = tot > 0 ? round1((t.ng / tot) * 100) : 0;
+      t.qualityRate = tot > 0 ? round1((t.good / tot) * 100) : 0;
+    }
+    const qcTotal = qcGood + qcNg;
+    const qcNgPerCategory = Array.from(qcCatMap.entries())
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count);
+
+    return {
+      range: startDate && endDate ? 'custom' : range === 'today' ? 'today' : range === '30d' ? '30d' : '7d',
+      mode: win.mode,
+      cutting: {
+        entan: {
+          productivity: cuttingProductivity,
+          totalEntan,
+          totalPond: pondGood,
+        },
+        pond: {
+          productivity: pondProductivity,
+          good: pondGood, ng: pondNg, total: pondTotal,
+          ngRate: rate(pondNg, pondTotal),
+          qualityRate: rate(pondGood, pondTotal),
+          ngPerComponent: cuttingNgPerComponent,
+        },
+      },
+      checkPanel: {
+        good: cpGood, ng: cpNg, total: cpTotal,
+        ngRate: cpTotal > 0 ? round1((cpNg / cpTotal) * 100) : 0,
+        qualityRate: cpTotal > 0 ? round1((cpGood / cpTotal) * 100) : 0,
+        trend: cpTrend,
+        ngPerComponent: cpNgPerComponent,
+      },
+      sewing: {
+        totalStart, totalFinish,
+        productivity: sewingProductivity,
+        trend: sewingTrend,
+      },
+      qc: {
+        good: qcGood, ng: qcNg, total: qcTotal,
+        ngRate: qcTotal > 0 ? round1((qcNg / qcTotal) * 100) : 0,
+        qualityRate: qcTotal > 0 ? round1((qcGood / qcTotal) * 100) : 0,
+        trend: qcTrend,
+        ngPerCategory: qcNgPerCategory,
+      },
+    };
+  }
+
+  // ======================================================
   // DASHBOARD STATS
   // ======================================================
   async getDashboardStats() {

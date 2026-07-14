@@ -1,14 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Activity, Layers, RefreshCw,
-  TrendingUp, Clock,
-  Cpu,
-  TrendingDown, Maximize2, Minimize2,
-  Filter, Factory, AlertTriangle, 
-  Scissors, CheckSquare, Truck, Package, Shirt,
-  Radio, Zap, Sparkles,
-  ArrowDownToLine, ArrowUpFromLine, Percent, XCircle,
-  Calendar
+  Activity, RefreshCw, TrendingUp, Maximize2, Minimize2,
+  Scissors, CheckSquare, Shirt, ShieldCheck, AlertTriangle, Percent,
+  Layers, Calendar, Award, Boxes, Gauge, PackageCheck, Factory,
+  Package, Truck, Workflow, ArrowDownToLine, ArrowUpFromLine, XCircle,
 } from 'lucide-react';
 import type { DashboardComprehensive } from '../../types/production';
 import {
@@ -18,765 +13,648 @@ import {
 
 const API_BASE_URL = 'http://202.52.15.30:4000';
 
-// ==========================================
-// COLOR PALETTE
-// ==========================================
-const CHART_COLORS = {
-  primary: '#3b82f6',
-  success: '#10b981',
-  warning: '#f59e0b',
-  danger: '#ef4444',
-  purple: '#8b5cf6',
-  gray: '#64748b',
-  info: '#06b6d4',
+// ============ PALETTE ============
+const C = {
+  blue: '#3b82f6', green: '#10b981', amber: '#f59e0b', red: '#ef4444',
+  purple: '#8b5cf6', cyan: '#06b6d4', slate: '#64748b', orange: '#f97316', pink: '#ec4899',
 };
+const NG_PALETTE = ['#ef4444', '#f97316', '#f59e0b', '#8b5cf6', '#06b6d4', '#3b82f6', '#ec4899', '#14b8a6'];
 
-const STATION_COLORS: Record<string, string> = {
-  'CUTTING_ENTAN': '#f97316', // Orange
-  'CUTTING_POND': '#f59e0b',  // Amber
-  'CP': '#10b981',            // Emerald
-  'SEWING': '#8b5cf6',        // Violet
-  'QC': '#ef4444',            // Rose
-  'PACKING': '#3b82f6',       // Blue
-  'FG': '#06b6d4',            // Cyan
-};
-
-// ==========================================
-// COMPACT KPI CARD COMPONENT - SOLID STYLE
-// ==========================================
-const CompactKpiCard = ({
-  title,
-  value,
-  icon: Icon,
-  color = 'blue',
-  suffix,
-  trend,
-  trendDirection = 'up',
-  loading = false,
-  delay = 0
-}: any) => {
-  const colorMap: Record<string, {
-    border: string;
-    iconBg: string;
-    text: string;
-  }> = {
-    blue: {
-      border: 'border-blue-500',
-      iconBg: 'bg-blue-600 shadow-blue-600/30',
-      text: 'text-blue-600 dark:text-blue-400',
-    },
-    amber: {
-      border: 'border-amber-500',
-      iconBg: 'bg-amber-500 shadow-amber-500/30',
-      text: 'text-amber-600 dark:text-amber-400',
-    },
-    rose: {
-      border: 'border-rose-500',
-      iconBg: 'bg-rose-600 shadow-rose-600/30',
-      text: 'text-rose-600 dark:text-rose-400',
-    },
+// ============ TYPES (analytics endpoint) ============
+interface EntanPondPoint { label: string; entan: number; pond: number; }
+interface PondPoint { label: string; good: number; ng: number; }
+interface NgComp { name: string; good: number; ng: number; total: number; ngRate: number; }
+interface QualityPoint { label: string; good: number; ng: number; ngRate: number; qualityRate: number; }
+interface SewingPoint { label: string; start: number; finish: number; }
+interface Analytics {
+  range: string;
+  mode: 'hour' | 'day';
+  cutting: {
+    entan: { productivity: EntanPondPoint[]; totalEntan: number; totalPond: number; };
+    pond: { productivity: PondPoint[]; good: number; ng: number; total: number; ngRate: number; qualityRate: number; ngPerComponent: NgComp[]; };
   };
-  const colors = colorMap[color] || colorMap.blue;
+  checkPanel: { good: number; ng: number; total: number; ngRate: number; qualityRate: number; trend: QualityPoint[]; ngPerComponent: NgComp[]; };
+  sewing: { totalStart: number; totalFinish: number; productivity: SewingPoint[]; trend: { label: string; output: number }[]; };
+  qc: { good: number; ng: number; total: number; ngRate: number; qualityRate: number; trend: QualityPoint[]; ngPerCategory: { category: string; count: number }[]; };
+}
 
-  if (loading) {
-    return (
-      <div
-        className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-6 shadow-sm animate-pulse flex items-center justify-between"
-        style={{ animationDelay: `${delay}ms` }}
-      >
-        <div>
-          <div className="h-3 w-28 bg-slate-200 dark:bg-slate-700 rounded-full mb-4" />
-          <div className="h-8 w-36 bg-slate-200 dark:bg-slate-700 rounded-lg" />
-        </div>
-        <div className="h-14 w-14 bg-slate-200 dark:bg-slate-700 rounded-2xl" />
-      </div>
-    );
-  }
+type TabKey = 'flow' | 'entan' | 'pond' | 'cp' | 'sewing' | 'qc';
+type RangeKey = 'today' | '7d' | '30d' | 'custom';
 
-  return (
-    <div
-      className={`group relative bg-white dark:bg-slate-800 rounded-2xl border-l-4 ${colors.border} border-y border-r border-slate-200 dark:border-slate-700 p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg shadow-sm flex items-center justify-between overflow-hidden`}
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div className="relative z-10 flex flex-col gap-1">
-        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-          {title}
-        </span>
-        <div className="flex items-baseline gap-2 mt-1">
-          <span className="text-3xl 2xl:text-4xl font-black text-slate-900 dark:text-white tracking-tight leading-none">
-            {typeof value === 'number' ? value.toLocaleString() : value}
-          </span>
-          {suffix && <span className="text-sm font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{suffix}</span>}
-        </div>
-        {trend && (
-          <div className="mt-3">
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${
-              trendDirection === 'up' 
-                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
-                : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
-            }`}>
-              {trendDirection === 'up' ? <TrendingUp size={14} strokeWidth={3} /> : <TrendingDown size={14} strokeWidth={3} />}
-              {trend}
-            </span>
-          </div>
-        )}
-      </div>
-      
-      <div className={`relative z-10 w-14 h-14 2xl:w-16 2xl:h-16 rounded-xl flex items-center justify-center text-white shadow-lg group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300 ${colors.iconBg}`}>
-        <Icon size={28} strokeWidth={2.5} />
-      </div>
-    </div>
-  );
-};
+// ============ SMALL UI HELPERS ============
+const fmtNum = (n: number) => (typeof n === 'number' ? n.toLocaleString('id-ID') : n);
 
-// ==========================================
-// ENHANCED STATION FLOW COMPONENT - SOLID STYLE
-// ==========================================
-const StationFlow = ({ data }: { data: Array<{ 
-  station: string; 
-  count: number; 
-  wipQty: number; 
-  todayInput: number; 
-  todayOutput: number; 
-  qtyNg: number; 
-  progress: number 
-}> }) => {
-  const stationOrder = ['CUTTING_ENTAN', 'CUTTING_POND', 'CP', 'SEWING', 'QC', 'PACKING', 'FG'];
-  const stationLabels: Record<string, string> = {
-    'CUTTING_ENTAN': 'Cutting Entan',
-    'CUTTING_POND': 'Cutting Pond',
-    'CP': 'Check Panel',
-    'SEWING': 'Sewing',
-    'QC': 'Quality Control',
-    'PACKING': 'Packing',
-    'FG': 'Finished Goods',
-  };
-
-  const getStationIcon = (station: string) => {
-    if (station.includes('CUTTING')) return Scissors;
-    if (station === 'QC' || station === 'CP') return CheckSquare;
-    if (station === 'SEWING') return Shirt;
-    if (station === 'PACKING') return Package;
-    if (station === 'FG') return Truck;
-    return Factory;
-  };
-
-  const enrichedData = stationOrder.map(station => {
-    const found = data.find(d => d.station === station);
-    if (found) return found;
-    return { station, count: 0, wipQty: 0, todayInput: 0, todayOutput: 0, qtyNg: 0, progress: 0 };
-  });
-
-  if (enrichedData.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[400px] bg-white dark:bg-slate-800 rounded-[2rem] border-2 border-dashed border-slate-300 dark:border-slate-700">
-        <div className="p-5 bg-slate-100 dark:bg-slate-900 rounded-2xl mb-4">
-          <Factory size={48} className="text-slate-400 dark:text-slate-500" />
-        </div>
-        <p className="text-xl font-bold text-slate-500 dark:text-slate-400">No station data available</p>
-      </div>
-    );
-  }
-
-  const mainStations = enrichedData.slice(0, 6);
-  const fgStation = enrichedData[6];
-
-  return (
-    <div className="flex flex-col h-full gap-5 2xl:gap-6">
-      {/* PIPELINE VISUALIZATION - 6 STATIONS ROW */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5 flex-grow">
-        {mainStations.map((station, idx) => {
-          const StationIcon = getStationIcon(station.station);
-          const showNg = station.station === 'CUTTING_POND' || station.station === 'CP' || station.station === 'QC';
-          const stationColor = STATION_COLORS[station.station] || CHART_COLORS.gray;
-          
-          let wipLabel = 'WIP';
-          if (station.station === 'CUTTING_ENTAN') wipLabel = 'Antrian OP';
-          if (station.station === 'FG') wipLabel = 'Stock';
-
-          return (
-            <div key={station.station} className="relative group flex flex-col h-full">
-              <div
-                className="relative flex flex-col h-full bg-white dark:bg-slate-800 rounded-3xl p-5 border-2 border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg transition-all duration-300 z-10 hover:-translate-y-1 hover:border-slate-300 dark:hover:border-slate-600"
-              >
-                {/* Station Header */}
-                <div className="flex flex-col items-center text-center mb-5 relative">
-                  <div className="absolute inset-x-0 top-1/2 h-0.5 bg-slate-100 dark:bg-slate-700 -z-10" />
-                  
-                  <div className="relative mb-3 group-hover:-translate-y-1 transition-transform duration-300">
-                    <div
-                      className="p-3.5 rounded-[1rem] text-white relative z-10 shadow-md"
-                      style={{ backgroundColor: stationColor, boxShadow: `0 4px 14px ${stationColor}50` }}
-                    >
-                      <StationIcon className="w-6 h-6" strokeWidth={2.5} />
-                    </div>
-                  </div>
-                  
-                  <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5 bg-slate-100 dark:bg-slate-700/50 px-3 py-1 rounded-lg">
-                    Step 0{idx + 1}
-                  </span>
-                  <h4 className="font-black text-sm 2xl:text-base text-slate-900 dark:text-white leading-tight mt-1 uppercase tracking-wide">
-                    {stationLabels[station.station] || station.station}
-                  </h4>
-                </div>
-
-                {/* Solid Progress Bar */}
-                <div className="w-full mb-6">
-                  <div className="flex justify-between items-end mb-1.5">
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Progress</span>
-                    <span className="text-xs font-black text-slate-800 dark:text-slate-200">{station.progress}%</span>
-                  </div>
-                  <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                    <div 
-                      className="h-full rounded-full transition-all duration-1000 ease-out"
-                      style={{ width: `${station.progress}%`, backgroundColor: stationColor }}
-                    />
-                  </div>
-                </div>
-
-                {/* Stats List */}
-                <div className="flex flex-col gap-3 flex-grow justify-center">
-                  
-                  {/* Active OP */}
-                  <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/30 border-2 border-slate-100 dark:border-slate-700/50">
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
-                        <Activity size={14} strokeWidth={3} />
-                      </div>
-                      <span className="text-[10px] 2xl:text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                        {station.station === 'CUTTING_ENTAN' ? 'Antrian OP' : 'Active OP'}
-                      </span>
-                    </div>
-                    <span className="text-base 2xl:text-lg font-black text-slate-900 dark:text-white leading-none">{station.count}</span>
-                  </div>
-
-                  {/* WIP */}
-                  <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/30 border-2 border-slate-100 dark:border-slate-700/50">
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400">
-                        <Layers size={14} strokeWidth={3} />
-                      </div>
-                      <span className="text-[10px] 2xl:text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">{wipLabel}</span>
-                    </div>
-                    <span className="text-base 2xl:text-lg font-black text-amber-600 dark:text-amber-500 leading-none">
-                      {station.wipQty.toLocaleString()}
-                      <span className="text-[10px] font-semibold text-slate-400 ml-1">
-                        {station.station === 'CUTTING_POND' || station.station === 'CP' ? 'patterns' : 'sets'}
-                      </span>
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 mt-1">
-                    {/* Input */}
-                    <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/30 border-2 border-slate-100 dark:border-slate-700/50 flex flex-col items-center justify-center text-center">
-                      <ArrowDownToLine size={16} className="text-indigo-500 mb-1" strokeWidth={3} />
-                      <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Input</span>
-                      <span className="text-sm font-black text-slate-900 dark:text-white leading-none">
-                        {station.todayInput.toLocaleString()}
-                        <span className="text-[10px] font-semibold text-slate-400 ml-1">
-                          {station.station === 'CUTTING_POND' || station.station === 'CP' ? 'patterns' : 'sets'}
-                        </span>
-                      </span>
-                    </div>
-                    {/* Output */}
-                    <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/30 border-2 border-slate-100 dark:border-slate-700/50 flex flex-col items-center justify-center text-center">
-                      <ArrowUpFromLine size={16} className="text-emerald-500 mb-1" strokeWidth={3} />
-                      <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Output</span>
-                      <span className="text-sm font-black text-slate-900 dark:text-white leading-none">
-                        {station.todayOutput.toLocaleString()}
-                        <span className="text-[10px] font-semibold text-slate-400 ml-1">
-                          {station.station === 'CUTTING_POND' || station.station === 'CP' ? 'patterns' : 'sets'}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Qty NG */}
-                  {showNg && (
-                    <div className="mt-1 flex items-center justify-between p-3 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border-2 border-rose-100 dark:border-rose-900/50">
-                      <div className="flex items-center gap-2.5">
-                        <div className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
-                          <XCircle size={14} strokeWidth={3} />
-                        </div>
-                        <span className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-wider">Defect / NG</span>
-                      </div>
-                      <span className="text-base font-black text-rose-600 dark:text-rose-400 leading-none">
-                        {station.qtyNg.toLocaleString()}
-                        <span className="text-[10px] font-semibold text-slate-400 ml-1">
-                          {station.station === 'CUTTING_POND' || station.station === 'CP' ? 'patterns' : 'sets'}
-                        </span>
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* FINISHED GOODS (FULL WIDTH BOTTOM) - Premium Solid Final Stage */}
-      {fgStation && (() => {
-        const progress = fgStation.progress;
-        const stationColor = STATION_COLORS['FG'];
-
-        return (
-          <div 
-            className="relative w-full bg-white dark:bg-slate-800 rounded-[2.5rem] p-6 2xl:p-8 shadow-sm border-2 border-cyan-500 flex flex-col xl:flex-row items-center gap-8 2xl:gap-12 transition-all duration-300 hover:shadow-lg group overflow-hidden"
-          >
-            <div className="relative z-10 flex items-center gap-6 w-full xl:w-1/4 xl:min-w-[340px] flex-shrink-0">
-              <div className="relative">
-                <div 
-                  className="p-5 2xl:p-6 rounded-[1.25rem] text-white relative z-10 transition-transform duration-300 group-hover:scale-105 shadow-md"
-                  style={{ backgroundColor: stationColor, boxShadow: `0 8px 20px ${stationColor}40` }}
-                >
-                  <Truck className="w-8 h-8 2xl:w-10 2xl:h-10" strokeWidth={2.5} />
-                </div>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="inline-block w-max text-[10px] 2xl:text-[11px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest bg-cyan-100 dark:bg-cyan-900/40 px-3 py-1.5 rounded-lg border border-cyan-200 dark:border-cyan-800/50">
-                  Step 07 • Final Output
-                </span>
-                <h4 className="font-black text-2xl 2xl:text-3xl text-slate-900 dark:text-white tracking-tight mt-1 uppercase">
-                  Finished Goods
-                </h4>
-              </div>
-            </div>
-
-            <div className="relative z-10 flex-1 grid grid-cols-2 md:grid-cols-5 gap-4 2xl:gap-5 w-full">
-              <div className="flex flex-col justify-center bg-slate-50 dark:bg-slate-700/30 p-5 rounded-2xl border-2 border-slate-100 dark:border-slate-700/50 transition-colors">
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-2 uppercase tracking-wider mb-2">
-                  <Activity size={16} className="text-blue-500" strokeWidth={3} /> Active OP
-                </p>
-                <p className="text-2xl 2xl:text-3xl font-black text-slate-900 dark:text-white leading-none">{fgStation.count}</p>
-              </div>
-              <div className="flex flex-col justify-center bg-slate-50 dark:bg-slate-700/30 p-5 rounded-2xl border-2 border-slate-100 dark:border-slate-700/50 transition-colors">
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-2 uppercase tracking-wider mb-2">
-                  <Layers size={16} className="text-amber-500" strokeWidth={3} /> Stock
-                </p>
-                <p className="text-2xl 2xl:text-3xl font-black text-amber-600 dark:text-amber-400 leading-none">{fgStation.wipQty.toLocaleString()}</p>
-              </div>
-              <div className="flex flex-col justify-center bg-slate-50 dark:bg-slate-700/30 p-5 rounded-2xl border-2 border-slate-100 dark:border-slate-700/50 transition-colors">
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-2 uppercase tracking-wider mb-2">
-                  <ArrowDownToLine size={16} className="text-indigo-500" strokeWidth={3} /> Input
-                </p>
-                <p className="text-2xl 2xl:text-3xl font-black text-slate-900 dark:text-white leading-none">{fgStation.todayInput.toLocaleString()}</p>
-              </div>
-              <div className="flex flex-col justify-center bg-slate-50 dark:bg-slate-700/30 p-5 rounded-2xl border-2 border-slate-100 dark:border-slate-700/50 transition-colors">
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-2 uppercase tracking-wider mb-2">
-                  <ArrowUpFromLine size={16} className="text-emerald-500" strokeWidth={3} /> Output
-                </p>
-                <p className="text-2xl 2xl:text-3xl font-black text-slate-900 dark:text-white leading-none">{fgStation.todayOutput.toLocaleString()}</p>
-              </div>
-              <div className="flex flex-col justify-center bg-cyan-50 dark:bg-cyan-900/20 p-5 rounded-2xl border-2 border-cyan-200 dark:border-cyan-800/50 col-span-2 md:col-span-1 relative overflow-hidden">
-                <div 
-                  className="absolute bottom-0 left-0 h-2 transition-all duration-1000 ease-out rounded-r-full" 
-                  style={{ width: `${progress}%`, backgroundColor: stationColor }} 
-                />
-                <p className="text-[11px] text-cyan-700 dark:text-cyan-400 font-bold flex items-center gap-2 uppercase tracking-wider mb-2 relative z-10">
-                  <Percent size={16} className="text-cyan-500" strokeWidth={3} /> Progress
-                </p>
-                <p className="text-2xl 2xl:text-3xl font-black text-cyan-600 dark:text-cyan-400 relative z-10 leading-none">{progress}%</p>
-              </div>
-            </div>
-
-          </div>
-        );
-      })()}
-    </div>
-  );
-};
-
-// ==========================================
-// ANALYTICS: KPI + CHARTS + LISTS (recharts)
-// ==========================================
-const STATUS_COLORS: Record<string, string> = { WIP: '#3b82f6', DONE: '#10b981', HOLD: '#f59e0b' };
-const axisColor = (d: boolean) => (d ? '#94a3b8' : '#64748b');
-const gridColor = (d: boolean) => (d ? '#334155' : '#e2e8f0');
-const tipStyle = (d: boolean): React.CSSProperties => ({
-  backgroundColor: d ? '#1e293b' : '#ffffff',
-  border: `1px solid ${d ? '#334155' : '#e2e8f0'}`,
-  borderRadius: 12,
-  fontSize: 12,
-  color: d ? '#f1f5f9' : '#0f172a',
-});
-
-const StatCard = ({ icon: Icon, label, value, suffix, accent, sub }: any) => (
-  <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-4 2xl:p-5 shadow-sm flex items-center gap-4">
-    <div className={`w-12 h-12 2xl:w-14 2xl:h-14 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-md ${accent}`}>
-      <Icon size={24} strokeWidth={2.5} />
-    </div>
+const KpiCard = ({ title, value, icon: Icon, color, suffix }: {
+  title: string; value: number | string; icon: any; color: string; suffix?: string;
+}) => (
+  <div className="bg-white dark:bg-slate-800 rounded-2xl border-l-4 border-y border-r border-slate-200 dark:border-slate-700 p-4 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between" style={{ borderLeftColor: color }}>
     <div className="min-w-0">
-      <p className="text-[10px] 2xl:text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">{label}</p>
-      <div className="flex items-baseline gap-1.5 mt-0.5">
-        <span className="text-2xl 2xl:text-3xl font-black text-slate-900 dark:text-white leading-none">
-          {typeof value === 'number' ? value.toLocaleString() : value}
-        </span>
-        {suffix && <span className="text-xs font-bold text-slate-400 dark:text-slate-500">{suffix}</span>}
+      <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">{title}</div>
+      <div className="text-2xl font-black text-slate-900 dark:text-white leading-none mt-1.5">
+        {typeof value === 'number' ? fmtNum(value) : value}
+        {suffix && <span className="text-xs font-semibold text-slate-400 ml-1">{suffix}</span>}
       </div>
-      {sub && <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 mt-1 truncate">{sub}</p>}
+    </div>
+    <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ml-3" style={{ backgroundColor: `${color}1a` }}>
+      <Icon size={20} style={{ color }} />
     </div>
   </div>
 );
 
-const ChartCard = ({ title, icon: Icon, children, className = '' }: any) => (
-  <div className={`bg-white dark:bg-slate-800 rounded-3xl border-2 border-slate-200 dark:border-slate-700 p-5 shadow-sm flex flex-col ${className}`}>
-    <div className="flex items-center gap-2 mb-4">
-      {Icon && <Icon size={18} className="text-blue-500" strokeWidth={2.5} />}
-      <h3 className="text-sm font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">{title}</h3>
+const StatTile = ({ label, value, suffix, color, icon: Icon, caption }: {
+  label: string; value: number | string; suffix?: string; color: string; icon: any; caption?: string;
+}) => (
+  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm flex flex-col">
+    <div className="flex items-center gap-2 mb-2">
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${color}1a` }}>
+        <Icon size={16} style={{ color }} />
+      </div>
+      <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{label}</span>
+    </div>
+    <div className="text-3xl font-black text-slate-900 dark:text-white leading-none">
+      {typeof value === 'number' ? fmtNum(value) : value}
+      {suffix && <span className="text-sm font-bold text-slate-400 ml-1">{suffix}</span>}
+    </div>
+    {caption && <div className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-2">{caption}</div>}
+  </div>
+);
+
+const ChartCard = ({ title, subtitle, icon: Icon, color, children }: {
+  title: string; subtitle?: string; icon: any; color: string; children: React.ReactNode;
+}) => (
+  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 flex flex-col">
+    <div className="flex items-center gap-2.5 mb-3">
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}1a` }}>
+        <Icon size={18} style={{ color }} />
+      </div>
+      <div>
+        <h3 className="text-sm font-black text-slate-900 dark:text-white leading-none">{title}</h3>
+        {subtitle && <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-1">{subtitle}</p>}
+      </div>
     </div>
     <div className="flex-1 min-h-0">{children}</div>
   </div>
 );
 
-const EmptyChart = ({ label = 'Belum ada data' }: any) => (
-  <div className="h-full min-h-[180px] flex flex-col items-center justify-center text-slate-300 dark:text-slate-600">
-    <Activity size={32} strokeWidth={1.5} />
-    <p className="text-xs font-bold mt-2">{label}</p>
+const EmptyState = ({ label = 'Belum ada data untuk rentang ini' }: { label?: string }) => (
+  <div className="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 py-10">
+    <Boxes size={36} className="mb-2 opacity-60" />
+    <p className="text-sm font-semibold text-center px-3">{label}</p>
   </div>
 );
 
-const KpiRow = ({ kpi }: { kpi?: DashboardComprehensive['kpi'] }) => {
-  if (!kpi) return null;
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6 relative z-10">
-      {/* Output aktual periode (dari Packing/FG yang CLOSED) */}
-      <StatCard icon={Package} label="Output (Periode)" value={kpi.todayOutput} suffix="pcs"
-        accent="bg-emerald-600 shadow-emerald-600/30" sub="Finished / Packing" />
-      {/* WIP aktual + total OP tercatat */}
-      <StatCard icon={Layers} label="Total WIP" value={kpi.totalWip} suffix="OP"
-        accent="bg-amber-500 shadow-amber-500/30" sub={`${kpi.totalOps.toLocaleString()} OP total`} />
-      {/* Hasil lolos inspeksi (nyata dari CP + QC) */}
-      <StatCard icon={CheckSquare} label="Lolos (Good)" value={kpi.totalGood} suffix="pcs"
-        accent="bg-teal-600 shadow-teal-600/30" sub="Inspeksi CP + QC" />
-      {/* Defect rate nyata + jumlah NG */}
-      <StatCard icon={Percent} label="Defect Rate" value={kpi.defectRate} suffix="%"
-        accent="bg-rose-600 shadow-rose-600/30" sub={`${kpi.totalNg.toLocaleString()} pcs NG`} />
-      {/* Pencapaian terhadap target (target = estimasi kapasitas line aktif) */}
-      <StatCard icon={TrendingUp} label="Pencapaian Target" value={kpi.achievement} suffix="%"
-        accent="bg-blue-600 shadow-blue-600/30" sub={`Target ${kpi.targetOutput.toLocaleString()} pcs`} />
-    </div>
-  );
-};
+// ============ PRODUCTION FLOW (pipeline Cutting Entan -> Finished Goods) ============
+const FLOW_STATIONS = [
+  { key: 'CUTTING_ENTAN', label: 'Cutting Entan', icon: Scissors, color: C.orange, unit: 'sets' },
+  { key: 'CUTTING_POND', label: 'Cutting Pond', icon: Layers, color: C.amber, unit: 'patterns' },
+  { key: 'CP', label: 'Check Panel', icon: CheckSquare, color: C.green, unit: 'patterns' },
+  { key: 'SEWING', label: 'Sewing', icon: Shirt, color: C.purple, unit: 'sets' },
+  { key: 'QC', label: 'Quality Control', icon: ShieldCheck, color: C.red, unit: 'sets' },
+  { key: 'PACKING', label: 'Packing', icon: Package, color: C.blue, unit: 'sets' },
+  { key: 'FG', label: 'Finished Goods', icon: Truck, color: C.cyan, unit: 'sets' },
+];
 
-const TopCharts = ({ data, dark }: { data: DashboardComprehensive | null; dark: boolean }) => {
-  const hourly = data?.hourlyProduction || [];
-  const status = (data?.statusDistribution || []).filter((x) => x.count > 0);
-  return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-6 relative z-10">
-      <ChartCard title="Produksi per Jam" icon={Clock} className="xl:col-span-2">
-        {hourly.length === 0 ? <EmptyChart /> : (
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={hourly} margin={{ top: 6, right: 8, left: -12, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={gridColor(dark)} vertical={false} />
-              <XAxis dataKey="hour" tick={{ fontSize: 11, fill: axisColor(dark) }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: axisColor(dark) }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tipStyle(dark)} cursor={{ fill: dark ? 'rgba(51,65,85,0.3)' : '#f1f5f9' }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="output" name="Output" fill="#3b82f6" radius={[6, 6, 0, 0]} maxBarSize={34} />
-              <Line type="monotone" dataKey="target" name="Target" stroke="#f59e0b" strokeWidth={2.5} dot={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        )}
-      </ChartCard>
-      <ChartCard title="Status OP" icon={Layers}>
-        {status.length === 0 ? <EmptyChart /> : (
-          <ResponsiveContainer width="100%" height={260}>
-            <PieChart>
-              <Pie data={status} dataKey="count" nameKey="status" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3}>
-                {status.map((sd, i) => <Cell key={i} fill={STATUS_COLORS[sd.status] || '#64748b'} />)}
-              </Pie>
-              <Tooltip contentStyle={tipStyle(dark)} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-            </PieChart>
-          </ResponsiveContainer>
-        )}
-      </ChartCard>
-    </div>
-  );
-};
+type FlowRow = { station: string; count: number; wipQty: number; todayInput: number; todayOutput: number; qtyNg: number; progress: number; };
 
-const BottomPanels = ({ data, dark }: { data: DashboardComprehensive | null; dark: boolean }) => {
-  const quality = data?.qualityTrend || [];
-  const lines = data?.lineSummaries || [];
-  const slow = data?.slowMovingOps || [];
-  const recent = data?.recentActivities || [];
+const StationFlow = ({ data }: { data: FlowRow[] }) => {
+  const byKey = new Map(data.map(d => [d.station, d]));
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mt-6 relative z-10">
-      <ChartCard title="Tren Kualitas (7 Hari)" icon={Percent}>
-        {quality.length === 0 ? <EmptyChart /> : (
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={quality} margin={{ top: 6, right: 8, left: -12, bottom: 0 }}>
-              <defs>
-                <linearGradient id="qtGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.35} />
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={gridColor(dark)} vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 11, fill: axisColor(dark) }} axisLine={false} tickLine={false} />
-              <YAxis unit="%" tick={{ fontSize: 11, fill: axisColor(dark) }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tipStyle(dark)} />
-              <Area type="monotone" dataKey="defectRate" name="Defect %" stroke="#ef4444" strokeWidth={2.5} fill="url(#qtGrad)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        )}
-      </ChartCard>
-      <ChartCard title="Performa per Line" icon={Factory}>
-        {lines.length === 0 ? <EmptyChart /> : (
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={lines} margin={{ top: 6, right: 8, left: -12, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={gridColor(dark)} vertical={false} />
-              <XAxis dataKey="lineCode" tick={{ fontSize: 11, fill: axisColor(dark) }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: axisColor(dark) }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tipStyle(dark)} cursor={{ fill: dark ? 'rgba(51,65,85,0.3)' : '#f1f5f9' }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="output" name="Output" fill="#10b981" radius={[6, 6, 0, 0]} maxBarSize={40} />
-              <Bar dataKey="target" name="Target" fill="#cbd5e1" radius={[6, 6, 0, 0]} maxBarSize={40} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </ChartCard>
-      <ChartCard title="OP Lambat / Tertahan" icon={AlertTriangle}>
-        <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
-          {slow.length === 0 ? <EmptyChart label="Tidak ada OP tertahan" /> : slow.map((op, i) => (
-            <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-100 dark:border-slate-700">
-              <div className="min-w-0">
-                <p className="font-mono font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{op.opNumber}</p>
-                <p className="text-[10px] font-semibold text-slate-500 uppercase">{op.currentStation}</p>
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+      {FLOW_STATIONS.map((s, idx) => {
+        const d = byKey.get(s.key) || { station: s.key, count: 0, wipQty: 0, todayInput: 0, todayOutput: 0, qtyNg: 0, progress: 0 };
+        const showNg = s.key === 'CUTTING_POND' || s.key === 'CP' || s.key === 'QC';
+        const wipLabel = s.key === 'CUTTING_ENTAN' ? 'Antrian' : s.key === 'FG' ? 'Stock' : 'WIP';
+        return (
+          <div key={s.key} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-3.5 flex flex-col">
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: s.color, boxShadow: `0 4px 12px ${s.color}50` }}>
+                <s.icon size={17} strokeWidth={2.5} />
               </div>
-              <span className={`text-xs font-black px-2.5 py-1 rounded-lg shrink-0 ${op.hoursInStation >= 24 ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>{op.hoursInStation} jam</span>
+              <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest bg-slate-100 dark:bg-slate-700/50 px-2 py-0.5 rounded-md">0{idx + 1}</span>
             </div>
-          ))}
-        </div>
-      </ChartCard>
-      <ChartCard title="Aktivitas Terbaru" icon={Activity}>
-        <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
-          {recent.length === 0 ? <EmptyChart label="Belum ada aktivitas" /> : recent.map((a, i) => (
-            <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-100 dark:border-slate-700">
-              <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
-                  <span className="font-mono">{a.opNumber}</span>
-                  <span className="text-slate-400 dark:text-slate-500 font-normal"> · {a.station} · {a.action}</span>
-                </p>
-                <p className="text-[10px] text-slate-400">{new Date(a.time).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</p>
+            <h4 className="text-[12px] font-black text-slate-900 dark:text-white leading-tight uppercase tracking-wide">{s.label}</h4>
+
+            <div className="mt-2.5">
+              <div className="flex justify-between text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                <span>Progress</span><span className="text-slate-700 dark:text-slate-200">{d.progress}%</span>
               </div>
-              <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 shrink-0">+{a.qty}</span>
+              <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(d.progress, 100)}%`, backgroundColor: s.color }} />
+              </div>
             </div>
-          ))}
-        </div>
-      </ChartCard>
+
+            <div className="mt-3 flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-700/30">
+              <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1"><Activity size={11} />{wipLabel}</span>
+              <span className="text-sm font-black text-slate-900 dark:text-white">{d.count}</span>
+            </div>
+
+            <div className="mt-1.5 flex items-center justify-between p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20">
+              <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1"><Layers size={11} />Qty</span>
+              <span className="text-sm font-black text-amber-600 dark:text-amber-400">{fmtNum(d.wipQty)}</span>
+            </div>
+
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+              <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-700/30 text-center">
+                <ArrowDownToLine size={12} className="text-indigo-500 mx-auto" strokeWidth={3} />
+                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wide mt-0.5">In</div>
+                <div className="text-[11px] font-black text-slate-800 dark:text-white leading-none">{fmtNum(d.todayInput)}</div>
+              </div>
+              <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-700/30 text-center">
+                <ArrowUpFromLine size={12} className="text-emerald-500 mx-auto" strokeWidth={3} />
+                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wide mt-0.5">Out</div>
+                <div className="text-[11px] font-black text-slate-800 dark:text-white leading-none">{fmtNum(d.todayOutput)}</div>
+              </div>
+            </div>
+
+            {showNg && (
+              <div className="mt-1.5 flex items-center justify-between p-2 rounded-lg bg-rose-50 dark:bg-rose-900/20">
+                <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-wider flex items-center gap-1"><XCircle size={11} />NG</span>
+                <span className="text-sm font-black text-rose-600 dark:text-rose-400">{fmtNum(d.qtyNg)}</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };
 
-// ==========================================
-// MAIN DASHBOARD COMPONENT
-// ==========================================
+// ============ MAIN ============
 export const DashboardView = () => {
+  const [comp, setComp] = useState<DashboardComprehensive | null>(null);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<DashboardComprehensive | null>(null);
-  const [lastUpdate, setLastUpdate] = useState('');
-  const [selectedLine, setSelectedLine] = useState(''); // '' = Semua Line
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState('');
+  const [selectedLine, setSelectedLine] = useState('');
+  const [range, setRange] = useState<RangeKey>('7d');
+  const [tab, setTab] = useState<TabKey>('flow');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isDark, setIsDark] = useState(false);
 
-  const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  };
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const fmtD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const defStart = () => { const d = new Date(); d.setDate(d.getDate() - 6); return fmtD(d); };
+  const [customStart, setCustomStart] = useState(defStart());
+  const [customEnd, setCustomEnd] = useState(fmtD(new Date()));
 
-  const [startDate, setStartDate] = useState(getTodayDate());
-  const [endDate, setEndDate] = useState(getTodayDate());
-
-  // ==========================================
-  // FETCH DATA
-  // ==========================================
-  const fetchData = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const params = new URLSearchParams();
-      if (startDate && endDate) {
-        params.set('startDate', startDate);
-        params.set('endDate', endDate);
-      }
-      if (selectedLine) {
-        params.set('lineCode', selectedLine);
-      }
-      const qs = params.toString();
-      const url = `${API_BASE_URL}/production-orders/dashboard-comprehensive${qs ? `?${qs}` : ''}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const json: DashboardComprehensive = await res.json();
-        setData(json);
-        setLastUpdate(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-      }
-    } catch (e) {
-      console.error('Failed to load dashboard stats:', e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [startDate, endDate, selectedLine]); // <-- selectedLine ditambahkan agar ganti line => refetch
-
+  // Dark mode observer (mengikuti class 'dark' pada <html>)
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
-
-  useEffect(() => {
-    const isDark = document.documentElement.classList.contains('dark');
-    setIsDarkMode(isDark);
+    const el = document.documentElement;
+    const update = () => setIsDark(el.classList.contains('dark'));
+    update();
+    const obs = new MutationObserver(update);
+    obs.observe(el, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
   }, []);
 
-  // ==========================================
-  // FULLSCREEN TOGGLE
-  // ==========================================
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-        setIsFullscreen(false);
-      }
+  const rangeToDates = useCallback((r: RangeKey) => {
+    if (r === 'custom') return { startDate: customStart, endDate: customEnd };
+    const today = new Date();
+    if (r === 'today') return { startDate: fmtD(today), endDate: fmtD(today) };
+    const days = r === '30d' ? 30 : 7;
+    const s = new Date(today); s.setDate(s.getDate() - (days - 1));
+    return { startDate: fmtD(s), endDate: fmtD(today) };
+  }, [customStart, customEnd]);
+
+  const fetchAll = useCallback(async (silent = false) => {
+    if (silent) setRefreshing(true); else setLoading(true);
+    try {
+      const { startDate, endDate } = rangeToDates(range);
+      const compQs = new URLSearchParams({ startDate, endDate });
+      if (selectedLine) compQs.set('lineCode', selectedLine);
+      const anaQs = new URLSearchParams();
+      if (range === 'custom') { anaQs.set('startDate', startDate); anaQs.set('endDate', endDate); }
+      else anaQs.set('range', range);
+      if (selectedLine) anaQs.set('lineCode', selectedLine);
+
+      const [compRes, anaRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/production-orders/dashboard-comprehensive?${compQs.toString()}`),
+        fetch(`${API_BASE_URL}/production-orders/dashboard-analytics?${anaQs.toString()}`),
+      ]);
+      if (compRes.ok) setComp(await compRes.json());
+      if (anaRes.ok) setAnalytics(await anaRes.json());
+      setLastUpdate(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    } catch (e) {
+      console.error('Failed to fetch dashboard', e);
+    } finally {
+      setLoading(false); setRefreshing(false);
     }
+  }, [range, selectedLine, rangeToDates]);
+
+  useEffect(() => {
+    fetchAll();
+    const i = setInterval(() => fetchAll(true), 30000);
+    return () => clearInterval(i);
+  }, [fetchAll]);
+
+  const kpi = comp?.kpi;
+  const lines = comp?.lineSummaries || [];
+
+  // Recharts shared styling
+  const axisTick = { fontSize: 11, fill: isDark ? '#94a3b8' : '#64748b', fontWeight: 600 };
+  const gridStroke = isDark ? '#334155' : '#e2e8f0';
+  const tooltipStyle = {
+    contentStyle: {
+      background: isDark ? '#1e293b' : '#ffffff',
+      border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+      borderRadius: 12, fontSize: 12, fontWeight: 600,
+      boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+    },
+    labelStyle: { color: isDark ? '#e2e8f0' : '#0f172a', fontWeight: 700, marginBottom: 4 },
   };
+  const rangeLabel = range === 'today' ? 'Hari ini (per jam)'
+    : range === '30d' ? '30 hari terakhir'
+    : range === 'custom' ? `${customStart} s/d ${customEnd}`
+    : '7 hari terakhir';
 
-  // ==========================================
-  // RENDER
-  // ==========================================
+  const TABS: { key: TabKey; label: string; icon: any; color: string }[] = [
+    { key: 'flow', label: 'Production Flow', icon: Workflow, color: C.blue },
+    { key: 'entan', label: 'Cutting Entan', icon: Scissors, color: C.orange },
+    { key: 'pond', label: 'Cutting Pond', icon: Layers, color: C.amber },
+    { key: 'cp', label: 'Check Panel', icon: CheckSquare, color: C.green },
+    { key: 'sewing', label: 'Sewing', icon: Shirt, color: C.purple },
+    { key: 'qc', label: 'Quality Control', icon: ShieldCheck, color: C.red },
+  ];
+
+  const donutData = (good: number, ng: number) => [{ name: 'Good', value: good }, { name: 'Not Good', value: ng }];
+  const ngBar = (data: NgComp[], color: string, title: string, subtitle: string) => (
+    <ChartCard title={title} subtitle={subtitle} icon={Percent} color={color}>
+      {data.length === 0 ? <EmptyState label="Belum ada data pola" /> : (
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart layout="vertical" data={data.slice(0, 8)} margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
+            <XAxis type="number" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} unit="%" />
+            <YAxis type="category" dataKey="name" tick={axisTick} tickLine={false} axisLine={false} width={92} />
+            <Tooltip {...tooltipStyle} formatter={(v: any, _n: any, p: any) => [`${v}%  (NG ${p?.payload?.ng} / ${p?.payload?.total})`, 'Rate NG']} />
+            <Bar dataKey="ngRate" name="Rate NG" radius={[0, 6, 6, 0]} maxBarSize={22}>
+              {data.slice(0, 8).map((_, i) => <Cell key={i} fill={NG_PALETTE[i % NG_PALETTE.length]} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </ChartCard>
+  );
+
   return (
-    <div className={`relative w-full bg-slate-50 dark:bg-slate-900 transition-all duration-500 overflow-x-hidden flex flex-col font-poppins ${isFullscreen ? 'h-screen overflow-y-auto p-4 2xl:p-6' : 'min-h-screen p-4 md:p-6 2xl:p-8'}`}>
-      
-      <style>
-        {`
-          @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
-          .font-poppins { font-family: 'Poppins', sans-serif; }
-        `}
-      </style>
+    <div className={`font-poppins text-slate-800 dark:text-slate-100 ${isFullscreen ? 'fixed inset-0 z-[200] bg-slate-50 dark:bg-slate-900 overflow-auto p-4' : ''} animate-in fade-in duration-300`}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+        .font-poppins { font-family: 'Poppins', sans-serif; }
+      `}</style>
 
-      {/* ==========================================
-          HEADER 
-      ========================================== */}
-      <div className="relative bg-white dark:bg-slate-800 rounded-3xl border-2 border-slate-200 dark:border-slate-700 p-5 2xl:p-6 shadow-sm mb-6 z-20 flex-shrink-0">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-          
-          <div className="flex items-center gap-5">
-            <div className="relative group">
-              <div className="p-4 bg-blue-600 rounded-2xl shadow-md shadow-blue-600/30 relative z-10 transition-transform duration-300 group-hover:scale-105">
-                <Cpu className="w-8 h-8 2xl:w-9 2xl:h-9 text-white" strokeWidth={2.5} />
-              </div>
+      {/* ===== HEADER ===== */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 md:p-5 mb-4">
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/30">
+              <Factory size={24} className="text-white" />
             </div>
             <div>
-              <h1 className="text-2xl 2xl:text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-none mb-2 uppercase">
+              <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
                 Production Dashboard
+                <span className="text-[10px] px-2 py-1 bg-blue-600 text-white rounded-md font-bold uppercase tracking-wider hidden sm:inline">Live</span>
               </h1>
-              <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-700 w-max px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-                </span>
-                <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                  Live Sync: <span className="text-slate-800 dark:text-slate-200 ml-1">{lastUpdate || 'Connecting...'}</span>
-                </p>
-              </div>
+              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5">
+                <Calendar size={12} /> {rangeLabel}
+                {lastUpdate && <span className="text-slate-400">• update {lastUpdate}</span>}
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap w-full lg:w-auto bg-slate-50 dark:bg-slate-900 p-2 rounded-2xl border-2 border-slate-200 dark:border-slate-700">
-            
-            {/* Solid Date Range Picker */}
-            <div className="flex items-center bg-white dark:bg-slate-800 rounded-xl shadow-sm border-2 border-slate-200 dark:border-slate-700 px-1 overflow-hidden">
-              <div className="relative flex items-center">
-                <Calendar className="absolute left-3 w-4 h-4 text-slate-500 pointer-events-none" strokeWidth={2.5} />
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="pl-9 pr-3 py-2.5 text-sm font-bold bg-transparent border-none text-slate-800 dark:text-white focus:outline-none focus:ring-0 cursor-pointer w-[145px]"
-                />
-              </div>
-              <div className="h-6 w-0.5 bg-slate-200 dark:bg-slate-700 mx-1" />
-              <div className="relative flex items-center">
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="px-3 py-2.5 text-sm font-bold bg-transparent border-none text-slate-800 dark:text-white focus:outline-none focus:ring-0 cursor-pointer w-[130px]"
-                />
-              </div>
+          <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+            {/* Range selector */}
+            <div className="flex bg-slate-100 dark:bg-slate-700/50 rounded-xl p-1">
+              {(['today', '7d', '30d', 'custom'] as RangeKey[]).map(r => (
+                <button
+                  key={r}
+                  onClick={() => setRange(r)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${range === r ? 'bg-blue-600 text-white shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-600/50'}`}
+                >
+                  {r === 'today' ? 'Hari ini' : r === '7d' ? '7 Hari' : r === '30d' ? '30 Hari' : 'Custom'}
+                </button>
+              ))}
             </div>
 
-            {/* Solid Select Dropdown */}
-            <div className="relative group flex-shrink-0">
-              <select
-                value={selectedLine}
-                onChange={(e) => setSelectedLine(e.target.value)}
-                className="appearance-none bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl pl-5 pr-11 py-2.5 text-sm font-bold text-slate-800 dark:text-white focus:outline-none focus:border-blue-500 shadow-sm cursor-pointer hover:border-blue-400 transition-colors min-w-[130px]"
-              >
-                <option value="">Semua Line</option>
-                {data?.lineSummaries?.map(line => (
-                  <option key={line.lineCode} value={line.lineCode}>{line.lineCode}</option>
-                ))}
-              </select>
-              <Filter size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" strokeWidth={2.5} />
-            </div>
+            {/* Custom date pickers */}
+            {range === 'custom' && (
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl px-2 py-1">
+                <input type="date" value={customStart} max={customEnd} onChange={(e) => setCustomStart(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 outline-none" />
+                <span className="text-slate-400 text-xs font-bold">→</span>
+                <input type="date" value={customEnd} min={customStart} max={fmtD(new Date())} onChange={(e) => setCustomEnd(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 outline-none" />
+              </div>
+            )}
 
-            {/* Solid Action Buttons */}
-            <div className="flex gap-2 ml-auto lg:ml-1">
-              <button
-                onClick={fetchData}
-                disabled={refreshing}
-                className="p-3 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all shadow-sm disabled:opacity-50 group"
-              >
-                <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin text-blue-600' : 'text-slate-600 dark:text-slate-400 group-hover:text-blue-600'}`} strokeWidth={2.5} />
-              </button>
-              <button
-                onClick={toggleFullscreen}
-                className="p-3 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all shadow-sm group"
-              >
-                {isFullscreen ? 
-                  <Minimize2 className="w-5 h-5 text-slate-600 dark:text-slate-400 group-hover:text-blue-600" strokeWidth={2.5} /> : 
-                  <Maximize2 className="w-5 h-5 text-slate-600 dark:text-slate-400 group-hover:text-blue-600" strokeWidth={2.5} />
-                }
-              </button>
-            </div>
+            {/* Line filter */}
+            <select
+              value={selectedLine}
+              onChange={(e) => setSelectedLine(e.target.value)}
+              className="px-3 py-2 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500"
+            >
+              <option value="">Semua Line</option>
+              {lines.map(l => <option key={l.lineCode} value={l.lineCode}>{l.lineCode}</option>)}
+            </select>
+
+            <button
+              onClick={() => fetchAll(true)}
+              disabled={refreshing}
+              className="group px-3 py-2 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2 hover:border-blue-500 hover:text-blue-600 transition-colors text-xs"
+            >
+              <RefreshCw size={15} className={refreshing ? 'animate-spin text-blue-600' : 'group-hover:rotate-180 transition-transform duration-500'} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+            <button
+              onClick={() => setIsFullscreen(v => !v)}
+              className="p-2 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl hover:border-blue-500 transition-colors"
+              title={isFullscreen ? 'Keluar fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            </button>
           </div>
         </div>
       </div>
 
-      {loading && !data ? (
-        <div className="space-y-6 relative z-10 flex-grow">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[...Array(3)].map((_, i) => (
-               <div key={i} className="h-36 bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-200 dark:border-slate-700 animate-pulse" />
-            ))}
-          </div>
-          <div className="h-full min-h-[400px] bg-white dark:bg-slate-800 rounded-[2.5rem] border-2 border-slate-200 dark:border-slate-700 animate-pulse" />
+      {/* ===== KPI STRIP ===== */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-4">
+        <KpiCard title="Output Periode" value={kpi?.todayOutput ?? 0} suffix="sets" icon={PackageCheck} color={C.blue} />
+        <KpiCard title="Total WIP" value={kpi?.totalWip ?? 0} icon={Layers} color={C.amber} />
+        <KpiCard title="Good (CP+QC)" value={kpi?.totalGood ?? 0} icon={Award} color={C.green} />
+        <KpiCard title="Defect Rate" value={kpi ? `${kpi.defectRate}` : '0'} suffix="%" icon={AlertTriangle} color={C.red} />
+        <KpiCard title="Achievement" value={kpi ? `${kpi.achievement}` : '0'} suffix="%" icon={TrendingUp} color={C.purple} />
+      </div>
+
+      {/* ===== TAB BAR ===== */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {TABS.map(t => {
+          const active = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${active ? 'text-white shadow-md' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-300'}`}
+              style={active ? { backgroundColor: t.color, boxShadow: `0 4px 14px ${t.color}55` } : undefined}
+            >
+              <t.icon size={16} /> {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ===== TAB CONTENT ===== */}
+      {loading && !analytics ? (
+        <div className="h-72 flex items-center justify-center bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+          <RefreshCw size={32} className="animate-spin text-blue-500" />
         </div>
       ) : (
-        <>
-          {/* ===== KPI ROW ===== */}
-          <KpiRow kpi={data?.kpi} />
+        <div className="animate-in fade-in duration-300">
 
-          {/* ===== TOP CHARTS: hourly + status ===== */}
-          <TopCharts data={data} dark={isDarkMode} />
+          {/* ---------- PRODUCTION FLOW ---------- */}
+          {tab === 'flow' && (
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-4">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${C.blue}1a` }}>
+                  <Workflow size={18} style={{ color: C.blue }} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white leading-none">Alur Produksi — Cutting Entan → Finished Goods</h3>
+                  <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-1">Status tiap station: antrian/WIP, input, output, dan NG</p>
+                </div>
+              </div>
+              <StationFlow data={comp?.stationFlow || []} />
+            </div>
+          )}
 
-          {/* ===== STATION FLOW (pipeline) ===== */}
-          <div className="relative z-10 flex flex-col pb-2">
-            <StationFlow data={data?.stationFlow || []} />
-          </div>
+          {/* ---------- CUTTING ENTAN ---------- */}
+          {tab === 'entan' && analytics && (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <StatTile label="Output Entan" value={analytics.cutting.entan.totalEntan} suffix="pcs" color={C.orange} icon={Scissors} caption="Total dikirim ke Pond" />
+                <StatTile label="Output Pond" value={analytics.cutting.entan.totalPond} suffix="pcs" color={C.amber} icon={Layers} caption="Total pola lolos hitung" />
+                <StatTile
+                  label="Throughput Pond"
+                  value={analytics.cutting.entan.totalEntan > 0 ? Math.round((analytics.cutting.entan.totalPond / analytics.cutting.entan.totalEntan) * 100) : 0}
+                  suffix="%" color={C.green} icon={Gauge} caption="Output Pond / Output Entan"
+                />
+              </div>
+              <ChartCard title="Grafik Produktivitas Entan & Pond" subtitle="Output Cutting Entan vs Cutting Pond per periode" icon={TrendingUp} color={C.orange}>
+                {analytics.cutting.entan.productivity.every(p => p.entan + p.pond === 0) ? <EmptyState /> : (
+                  <ResponsiveContainer width="100%" height={320}>
+                    <ComposedChart data={analytics.cutting.entan.productivity} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+                      <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} />
+                      <YAxis tick={axisTick} tickLine={false} axisLine={false} />
+                      <Tooltip {...tooltipStyle} />
+                      <Legend wrapperStyle={{ fontSize: 12, fontWeight: 700 }} />
+                      <Bar dataKey="entan" name="Output Entan" fill={C.orange} radius={[4, 4, 0, 0]} maxBarSize={30} />
+                      <Line type="monotone" dataKey="pond" name="Output Pond" stroke={C.amber} strokeWidth={3} dot={{ r: 3 }} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                )}
+              </ChartCard>
+            </div>
+          )}
 
-          {/* ===== BOTTOM PANELS: quality, line, slow, recent ===== */}
-          <BottomPanels data={data} dark={isDarkMode} />
-        </>
+          {/* ---------- CUTTING POND ---------- */}
+          {tab === 'pond' && analytics && (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <StatTile label="Rate Kualitas" value={analytics.cutting.pond.qualityRate} suffix="%" color={C.green} icon={Gauge} caption={`${fmtNum(analytics.cutting.pond.good)} good`} />
+                <StatTile label="Rate NG" value={analytics.cutting.pond.ngRate} suffix="%" color={C.red} icon={AlertTriangle} caption={`${fmtNum(analytics.cutting.pond.ng)} NG (pola)`} />
+                <StatTile label="Total Pola" value={analytics.cutting.pond.total} suffix="pcs" color={C.amber} icon={Layers} caption="Good + NG" />
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-2 shadow-sm">
+                  {analytics.cutting.pond.total === 0 ? <EmptyState label="Belum ada data" /> : (
+                    <ResponsiveContainer width="100%" height={96}>
+                      <PieChart>
+                        <Pie data={donutData(analytics.cutting.pond.good, analytics.cutting.pond.ng)} dataKey="value" nameKey="name" innerRadius={26} outerRadius={42} paddingAngle={2}>
+                          <Cell fill={C.green} /><Cell fill={C.red} />
+                        </Pie>
+                        <Tooltip {...tooltipStyle} />
+                        <Legend wrapperStyle={{ fontSize: 10, fontWeight: 700 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <ChartCard title="Produktivitas Pond (Good vs NG)" subtitle="Hasil hitung pola per periode" icon={Layers} color={C.amber}>
+                  {analytics.cutting.pond.productivity.every(p => p.good + p.ng === 0) ? <EmptyState /> : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={analytics.cutting.pond.productivity} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+                        <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} />
+                        <YAxis tick={axisTick} tickLine={false} axisLine={false} />
+                        <Tooltip {...tooltipStyle} />
+                        <Legend wrapperStyle={{ fontSize: 12, fontWeight: 700 }} />
+                        <Bar dataKey="good" name="Good" fill={C.green} radius={[4, 4, 0, 0]} maxBarSize={22} />
+                        <Bar dataKey="ng" name="Not Good" fill={C.red} radius={[4, 4, 0, 0]} maxBarSize={22} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartCard>
+                {ngBar(analytics.cutting.pond.ngPerComponent, C.red, 'Rate NG per Komponen / Pola', 'Persentase NG tiap pola (Cutting Pond)')}
+              </div>
+            </div>
+          )}
+
+          {/* ---------- CHECK PANEL ---------- */}
+          {tab === 'cp' && analytics && (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <StatTile label="Rate Kualitas" value={analytics.checkPanel.qualityRate} suffix="%" color={C.green} icon={Gauge} caption={`${fmtNum(analytics.checkPanel.good)} good`} />
+                <StatTile label="Rate NG" value={analytics.checkPanel.ngRate} suffix="%" color={C.red} icon={AlertTriangle} caption={`${fmtNum(analytics.checkPanel.ng)} not good`} />
+                <StatTile label="Total Inspeksi" value={analytics.checkPanel.total} suffix="pola" color={C.blue} icon={CheckSquare} caption="Good + Not Good" />
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-2 shadow-sm">
+                  {analytics.checkPanel.total === 0 ? <EmptyState label="Belum ada inspeksi" /> : (
+                    <ResponsiveContainer width="100%" height={96}>
+                      <PieChart>
+                        <Pie data={donutData(analytics.checkPanel.good, analytics.checkPanel.ng)} dataKey="value" nameKey="name" innerRadius={26} outerRadius={42} paddingAngle={2}>
+                          <Cell fill={C.green} /><Cell fill={C.red} />
+                        </Pie>
+                        <Tooltip {...tooltipStyle} />
+                        <Legend wrapperStyle={{ fontSize: 10, fontWeight: 700 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <ChartCard title="Trend Kualitas" subtitle="Rate Kualitas vs Rate NG per periode" icon={TrendingUp} color={C.green}>
+                  {analytics.checkPanel.trend.every(t => t.good + t.ng === 0) ? <EmptyState /> : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <AreaChart data={analytics.checkPanel.trend} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="cpQual" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.green} stopOpacity={0.35} /><stop offset="95%" stopColor={C.green} stopOpacity={0} /></linearGradient>
+                          <linearGradient id="cpNg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.red} stopOpacity={0.3} /><stop offset="95%" stopColor={C.red} stopOpacity={0} /></linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+                        <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} />
+                        <YAxis tick={axisTick} tickLine={false} axisLine={false} unit="%" />
+                        <Tooltip {...tooltipStyle} />
+                        <Legend wrapperStyle={{ fontSize: 12, fontWeight: 700 }} />
+                        <Area type="monotone" dataKey="qualityRate" name="Rate Kualitas" stroke={C.green} strokeWidth={2.5} fill="url(#cpQual)" />
+                        <Area type="monotone" dataKey="ngRate" name="Rate NG" stroke={C.red} strokeWidth={2.5} fill="url(#cpNg)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartCard>
+                {ngBar(analytics.checkPanel.ngPerComponent, C.red, 'Rate NG per Komponen / Pola', 'Persentase NG tiap pola (Check Panel)')}
+              </div>
+            </div>
+          )}
+
+          {/* ---------- SEWING ---------- */}
+          {tab === 'sewing' && analytics && (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <StatTile label="Total Sewing Start" value={analytics.sewing.totalStart} suffix="sets" color={C.blue} icon={Activity} caption="Mulai dijahit" />
+                <StatTile label="Total Sewing Finish" value={analytics.sewing.totalFinish} suffix="sets" color={C.green} icon={PackageCheck} caption="Selesai dijahit" />
+                <StatTile
+                  label="Efisiensi Finish"
+                  value={analytics.sewing.totalStart > 0 ? Math.round((analytics.sewing.totalFinish / analytics.sewing.totalStart) * 100) : 0}
+                  suffix="%" color={C.purple} icon={Gauge} caption="Finish / Start"
+                />
+              </div>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <ChartCard title="Grafik Produktivitas" subtitle="Sewing Start vs Finish per periode" icon={Shirt} color={C.purple}>
+                  {analytics.sewing.productivity.every(p => p.start + p.finish === 0) ? <EmptyState /> : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={analytics.sewing.productivity} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+                        <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} />
+                        <YAxis tick={axisTick} tickLine={false} axisLine={false} />
+                        <Tooltip {...tooltipStyle} />
+                        <Legend wrapperStyle={{ fontSize: 12, fontWeight: 700 }} />
+                        <Bar dataKey="start" name="Start" fill={C.blue} radius={[4, 4, 0, 0]} maxBarSize={22} />
+                        <Bar dataKey="finish" name="Finish" fill={C.purple} radius={[4, 4, 0, 0]} maxBarSize={22} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartCard>
+
+                <ChartCard title="Trend Produktivitas" subtitle="Output finish sewing per periode" icon={TrendingUp} color={C.green}>
+                  {analytics.sewing.trend.every(p => p.output === 0) ? <EmptyState /> : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <AreaChart data={analytics.sewing.trend} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="swTrend" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.green} stopOpacity={0.4} /><stop offset="95%" stopColor={C.green} stopOpacity={0} /></linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+                        <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} />
+                        <YAxis tick={axisTick} tickLine={false} axisLine={false} />
+                        <Tooltip {...tooltipStyle} />
+                        <Area type="monotone" dataKey="output" name="Output" stroke={C.green} strokeWidth={3} fill="url(#swTrend)" dot={{ r: 2 }} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartCard>
+              </div>
+            </div>
+          )}
+
+          {/* ---------- QUALITY CONTROL ---------- */}
+          {tab === 'qc' && analytics && (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <StatTile label="Rate Kualitas" value={analytics.qc.qualityRate} suffix="%" color={C.green} icon={Gauge} caption={`${fmtNum(analytics.qc.good)} good`} />
+                <StatTile label="Rate NG" value={analytics.qc.ngRate} suffix="%" color={C.red} icon={AlertTriangle} caption={`${fmtNum(analytics.qc.ng)} not good`} />
+                <StatTile label="Total Inspeksi" value={analytics.qc.total} suffix="sets" color={C.blue} icon={ShieldCheck} caption="Good + Not Good" />
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-2 shadow-sm">
+                  {analytics.qc.total === 0 ? <EmptyState label="Belum ada inspeksi" /> : (
+                    <ResponsiveContainer width="100%" height={96}>
+                      <PieChart>
+                        <Pie data={donutData(analytics.qc.good, analytics.qc.ng)} dataKey="value" nameKey="name" innerRadius={26} outerRadius={42} paddingAngle={2}>
+                          <Cell fill={C.green} /><Cell fill={C.red} />
+                        </Pie>
+                        <Tooltip {...tooltipStyle} />
+                        <Legend wrapperStyle={{ fontSize: 10, fontWeight: 700 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <ChartCard title="Trend Kualitas" subtitle="Rate Kualitas vs Rate NG per periode" icon={TrendingUp} color={C.green}>
+                  {analytics.qc.trend.every(t => t.good + t.ng === 0) ? <EmptyState /> : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <AreaChart data={analytics.qc.trend} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="qcQual" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.green} stopOpacity={0.35} /><stop offset="95%" stopColor={C.green} stopOpacity={0} /></linearGradient>
+                          <linearGradient id="qcNg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.red} stopOpacity={0.3} /><stop offset="95%" stopColor={C.red} stopOpacity={0} /></linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+                        <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} />
+                        <YAxis tick={axisTick} tickLine={false} axisLine={false} unit="%" />
+                        <Tooltip {...tooltipStyle} />
+                        <Legend wrapperStyle={{ fontSize: 12, fontWeight: 700 }} />
+                        <Area type="monotone" dataKey="qualityRate" name="Rate Kualitas" stroke={C.green} strokeWidth={2.5} fill="url(#qcQual)" />
+                        <Area type="monotone" dataKey="ngRate" name="Rate NG" stroke={C.red} strokeWidth={2.5} fill="url(#qcNg)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartCard>
+
+                <ChartCard title="Rate NG per Kategori" subtitle="Jumlah temuan NG per kategori defect (QC)" icon={AlertTriangle} color={C.red}>
+                  {analytics.qc.ngPerCategory.length === 0 ? <EmptyState label="Tidak ada NG pada rentang ini" /> : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart layout="vertical" data={analytics.qc.ngPerCategory.slice(0, 8)} margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
+                        <XAxis type="number" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} allowDecimals={false} />
+                        <YAxis type="category" dataKey="category" tick={axisTick} tickLine={false} axisLine={false} width={104} />
+                        <Tooltip {...tooltipStyle} formatter={(v: any) => [`${v} temuan`, 'Jumlah NG']} />
+                        <Bar dataKey="count" name="Jumlah NG" radius={[0, 6, 6, 0]} maxBarSize={22}>
+                          {analytics.qc.ngPerCategory.slice(0, 8).map((_, i) => <Cell key={i} fill={NG_PALETTE[i % NG_PALETTE.length]} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartCard>
+              </div>
+            </div>
+          )}
+        </div>
       )}
-
     </div>
   );
 };

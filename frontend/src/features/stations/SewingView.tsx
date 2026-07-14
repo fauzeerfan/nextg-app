@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Shirt, Activity, RefreshCw, Target, Package, Layers, ArrowRight, CheckCircle, Clock } from 'lucide-react';
+import { Shirt, Activity, RefreshCw, Target, Package, Layers, ArrowRight, CheckCircle, Clock, Info, XCircle, Play } from 'lucide-react';
 import type { ProductionOrder } from '../../types/production';
 import { TargetSummaryCard } from '../../components/ui/TargetSummaryCard';
+import type { LucideIcon } from 'lucide-react';
 
 const API_BASE_URL = 'http://202.52.15.30:4000';
 
@@ -26,7 +27,7 @@ interface SewingOp extends ProductionOrder {
 interface MetricCardProps {
   title: string;
   value: number | string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   color?: 'purple' | 'emerald' | 'blue' | 'amber';
   subtitle?: string;
   suffix?: string;
@@ -185,6 +186,36 @@ export const SewingView = () => {
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState('');
 
+  // ===== History (per-hari per-OP) =====
+  const [showHistory, setShowHistory] = useState(false);
+  const [histLoading, setHistLoading] = useState(false);
+  const [histRecords, setHistRecords] = useState<any[]>([]);
+
+  const fmtDate = (s: string) =>
+    s ? new Date(s).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+  const fmtTime = (s: string) =>
+    s ? new Date(s).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
+
+  const fetchHistory = useCallback(async () => {
+    setHistLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/production-orders/history/sewing`);
+      if (res.ok) {
+        const data = await res.json();
+        setHistRecords(data.records || []);
+      }
+    } catch {
+      console.error('Failed to fetch Sewing history');
+    } finally {
+      setHistLoading(false);
+    }
+  }, []);
+
+  const openHistory = () => {
+    fetchHistory();
+    setShowHistory(true);
+  };
+
   const fetchOps = useCallback(async () => {
     setLoading(true);
     try {
@@ -286,6 +317,14 @@ export const SewingView = () => {
                 {loading ? <RefreshCw size={18} className="animate-spin text-purple-600" /> : <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-500" />}
                 Refresh
               </button>
+              <button
+                onClick={openHistory}
+                className="px-5 py-3 bg-slate-800 dark:bg-slate-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-900 dark:hover:bg-slate-600 transition-all shadow-md shadow-slate-800/20"
+                title="Lihat riwayat sewing start & finish"
+              >
+                <Info size={18} />
+                <span className="uppercase tracking-wider text-xs">History</span>
+              </button>
             </div>
           </div>
         </div>
@@ -340,6 +379,83 @@ export const SewingView = () => {
           </div>
         )}
       </div>
+
+      {/* ===== HISTORY MODAL (Sewing) ===== */}
+      {showHistory && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-6xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg text-white">
+                  <Info size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white leading-none">History Sewing</h3>
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider">Sewing Start &amp; Finish — per-hari per-OP</p>
+                </div>
+              </div>
+              <button onClick={() => setShowHistory(false)} className="p-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors shadow-sm">
+                <XCircle size={24} className="text-slate-500" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 flex-1 overflow-auto bg-slate-50/30 dark:bg-slate-900/30 custom-scrollbar">
+              {histLoading ? (
+                <div className="flex flex-col items-center justify-center h-full text-slate-500 py-16">
+                  <RefreshCw size={40} className="mb-4 animate-spin text-purple-500" />
+                  <p className="font-bold">Memuat riwayat...</p>
+                </div>
+              ) : histRecords.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-slate-500 py-16">
+                  <Info size={44} className="mb-4 text-slate-300 dark:text-slate-600" />
+                  <p className="font-bold text-lg">Belum ada riwayat sewing</p>
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-100 dark:bg-slate-700/50">
+                        <tr className="text-left text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                          <th className="py-3.5 px-4">Tanggal</th>
+                          <th className="py-3.5 px-4">Waktu Terakhir</th>
+                          <th className="py-3.5 px-4">No. OP</th>
+                          <th className="py-3.5 px-4">No. FG</th>
+                          <th className="py-3.5 px-4">Deskripsi FG</th>
+                          <th className="py-3.5 px-4">Line</th>
+                          <th className="py-3.5 px-4 text-right text-blue-600 dark:text-blue-400">Sewing Start</th>
+                          <th className="py-3.5 px-4 text-right text-emerald-600 dark:text-emerald-400">Sewing Finish</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                        {histRecords.map((r, i) => (
+                          <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                            <td className="py-3 px-4 font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{fmtDate(r.date)}</td>
+                            <td className="py-3 px-4 text-slate-500 dark:text-slate-400 whitespace-nowrap"><span className="inline-flex items-center gap-1"><Clock size={12} />{fmtTime(r.lastAt)}</span></td>
+                            <td className="py-3 px-4 font-mono font-black text-slate-900 dark:text-white whitespace-nowrap">{r.opNumber}</td>
+                            <td className="py-3 px-4 font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">{r.itemNumberFG}</td>
+                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400 max-w-[220px] truncate" title={r.itemNameFG || ''}>{r.itemNameFG || '-'}</td>
+                            <td className="py-3 px-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{r.lineCode || '-'}</td>
+                            <td className="py-3 px-4 text-right font-black text-blue-600 dark:text-blue-400"><span className="inline-flex items-center gap-1 justify-end"><Play size={12} />{r.start || 0}</span></td>
+                            <td className="py-3 px-4 text-right font-black text-emerald-600 dark:text-emerald-400"><span className="inline-flex items-center gap-1 justify-end"><CheckCircle size={12} />{r.finish || 0}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col sm:flex-row gap-3 justify-between items-center">
+              <div className="text-xs font-semibold text-slate-400 dark:text-slate-500">Agregat per-hari per-OP • 90 hari terakhir</div>
+              <button onClick={() => setShowHistory(false)} className="px-8 py-3 bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-black hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors uppercase tracking-wider">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

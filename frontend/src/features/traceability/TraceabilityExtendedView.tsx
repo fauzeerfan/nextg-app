@@ -16,6 +16,25 @@ interface BcDocument {
   tanggal_dokumen_bc: string;
 }
 
+// Detail penerimaan material (batch + dokumen BC) — ditampilkan di AWAL hasil trace by OP
+interface MaterialReceipt {
+  set_artnr_u: string;
+  Art_name: string;
+  consumptionPerUnit: number;
+  unit: string;
+  list_batch: string[];
+  list_dokumen_bc: BcDocument[];
+}
+
+// Surat jalan pengiriman — ditampilkan di AKHIR hasil trace by OP
+interface DeliveryNote {
+  suratJalan: string;
+  shipmentDate: string;
+  fgNumber: string;
+  qty: number;
+  shipmentTotalQty: number;
+}
+
 interface PatternProgress {
   patternIndex: number;
   patternName: string;
@@ -79,6 +98,9 @@ interface OpTraceResult {
   totalPacked: number;
   fgStockQty: number;
   bcDocuments: BcDocument[];
+  materialReceipts?: MaterialReceipt[];
+  deliveryNotes?: DeliveryNote[];
+  isShipped?: boolean;
   updatedAt: string;
   cuttingEntanDetails?: {
     batches: { batchNumber: number; qty: number; createdAt: string }[];
@@ -240,20 +262,24 @@ const uniqueBcDocuments = (docs: BcDocument[]): BcDocument[] => {
   });
 };
 
-const OpDetailCard = ({ 
-  op, 
-  isExpanded, 
-  onToggle, 
-  detailed = true, 
+const OpDetailCard = ({
+  op,
+  isExpanded,
+  onToggle,
+  detailed = true,
   showBcDocuments = true,
-  showProductionInfo = true 
-}: { 
-  op: OpTraceResult; 
-  isExpanded: boolean; 
-  onToggle: () => void; 
-  detailed?: boolean; 
+  showProductionInfo = true,
+  enhancedReceiving = false,
+  showDeliveryNotes = false
+}: {
+  op: OpTraceResult;
+  isExpanded: boolean;
+  onToggle: () => void;
+  detailed?: boolean;
   showBcDocuments?: boolean;
   showProductionInfo?: boolean;
+  enhancedReceiving?: boolean;
+  showDeliveryNotes?: boolean;
 }) => {
   const formatDateRange = (dateRange?: string) => {
     if (!dateRange || dateRange === '-') return '-';
@@ -339,7 +365,7 @@ const OpDetailCard = ({
 
       {isExpanded && (
         <div className="p-5 md:p-8 space-y-6 bg-slate-50/50 dark:bg-slate-900/30 border-t-2 border-slate-100 dark:border-slate-700">
-          {showBcDocuments && op.bcDocuments.length > 0 && (
+          {showBcDocuments && !enhancedReceiving && op.bcDocuments.length > 0 && (
             <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border-2 border-rose-200 dark:border-rose-800/50 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/5 rounded-bl-full pointer-events-none"></div>
               <h5 className="text-sm md:text-base font-black text-rose-700 dark:text-rose-400 mb-5 flex items-center gap-2 uppercase tracking-wide">
@@ -363,6 +389,102 @@ const OpDetailCard = ({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* ===== AWAL: PENERIMAAN MATERIAL & DOKUMEN BC (khusus trace by OP) ===== */}
+          {enhancedReceiving && (
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border-2 border-rose-200 dark:border-rose-800/50 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/5 rounded-bl-full pointer-events-none"></div>
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400 flex items-center justify-center shrink-0">
+                  <FileText size={18} />
+                </div>
+                <h5 className="text-sm md:text-base font-black text-rose-700 dark:text-rose-400 uppercase tracking-wide">
+                  Penerimaan Material &amp; Dokumen BC
+                </h5>
+              </div>
+              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 mb-5 ml-12">Titik awal traceability — dokumen BC penerimaan material untuk OP ini</p>
+
+              {op.materialReceipts && op.materialReceipts.length > 0 ? (
+                <div className="space-y-4">
+                  {op.materialReceipts.map((mat, idx) => {
+                    const formatNumber = (num: number) => {
+                      if (num % 1 === 0) return num.toString();
+                      return parseFloat(num.toFixed(4)).toString();
+                    };
+                    return (
+                      <div key={idx} className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-rose-100 dark:border-rose-800/50 p-4 md:p-5 shadow-sm">
+                        <div className="flex flex-wrap justify-between items-start gap-3 mb-3">
+                          <div>
+                            <div className="font-mono font-black text-sm text-slate-900 dark:text-white">Part Number: {mat.set_artnr_u || '-'}</div>
+                            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">{mat.Art_name || '-'}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Konsumsi / unit</div>
+                            <div className="font-black text-base text-amber-600 dark:text-amber-400">{formatNumber(mat.consumptionPerUnit)} {mat.unit}</div>
+                          </div>
+                        </div>
+
+                        {mat.list_batch && mat.list_batch.length > 0 && (
+                          <div className="mb-3 flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Batch:</span>
+                            {mat.list_batch.map((b, bi) => (
+                              <span key={bi} className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-mono font-bold text-slate-600 dark:text-slate-300 shadow-sm">{b}</span>
+                            ))}
+                          </div>
+                        )}
+
+                        {mat.list_dokumen_bc && mat.list_dokumen_bc.length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-3 border-t border-rose-100 dark:border-slate-700/50">
+                            {uniqueBcDocuments(mat.list_dokumen_bc).map((doc, di) => (
+                              <div key={di} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-rose-100 dark:border-rose-800/50 text-sm text-slate-700 dark:text-slate-300 shadow-sm">
+                                <div className="flex justify-between items-center mb-3 pb-3 border-b border-rose-100 dark:border-slate-700/50">
+                                  <span className="text-slate-500 font-bold uppercase text-xs tracking-wider">No. EL</span>
+                                  <span className="font-black text-rose-600 dark:text-rose-400 text-base">{doc.nomor_el}</span>
+                                </div>
+                                <div className="flex justify-between items-center mb-2">
+                                  <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Dokumen</span>
+                                  <span className="font-bold text-slate-800 dark:text-slate-200">{doc.nomor_dokumen_bc}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Tanggal</span>
+                                  <span className="font-bold text-slate-800 dark:text-slate-200">{new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-xs font-bold text-slate-400 pt-3 border-t border-rose-100 dark:border-slate-700/50">Tidak ada dokumen BC untuk material ini.</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : op.bcDocuments && op.bcDocuments.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {uniqueBcDocuments(op.bcDocuments).map((doc, idx) => (
+                    <div key={idx} className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-rose-100 dark:border-rose-800/50 text-sm text-slate-700 dark:text-slate-300 shadow-sm">
+                      <div className="flex justify-between items-center mb-3 pb-3 border-b border-rose-100 dark:border-slate-700/50">
+                        <span className="text-slate-500 font-bold uppercase text-xs tracking-wider">No. EL</span>
+                        <span className="font-black text-rose-600 dark:text-rose-400 text-base">{doc.nomor_el}</span>
+                      </div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Dokumen</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">{doc.nomor_dokumen_bc}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Tanggal</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">{new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm font-bold text-slate-500 bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl flex items-center justify-center gap-3 border-2 border-dashed border-slate-200 dark:border-slate-700 uppercase tracking-wide">
+                  <FileText size={20} /> Belum ada data dokumen BC penerimaan
+                </div>
+              )}
             </div>
           )}
 
@@ -713,6 +835,56 @@ const OpDetailCard = ({
               </div>
             </div>
           )}
+
+          {/* ===== AKHIR: SURAT JALAN PENGIRIMAN (khusus trace by OP) ===== */}
+          {showDeliveryNotes && (
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border-2 border-blue-200 dark:border-blue-800/50 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-full pointer-events-none"></div>
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 flex items-center justify-center shrink-0">
+                  <Truck size={18} />
+                </div>
+                <h5 className="text-sm md:text-base font-black text-blue-700 dark:text-blue-400 uppercase tracking-wide">
+                  Surat Jalan Pengiriman
+                </h5>
+              </div>
+              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 mb-5 ml-12">Titik akhir traceability — pengiriman finished goods untuk OP ini</p>
+
+              {op.deliveryNotes && op.deliveryNotes.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {op.deliveryNotes.map((dn, idx) => (
+                    <div key={idx} className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-blue-100 dark:border-blue-800/50 text-sm text-slate-700 dark:text-slate-300 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex justify-between items-center mb-3 pb-3 border-b border-blue-100 dark:border-slate-700/50">
+                        <span className="text-slate-500 font-bold uppercase text-xs tracking-wider">Surat Jalan</span>
+                        <span className="font-black text-blue-600 dark:text-blue-400 text-base">{dn.suratJalan}</span>
+                      </div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Qty Dikirim</span>
+                        <span className="font-black text-slate-800 dark:text-slate-200">{dn.qty} pcs</span>
+                      </div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">FG</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">{dn.fgNumber}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Tanggal</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">{new Date(dn.shipmentDate).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-amber-50 dark:bg-amber-900/20 p-5 rounded-2xl border-2 border-dashed border-amber-200 dark:border-amber-800/60">
+                  <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/50 rounded-xl flex items-center justify-center shrink-0 text-amber-600 dark:text-amber-400">
+                    <Archive size={20} />
+                  </div>
+                  <div className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                    OP ini <span className="font-black">belum dikirim</span> — masih berada di Finished Goods (stok {op.fgStockQty} pcs). Nomor surat jalan akan muncul setelah proses pengiriman dilakukan.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -820,7 +992,7 @@ export const TraceabilityExtendedView = () => {
           </div>
         </div>
       </div>
-      <OpDetailCard op={op} isExpanded={true} onToggle={() => {}} detailed={true} showBcDocuments={true} showProductionInfo={true} />
+      <OpDetailCard op={op} isExpanded={true} onToggle={() => {}} detailed={true} showBcDocuments={false} showProductionInfo={true} enhancedReceiving={true} showDeliveryNotes={true} />
     </div>
   );
 

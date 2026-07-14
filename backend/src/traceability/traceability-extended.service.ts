@@ -29,6 +29,25 @@ export interface BcDocument {
   tanggal_dokumen_bc: string;
 }
 
+// ===== TAMBAHAN: detail penerimaan material (awal) & surat jalan (akhir) untuk trace by OP =====
+export interface MaterialReceiptDetail {
+  set_artnr_u: string;          // part number material
+  Art_name: string;             // nama material
+  consumptionPerUnit: number;   // konsumsi per 1 pcs FG (field "total" dari external API)
+  unit: string;                 // satuan (Art_einheit)
+  list_batch: string[];         // daftar batch penerimaan
+  list_dokumen_bc: BcDocument[];// dokumen BC penerimaan untuk material ini
+}
+
+export interface DeliveryNoteDetail {
+  suratJalan: string;           // nomor surat jalan pengiriman
+  shipmentDate: Date;           // tanggal pengiriman
+  fgNumber: string;             // finished goods pada surat jalan
+  qty: number;                  // qty OP ini yang dikirim pada surat jalan tsb
+  shipmentTotalQty: number;     // total qty surat jalan tsb
+}
+// ===== AKHIR TAMBAHAN =====
+
 export interface CuttingBatchDetail {
   batchNumber: number;
   qty: number;
@@ -101,6 +120,9 @@ export interface OpTraceFullResult {
   totalPacked: number;
   fgStockQty: number;
   bcDocuments: BcDocument[];
+  materialReceipts: MaterialReceiptDetail[];   // penerimaan material + dokumen BC (disimpan di awal)
+  deliveryNotes: DeliveryNoteDetail[];         // surat jalan pengiriman (disimpan di akhir)
+  isShipped: boolean;                          // true jika OP sudah pernah dikirim (punya surat jalan)
   cuttingEntanDetails?: {
     batches: { batchNumber: number; qty: number; createdAt: string }[];
     totalCutSets: number;
@@ -225,25 +247,84 @@ export class TraceabilityExtendedService {
     return docNumber.replace(/^0+/, '');
   }
 
-  async getBcDocumentsForOp(op_number: string, item_fg: string): Promise<BcDocument[]> {
+  /**
+   * Mengambil detail penerimaan material (batch + dokumen BC) untuk sebuah OP langsung dari
+   * external traceability API. Dokumen BC pada external API berada di dalam
+   * list_material[].list_dokumen_bc (bukan top-level), sama seperti yang dipakai pada
+   * pencarian "Berdasarkan Surat Jalan". Karena query berbasis OP + FG (bukan surat jalan),
+   * data ini tetap tersedia walaupun OP belum dikirim / masih berada di Finished Goods.
+   */
+  async getReceivingDetailsForOp(
+    op_number: string,
+    item_fg: string,
+  ): Promise<{ bcDocuments: BcDocument[]; materialReceipts: MaterialReceiptDetail[] }> {
     try {
       const response = await firstValueFrom(
-        this.httpService.post(this.externalApiUrl, [{ op_number, item_fg }]).pipe(timeout(10000))
+        this.httpService.post(this.externalApiUrl, [{ op_number, item_fg }]).pipe(timeout(10000)),
       );
       const data = response.data;
-      if (Array.isArray(data) && data.length > 0 && data[0].list_dokumen_bc) {
-        return data[0].list_dokumen_bc.map((doc: any) => ({
-          nomor_el: doc.nomor_el,
-          kode_bc: doc.kode_bc,
-          nomor_dokumen_bc: doc.nomor_dokumen_bc,
-          tanggal_dokumen_bc: doc.tanggal_dokumen_bc
-        }));
+      const entry = Array.isArray(data) ? data[0] : data;
+      if (!entry) return { bcDocuments: [], materialReceipts: [] };
+
+      const materialsRaw = Array.isArray(entry.list_material) ? entry.list_material : [];
+      const materialReceipts: MaterialReceiptDetail[] = materialsRaw.map((m: any) => ({
+        set_artnr_u: m.material?.set_artnr_u ?? '',
+        Art_name: m.material?.Art_name ?? '',
+        consumptionPerUnit: m.material?.total ?? 0,
+        unit: m.material?.Art_einheit ?? '',
+        list_batch: Array.isArray(m.list_batch) ? m.list_batch : [],
+        list_dokumen_bc: Array.isArray(m.list_dokumen_bc)
+          ? m.list_dokumen_bc.map((doc: any) => ({
+              nomor_el: doc.nomor_el,
+              kode_bc: doc.kode_bc,
+              nomor_dokumen_bc: doc.nomor_dokumen_bc,
+              tanggal_dokumen_bc: doc.tanggal_dokumen_bc,
+            }))
+          : [],
+      }));
+
+      // Gabungkan & dedupe seluruh dokumen BC dari semua material menjadi satu daftar ringkas
+      const seen = new Set<string>();
+      const bcDocuments: BcDocument[] = [];
+      for (const mat of materialReceipts) {
+        for (const doc of mat.list_dokumen_bc) {
+          const key = `${doc.nomor_dokumen_bc}|${doc.nomor_el}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          bcDocuments.push(doc);
+        }
       }
-      return [];
+
+      // Fallback: bila (untuk sebagian respons) dokumen BC berada di top-level
+      if (bcDocuments.length === 0 && Array.isArray(entry.list_dokumen_bc)) {
+        for (const doc of entry.list_dokumen_bc) {
+          const key = `${doc.nomor_dokumen_bc}|${doc.nomor_el}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          bcDocuments.push({
+            nomor_el: doc.nomor_el,
+            kode_bc: doc.kode_bc,
+            nomor_dokumen_bc: doc.nomor_dokumen_bc,
+            tanggal_dokumen_bc: doc.tanggal_dokumen_bc,
+          });
+        }
+      }
+
+      return { bcDocuments, materialReceipts };
     } catch (error) {
-      console.error(`Error fetching BC for OP ${op_number}:`, error instanceof Error ? error.message : String(error));
-      return [];
+      this.logger.warn(
+        `Error fetching receiving details for OP ${op_number}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return { bcDocuments: [], materialReceipts: [] };
     }
+  }
+
+  /**
+   * Kompatibilitas: mengembalikan hanya daftar dokumen BC (versi ringkas) untuk sebuah OP.
+   */
+  async getBcDocumentsForOp(op_number: string, item_fg: string): Promise<BcDocument[]> {
+    const { bcDocuments } = await this.getReceivingDetailsForOp(op_number, item_fg);
+    return bcDocuments;
   }
 
   async traceByOpNumberFull(opNumber: string): Promise<OpTraceFullResult> {
@@ -376,7 +457,30 @@ export class TraceabilityExtendedService {
     const packingDates = packingSessions.map(p => p.createdAt);
 
     const fgStockQty = op.fgItems.reduce((sum, f) => sum + f.qty, 0);
-    const bcDocuments = await this.getBcDocumentsForOp(op.opNumber, op.itemNumberFG);
+
+    // ===== PENERIMAAN MATERIAL & DOKUMEN BC (disimpan di AWAL hasil trace OP) =====
+    // Diambil langsung dari external traceability API berbasis OP + FG, sehingga tetap
+    // muncul walaupun OP belum dikirim / masih berada di Finished Goods.
+    const { bcDocuments, materialReceipts } = await this.getReceivingDetailsForOp(
+      op.opNumber,
+      op.itemNumberFG,
+    );
+
+    // ===== SURAT JALAN PENGIRIMAN (disimpan di AKHIR hasil trace OP) =====
+    // Diambil dari relasi shipmentItems -> shipment. Bila OP belum dikirim, array ini kosong
+    // (frontend akan menampilkan status "masih di Finished Goods").
+    const deliveryNotes: DeliveryNoteDetail[] = op.shipmentItems
+      .map((si) => ({
+        suratJalan: si.shipment.suratJalan,
+        shipmentDate: si.shipment.createdAt,
+        fgNumber: si.shipment.fgNumber,
+        qty: si.qty,
+        shipmentTotalQty: si.shipment.totalQty,
+      }))
+      .sort(
+        (a, b) => new Date(a.shipmentDate).getTime() - new Date(b.shipmentDate).getTime(),
+      );
+    const isShipped = deliveryNotes.length > 0;
 
     const getDateRange = (dates: Date[]): string => {
       if (dates.length === 0) return '-';
@@ -553,6 +657,9 @@ export class TraceabilityExtendedService {
       totalPacked: totalPackedAll,
       fgStockQty,
       bcDocuments,
+      materialReceipts,
+      deliveryNotes,
+      isShipped,
       cuttingEntanDetails,
       cuttingPondDetails,
       checkPanelDetails,
