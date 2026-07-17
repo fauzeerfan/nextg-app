@@ -3,9 +3,17 @@ import {
   NotFoundException,
   BadRequestException,
   InternalServerErrorException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StationCode, ProductionStatus, OpLevel } from '@prisma/client';
+
+// Role yang selalu boleh edit/hapus & approve request (ralat: hanya Administrator).
+// Selain itu, user dengan flag canEditCuttingReport juga berwenang.
+const PRIVILEGED_ROLES = ['ADMINISTRATOR'];
+
+// Identitas pemanggil (dari JWT) untuk cek hak akses lock.
+type Actor = { userId?: string; role?: string; username?: string };
 
 // Grup item yang tergolong AUTOMOTIVE (acuan dari app cutting report lama).
 const AUTOMOTIVE_GROUPS = [
@@ -32,6 +40,109 @@ const num = (x: any) => Number(x) || 0;
 @Injectable()
 export class CuttingReportService {
   constructor(private prisma: PrismaService) {}
+
+  // ===== LOCK OTOMATIS (released) + AKSES (admin / user berwenang / grant) =====
+  private isPrivilegedRole(role?: string): boolean {
+    return !!role && PRIVILEGED_ROLES.includes(role.toUpperCase());
+  }
+
+  // "released" = OTOMATIS terkunci saat ada entan yang sudah dikirim ke produksi.
+  private async isReleased(formId: string): Promise<boolean> {
+    const c = await this.prisma.cuttingEntan.count({ where: { postedQty: { gt: 0 }, formOp: { formId } } });
+    return c > 0;
+  }
+
+  // Hak edit Cutting Report terkunci: Administrator, atau user ber-flag canEditCuttingReport.
+  private async actorHasEditRight(actor?: Actor): Promise<boolean> {
+    if (this.isPrivilegedRole(actor?.role)) return true;
+    if (actor?.userId) {
+      const u = await this.prisma.user.findUnique({ where: { id: actor.userId }, select: { role: true, canEditCuttingReport: true } });
+      if (u && (this.isPrivilegedRole(u.role) || u.canEditCuttingReport)) return true;
+    }
+    return false;
+  }
+
+  private async assertCanEditForm(formId: string | null | undefined, actor?: Actor) {
+    if (!formId) return;
+    if (!(await this.isReleased(formId))) return;            // belum released -> bebas
+    if (await this.actorHasEditRight(actor)) return;         // admin / user berwenang
+    const form = await this.prisma.cuttingForm.findUnique({ where: { id: formId }, select: { editGrantUserIds: true } });
+    const grants = Array.isArray((form as any)?.editGrantUserIds) ? ((form as any).editGrantUserIds as string[]) : [];
+    if (actor?.userId && grants.includes(actor.userId)) return; // sudah di-approve untuk form ini
+    throw new ForbiddenException(
+      'Cutting Report ini sudah dikirim ke produksi (terkunci). Edit/hapus hanya oleh Administrator atau user berwenang. Silakan ajukan request.',
+    );
+  }
+  private async assertCanEditByOp(opId: string, actor?: Actor) {
+    const o = await this.prisma.cuttingFormOp.findUnique({ where: { id: opId }, select: { formId: true } });
+    await this.assertCanEditForm(o?.formId, actor);
+  }
+  private async assertCanEditByEntan(entanId: string, actor?: Actor) {
+    const e = await this.prisma.cuttingEntan.findUnique({ where: { id: entanId }, select: { formOp: { select: { formId: true } } } });
+    await this.assertCanEditForm((e as any)?.formOp?.formId, actor);
+  }
+  private async assertCanEditByDetail(detailId: string, actor?: Actor) {
+    const d = await this.prisma.cuttingDetail.findUnique({ where: { id: detailId }, select: { entan: { select: { formOp: { select: { formId: true } } } } } });
+    await this.assertCanEditForm((d as any)?.entan?.formOp?.formId, actor);
+  }
+  private async assertCanEditByMaterial(materialId: string, actor?: Actor) {
+    const m = await this.prisma.cuttingFormOpMaterial.findUnique({ where: { id: materialId }, select: { formOp: { select: { formId: true } } } });
+    await this.assertCanEditForm((m as any)?.formOp?.formId, actor);
+  }
+  private async assertCanEditByTurunan(turunanId: string, actor?: Actor) {
+    const t = await this.prisma.cuttingTurunan.findUnique({ where: { id: turunanId }, select: { material: { select: { formOp: { select: { formId: true } } } } } });
+    await this.assertCanEditForm((t as any)?.material?.formOp?.formId, actor);
+  }
+
+  // ===== REQUEST edit/hapus + APPROVAL (untuk notifikasi) =====
+  async createEditRequest(dto: { formId: string; requestType?: string; targetLabel?: string; note?: string }, actor?: Actor) {
+    const form = await this.prisma.cuttingForm.findUnique({ where: { id: dto.formId }, select: { id: true, kodeForm: true } });
+    if (!form) throw new NotFoundException('Form not found');
+    return this.prisma.cuttingReportRequest.create({
+      data: {
+        formId: form.id,
+        kodeForm: form.kodeForm,
+        requestType: dto.requestType === 'DELETE' ? 'DELETE' : 'EDIT',
+        targetLabel: dto.targetLabel ?? null,
+        note: dto.note ?? null,
+        requestedById: actor?.userId ?? null,
+        requestedByName: actor?.username ?? 'Operator',
+        status: 'PENDING',
+      },
+    });
+  }
+
+  async listRequests(actor?: Actor) {
+    const isApprover = await this.actorHasEditRight(actor);
+    const where = isApprover ? {} : { requestedById: actor?.userId ?? '__none__' };
+    const requests = await this.prisma.cuttingReportRequest.findMany({ where, orderBy: { createdAt: 'desc' }, take: 100 });
+    const pendingCount = isApprover ? await this.prisma.cuttingReportRequest.count({ where: { status: 'PENDING' } }) : 0;
+    return { isApprover, pendingCount, requests };
+  }
+
+  async reviewRequest(id: string, action: 'APPROVE' | 'REJECT', actor?: Actor) {
+    if (!(await this.actorHasEditRight(actor))) {
+      throw new ForbiddenException('Hanya Administrator atau user berwenang yang bisa menyetujui/menolak.');
+    }
+    const req = await this.prisma.cuttingReportRequest.findUnique({ where: { id } });
+    if (!req) throw new NotFoundException('Request not found');
+    if (req.status !== 'PENDING') return req;
+    if (action === 'APPROVE') {
+      const form = await this.prisma.cuttingForm.findUnique({ where: { id: req.formId }, select: { editGrantUserIds: true } });
+      const grants = Array.isArray((form as any)?.editGrantUserIds) ? ((form as any).editGrantUserIds as string[]) : [];
+      if (req.requestedById && !grants.includes(req.requestedById)) grants.push(req.requestedById);
+      await this.prisma.cuttingForm.update({ where: { id: req.formId }, data: { editGrantUserIds: grants } });
+    }
+    return this.prisma.cuttingReportRequest.update({
+      where: { id },
+      data: {
+        status: action === 'APPROVE' ? 'APPROVED' : 'REJECTED',
+        reviewedById: actor?.userId ?? null,
+        reviewedByName: actor?.username ?? null,
+        reviewedAt: new Date(),
+      },
+    });
+  }
 
   private variantOf(group: string): 'AUT' | 'NAT' {
     return AUTOMOTIVE_GROUPS.includes((group || '').toUpperCase()) ? 'AUT' : 'NAT';
@@ -124,13 +235,13 @@ export class CuttingReportService {
   }
 
   // Tambah OP ke form cukup dengan nomor OP (auto-resolve)
-  async addOpByNumber(formId: string, dto: { opNumber: string }) {
+  async addOpByNumber(formId: string, dto: { opNumber: string }, actor?: Actor) {
     const info = await this.resolveOpInfo(dto.opNumber);
     return this.addOp(formId, {
       opNumber: info.opNumber,
       style: info.style,
       group: info.group,
-    });
+    }, actor);
   }
 
   // =====================================================
@@ -191,23 +302,28 @@ export class CuttingReportService {
     const forms = await this.prisma.cuttingForm.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
-        ops: { select: { opNumber: true, entans: { select: { id: true } } } },
+        ops: { select: { opNumber: true, entans: { select: { id: true, postedQty: true } } } },
       },
     });
-    return forms.map((f) => ({
-      id: f.id,
-      kodeForm: f.kodeForm,
-      shipDate: f.shipDate,
-      creatorName: f.creatorName,
-      status: f.status,
-      createdAt: f.createdAt,
-      updatedAt: f.updatedAt,
-      listOp: f.ops.map((o) => o.opNumber),
-      jumlahEntan: f.ops.reduce((s, o) => s + o.entans.length, 0),
-    }));
+    return forms.map((f) => {
+      // Lock OTOMATIS: terkunci saat ada entan yang sudah dikirim ke produksi.
+      const locked = f.ops.some((o) => o.entans.some((e) => (e.postedQty || 0) > 0));
+      return {
+        id: f.id,
+        kodeForm: f.kodeForm,
+        shipDate: f.shipDate,
+        creatorName: f.creatorName,
+        status: f.status,
+        locked,
+        createdAt: f.createdAt,
+        updatedAt: f.updatedAt,
+        listOp: f.ops.map((o) => o.opNumber),
+        jumlahEntan: f.ops.reduce((s, o) => s + o.entans.length, 0),
+      };
+    });
   }
 
-  async getForm(id: string) {
+  async getForm(id: string, actor?: Actor) {
     const form = await this.prisma.cuttingForm.findUnique({
       where: { id },
       include: {
@@ -224,12 +340,23 @@ export class CuttingReportService {
       },
     });
     if (!form) throw new NotFoundException('Form not found');
-    return form;
+    // Lock OTOMATIS (released) + apakah actor boleh mengedit form ini.
+    const locked = (form.ops as any[]).some((o) => (o.entans as any[]).some((e) => (e.postedQty || 0) > 0));
+    let canEdit = !locked;
+    if (locked) {
+      if (await this.actorHasEditRight(actor)) canEdit = true;
+      else {
+        const grants = Array.isArray((form as any).editGrantUserIds) ? ((form as any).editGrantUserIds as string[]) : [];
+        canEdit = !!(actor?.userId && grants.includes(actor.userId));
+      }
+    }
+    return { ...form, locked, canEdit };
   }
 
-  async deleteForm(id: string) {
+  async deleteForm(id: string, actor?: Actor) {
     const form = await this.prisma.cuttingForm.findUnique({ where: { id } });
     if (!form) throw new NotFoundException('Form not found');
+    await this.assertCanEditForm(id, actor);
     return this.prisma.cuttingForm.delete({ where: { id } });
   }
 
@@ -239,9 +366,21 @@ export class CuttingReportService {
   async addOp(
     formId: string,
     dto: { opNumber: string; style: string; group?: string },
+    _actor?: Actor,
   ) {
     const form = await this.prisma.cuttingForm.findUnique({ where: { id: formId } });
     if (!form) throw new NotFoundException('Form not found');
+
+    // KESEPAKATAN: 1 sesi/dokumen CR = 1 OP. Bila form ini sudah memiliki OP,
+    // tolak penambahan OP kedua. (Frontend juga menonaktifkan tombol Tambah OP.)
+    const existingOpCount = await this.prisma.cuttingFormOp.count({
+      where: { formId },
+    });
+    if (existingOpCount > 0) {
+      throw new BadRequestException(
+        'Satu sesi Cutting Report hanya untuk 1 OP. OP sudah ditambahkan pada sesi ini.',
+      );
+    }
 
     const group = (dto.group || DEFAULT_GROUP).toUpperCase();
     const list = await this.getOpList(group, dto.style);
@@ -281,16 +420,17 @@ export class CuttingReportService {
     });
   }
 
-  async removeOp(opId: string) {
+  async removeOp(opId: string, actor?: Actor) {
     const op = await this.prisma.cuttingFormOp.findUnique({ where: { id: opId } });
     if (!op) throw new NotFoundException('OP not found');
+    await this.assertCanEditByOp(opId, actor);
     return this.prisma.cuttingFormOp.delete({ where: { id: opId } });
   }
 
   // =====================================================
   // ENTAN
   // =====================================================
-  async addEntan(opId: string) {
+  async addEntan(opId: string, _actor?: Actor) {
     const op = await this.prisma.cuttingFormOp.findUnique({ where: { id: opId } });
     if (!op) throw new NotFoundException('OP not found');
     const last = await this.prisma.cuttingEntan.findFirst({
@@ -302,7 +442,7 @@ export class CuttingReportService {
     });
   }
 
-  async approveEntan(entanId: string) {
+  async approveEntan(entanId: string, _actor?: Actor) {
     const entan = await this.prisma.cuttingEntan.findUnique({ where: { id: entanId } });
     if (!entan) throw new NotFoundException('Entan not found');
     return this.prisma.cuttingEntan.update({
@@ -332,7 +472,7 @@ export class CuttingReportService {
     return { turunanId: null, turunanKe: null };
   }
 
-  async saveDetail(entanId: string, dto: any) {
+  async saveDetail(entanId: string, dto: any, _actor?: Actor) {
     const entan = await this.prisma.cuttingEntan.findUnique({ where: { id: entanId } });
     if (!entan) throw new NotFoundException('Entan not found');
     if (!dto.materialId) throw new BadRequestException('materialId wajib diisi');
@@ -371,9 +511,10 @@ export class CuttingReportService {
     return detail;
   }
 
-  async updateDetail(id: string, dto: any) {
+  async updateDetail(id: string, dto: any, actor?: Actor) {
     const existing = await this.prisma.cuttingDetail.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Detail not found');
+    await this.assertCanEditByDetail(id, actor);
     const merged = { ...existing, ...dto };
     const computed = this.compute(merged);
 
@@ -419,15 +560,16 @@ export class CuttingReportService {
     return detail;
   }
 
-  async deleteDetail(id: string) {
+  async deleteDetail(id: string, actor?: Actor) {
     const existing = await this.prisma.cuttingDetail.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Detail not found');
+    await this.assertCanEditByDetail(id, actor);
     await this.prisma.cuttingDetail.delete({ where: { id } });
     await this.recalcMaterialProgress(existing.materialId);
     return { success: true };
   }
 
-  async copyDetail(id: string) {
+  async copyDetail(id: string, _actor?: Actor) {
     const src = await this.prisma.cuttingDetail.findUnique({ where: { id } });
     if (!src) throw new NotFoundException('Detail not found');
     const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = src as any;
@@ -483,7 +625,7 @@ export class CuttingReportService {
   }
 
   // Buat grup turunan baru (noTurun = max + 1). Anti balapan nomor unik.
-  async createTurunan(materialId: string) {
+  async createTurunan(materialId: string, _actor?: Actor) {
     const material = await this.prisma.cuttingFormOpMaterial.findUnique({
       where: { id: materialId },
     });
@@ -507,9 +649,10 @@ export class CuttingReportService {
     throw new InternalServerErrorException('Gagal membuat nomor turunan unik');
   }
 
-  async deleteTurunan(turunanId: string) {
+  async deleteTurunan(turunanId: string, actor?: Actor) {
     const t = await this.prisma.cuttingTurunan.findUnique({ where: { id: turunanId } });
     if (!t) throw new NotFoundException('Turunan tidak ditemukan');
+    await this.assertCanEditByTurunan(turunanId, actor);
     // Hapus baris NAT di dalam grup secara eksplisit lalu hapus grupnya,
     // supaya tidak ada baris NAT yatim (turunanId null tapi tetap NAT).
     await this.prisma.cuttingDetail.deleteMany({ where: { turunanId } });
@@ -577,7 +720,7 @@ export class CuttingReportService {
   // =====================================================
   // FASE 5: KIRIM HASIL CUTTING REPORT -> PRODUKSI (hanya style diizinkan)
   // =====================================================
-  async postToProduction(opId: string, dto: { qtyEntan?: number }) {
+  async postToProduction(opId: string, dto: { qtyEntan?: number }, _actor?: Actor) {
     const op = await this.prisma.cuttingFormOp.findUnique({
       where: { id: opId },
       include: { materials: true },
@@ -667,13 +810,13 @@ export class CuttingReportService {
   // =====================================================
   // #2: KIRIM KE PRODUKSI PER-ENTAN (1 entan = 1 batch)
   // =====================================================
-  // Jumlah SET LENGKAP dari SATU entan = MIN, di antara material BOM AUT, dari
-  // total potong (totalSetOrPcs) material tsb DI ENTAN INI. Material BOM AUT yang
-  // belum dipotong di entan ini => 0 => set = 0 (belum lengkap). Konsisten dengan
-  // logika set lengkap di postToProduction, tetapi dihitung per-entan.
-  private async computeEntanSets(
+  // Satuan = PCS (bukan set). "Hasil cut" satu entan = TOTAL pcs dari seluruh
+  // baris potong AUT di entan ini (jumlah totalSetOrPcs). Nilai ini hanya sebagai
+  // REFERENSI hasil cut; jumlah yang dikirim diinput bebas oleh operator (parsial &
+  // berulang). Keputusan berapa pola dilakukan operator saat dispatch di Cutting Entan.
+  private async computeEntanPcs(
     entanId: string,
-  ): Promise<{ entanSets: number; op: any; entan: any }> {
+  ): Promise<{ entanPcs: number; op: any; entan: any }> {
     const entan = await this.prisma.cuttingEntan.findUnique({
       where: { id: entanId },
       include: {
@@ -683,27 +826,19 @@ export class CuttingReportService {
     });
     if (!entan) throw new NotFoundException('Entan tidak ditemukan');
 
-    const bom = entan.formOp.materials.filter(
-      (m: any) => m.variant === 'AUT' && (m.qtyRequirement || 0) > 0,
-    );
-    if (bom.length === 0) return { entanSets: 0, op: entan.formOp, entan };
-
-    const sumByMaterial = new Map<string, number>();
+    // Total pcs hasil cut = jumlah seluruh baris potong AUT (potong utama) di entan ini.
+    let entanPcs = 0;
     for (const d of entan.details as any[]) {
       if (d.variant !== 'AUT') continue;
-      sumByMaterial.set(
-        d.materialId,
-        (sumByMaterial.get(d.materialId) || 0) + (d.totalSetOrPcs || 0),
-      );
+      entanPcs += d.totalSetOrPcs || 0;
     }
-    const entanSets = Math.min(...bom.map((m: any) => sumByMaterial.get(m.id) || 0));
-    return { entanSets: Math.max(0, Math.trunc(entanSets)), op: entan.formOp, entan };
+    return { entanPcs: Math.max(0, Math.trunc(entanPcs)), op: entan.formOp, entan };
   }
 
-  // Info untuk dialog "Kirim ke Produksi" per-entan (set tersedia, sudah dikirim,
-  // sisa yang bisa dikirim, dan batchCode bila sudah pernah dikirim).
+  // Info untuk dialog "Kirim ke Produksi" per-entan (pcs hasil cut, sudah dikirim,
+  // sisa referensi, dan batchCode = identitas batch entan ini).
   async getEntanPostInfo(entanId: string) {
-    const { entanSets, op, entan } = await this.computeEntanSets(entanId);
+    const { entanPcs, op, entan } = await this.computeEntanPcs(entanId);
     const posted = entan.postedQty || 0;
     return {
       entanId: entan.id,
@@ -711,11 +846,11 @@ export class CuttingReportService {
       opNumber: op.opNumber,
       itemNumberFG: op.itemNumberFG,
       itemNameFG: op.itemNameFG,
-      // ID batch standar (otomatis) = B + nomor urut entan.
+      // ID batch standar (otomatis) = B + nomor urut entan. 1 entan = 1 batch.
       batchCode: entan.batchCode || `B${entan.entanKe}`,
-      entanSets,
+      entanPcs,
       postedQty: posted,
-      remaining: Math.max(0, entanSets - posted),
+      remaining: Math.max(0, entanPcs - posted),
     };
   }
 
@@ -725,8 +860,9 @@ export class CuttingReportService {
   async postEntanToProduction(
     entanId: string,
     dto: { batchCode?: string; qty?: number },
+    _actor?: Actor,
   ) {
-    const { entanSets, op, entan } = await this.computeEntanSets(entanId);
+    const { entanPcs, op, entan } = await this.computeEntanPcs(entanId);
 
     if (!op.itemNumberFG) {
       throw new BadRequestException(
@@ -742,18 +878,17 @@ export class CuttingReportService {
     }
 
     const posted = entan.postedQty || 0;
-    const remaining = Math.max(0, entanSets - posted);
-    if (remaining <= 0) {
+
+    // Satuan PCS. Jumlah yang dikirim = INPUT BEBAS operator (parsial & berulang,
+    // sesuai hasil cut riil). Tidak ada lagi pembatasan "set lengkap". Default bila
+    // qty tidak dikirim = sisa referensi (hasil cut - sudah dikirim). Hanya wajib > 0.
+    const reqQty = Math.trunc(Number(dto?.qty));
+    const qty = reqQty > 0 ? reqQty : Math.max(0, entanPcs - posted);
+    if (qty <= 0) {
       throw new BadRequestException(
-        `Tidak ada set lengkap baru untuk dikirim dari entan ini ` +
-          `(set tersedia ${entanSets}, sudah dikirim ${posted}). ` +
-          `Pastikan semua material BOM sudah dipotong.`,
+        'Jumlah pcs yang dikirim harus lebih dari 0.',
       );
     }
-
-    // Dispatch/kirim dibatasi <= sisa set laporan entan (tidak boleh melebihi).
-    const reqQty = Number(dto?.qty);
-    const qty = reqQty > 0 ? Math.min(Math.trunc(reqQty), remaining) : remaining;
 
     // #2: ID batch DISTANDARKAN = "B" + nomor urut entan (B1, B2, B3, ...).
     // Otomatis & konsisten, tidak perlu input manual. Nilai ini juga dipakai
@@ -821,8 +956,8 @@ export class CuttingReportService {
       batchCode,
       qtySent: qty,
       postedQty: posted + qty,
-      entanSets,
-      remaining: Math.max(0, entanSets - (posted + qty)),
+      entanPcs,
+      remaining: Math.max(0, entanPcs - (posted + qty)),
     };
   }
 }

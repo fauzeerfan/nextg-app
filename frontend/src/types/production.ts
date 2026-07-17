@@ -351,4 +351,5 @@ stationFlow: Array<{
     date: string;
     defectRate: number;
   }>;
+  fgTypes?: string[];            // 🔥 NEW: daftar TYPE finished goods untuk filter dashboard
 }

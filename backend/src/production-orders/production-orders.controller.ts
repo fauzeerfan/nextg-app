@@ -52,8 +52,15 @@ export class ProductionOrdersController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('lineCode') lineCode?: string,
+    @Query('type') type?: string,
   ) {
-    return this.productionOrdersService.getDashboardComprehensive(startDate, endDate, lineCode);
+    return this.productionOrdersService.getDashboardComprehensive(startDate, endDate, lineCode, type);
+  }
+
+  // Daftar TYPE finished goods (dari deskripsi FG) untuk mengisi dropdown filter. Read-only.
+  @Get('dashboard-fg-types')
+  getDashboardFgTypes(@Query('lineCode') lineCode?: string) {
+    return this.productionOrdersService.getDashboardFgTypes(lineCode);
   }
 
   // Analitik dashboard per-station. Rentang: today | 7d | 30d, ATAU custom (startDate & endDate). Read-only.
@@ -63,8 +70,9 @@ export class ProductionOrdersController {
     @Query('lineCode') lineCode?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('type') type?: string,
   ) {
-    return this.productionOrdersService.getDashboardAnalytics(range, lineCode, startDate, endDate);
+    return this.productionOrdersService.getDashboardAnalytics(range, lineCode, startDate, endDate, type);
   }
 
   @Get()

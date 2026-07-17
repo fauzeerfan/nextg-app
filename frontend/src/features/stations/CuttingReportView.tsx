@@ -1,9 +1,9 @@
 // frontend/src/features/stations/CuttingReportView.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   FileText, Plus, RefreshCw, X, ChevronRight, ArrowLeft, Search,
   Layers, Scissors, ClipboardList, Trash2, CheckCircle2, Package, Copy, SendHorizontal,
-  Edit, AlertCircle, Loader2
+  Edit, Loader2, Lock, Unlock
 } from 'lucide-react';
 import { API_BASE_URL, getAuthHeaders, apiFetch } from '../../lib/api';
 
@@ -132,6 +132,33 @@ export const CuttingReportView = () => {
   const [turunanModal, setTurunanModal] = useState<{ entanId: string; material: any } | null>(null);
   const [turunanData, setTurunanData] = useState<any | null>(null);
   const [turunanLoading, setTurunanLoading] = useState(false);
+
+  // ===== Lock OTOMATIS (released) + request akses =====
+  const locked = !!selected?.locked;                       // otomatis: sudah dikirim ke produksi
+  const canEdit = selected ? selected.canEdit !== false : true; // dihitung backend utk user ini
+  // Modal request edit/hapus (muncul saat operator klik edit/del pada form terkunci)
+  const [reqModal, setReqModal] = useState<{ type: 'EDIT' | 'DELETE'; label: string } | null>(null);
+  const [reqNote, setReqNote] = useState('');
+  const [reqLoading, setReqLoading] = useState(false);
+  const [reqSent, setReqSent] = useState(false);
+  // Jalankan aksi bila boleh; jika terkunci & tak berhak -> tawarkan request.
+  const guardEdit = (type: 'EDIT' | 'DELETE', label: string, run: () => void) => {
+    if (canEdit) { run(); return; }
+    setReqModal({ type, label }); setReqNote(''); setReqSent(false);
+  };
+  const submitEditRequest = async () => {
+    if (!selected || !reqModal) return;
+    setReqLoading(true);
+    try {
+      const res = await apiFetch(`${API_BASE_URL}/cutting-report/forms/${selected.id}/request-edit`, {
+        method: 'POST', headers: getAuthHeaders(),
+        body: JSON.stringify({ requestType: reqModal.type, targetLabel: reqModal.label, note: reqNote.trim() || null }),
+      });
+      if (res.ok) { setReqSent(true); }
+      else { alert(await readErrMsg(res, 'Gagal mengirim request')); }
+    } catch (e: any) { alert(`Gagal terhubung ke server:\n${e.message}`); }
+    finally { setReqLoading(false); }
+  };
 
   // ========== FETCH ==========
   const fetchForms = useCallback(async () => {
@@ -492,7 +519,7 @@ export const CuttingReportView = () => {
     }
   };
 
-  // #2: Kirim ke Produksi PER-ENTAN. Ambil info entan (set tersedia, sudah
+  // #2: Kirim ke Produksi PER-ENTAN. Ambil info entan (pcs hasil cut, sudah
   // dikirim, sisa, batchCode) dari backend lalu buka modal.
   const openPostModal = async (op: any, en: any) => {
     setPostModal({ op, entan: en, info: null, loadingInfo: true });
@@ -518,13 +545,13 @@ export const CuttingReportView = () => {
     }
   };
 
-  // #2: Kirim PER-ENTAN. 1 entan = 1 batch, ID batch diinput sekali lalu dipakai
-  // otomatis saat dispatch. Bisa berulang (incremental) dibatasi <= sisa set entan.
+  // #2: Kirim PER-ENTAN. 1 entan = 1 batch. Satuan PCS: jumlah diinput bebas oleh
+  // operator (parsial & berulang sesuai hasil cut). ID batch otomatis dari entan.
   const confirmPostToProduction = async () => {
     if (!postModal || !postModal.entan) return;
     if (postLoading) return;
     const qty = Math.trunc(Number(postQty) || 0);
-    if (qty <= 0) { alert('Jumlah set harus lebih dari 0.'); return; }
+    if (qty <= 0) { alert('Jumlah pcs harus lebih dari 0.'); return; }
     // ID batch otomatis (B + nomor entan) dari server; tidak perlu input manual.
     const batchCode = (postBatchCode || '').trim();
     setPostLoading(true);
@@ -540,7 +567,7 @@ export const CuttingReportView = () => {
         if (selected) await openForm(selected.id);
         alert(
           `Terkirim ke Produksi.\nOP ${r.opNumber} · Entan ke-${r.entanKe} · Batch ${r.batchCode}\n` +
-          `Dikirim ${r.qtySent} set (total entan ini: ${r.postedQty}, sisa ${r.remaining}).\n` +
+          `Dikirim ${r.qtySent} pcs (total entan ini: ${r.postedQty} pcs, sisa ${r.remaining} pcs).\n` +
           `ID batch akan terisi otomatis saat dispatch di Cutting Entan.`,
         );
       } else {
@@ -578,15 +605,28 @@ export const CuttingReportView = () => {
                 </p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <button onClick={() => { setAddOpOpen(true); setOpList([]); }} className="px-4 py-2.5 rounded-xl bg-orange-600 text-white font-bold text-sm flex items-center gap-2 hover:bg-orange-700 transition-colors">
+            <div className="flex flex-wrap gap-3 items-center">
+              {locked && (
+                <span
+                  title="Terkunci otomatis karena sudah dikirim ke produksi. Edit/hapus perlu hak Administrator atau approval."
+                  className={`px-3 py-2 rounded-xl font-black text-xs uppercase tracking-wider border flex items-center gap-1.5 ${canEdit ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800' : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'}`}
+                >
+                  {canEdit ? <Unlock size={14} /> : <Lock size={14} />} {canEdit ? 'Released · akses diberikan' : 'Released / Terkunci'}
+                </span>
+              )}
+              <button
+                onClick={() => { setAddOpOpen(true); setOpList([]); }}
+                disabled={(selected.ops || []).length >= 1}
+                title={(selected.ops || []).length >= 1 ? '1 sesi Cutting Report hanya untuk 1 OP' : 'Tambah OP ke sesi ini'}
+                className="px-4 py-2.5 rounded-xl bg-orange-600 text-white font-bold text-sm flex items-center gap-2 hover:bg-orange-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-orange-600"
+              >
                 <Plus size={16} /> Tambah OP
               </button>
               <div className="flex items-center gap-3 px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700">
                 <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Entan</span>
                 <span className="text-xl font-black text-orange-600 dark:text-orange-400">{totalEntan}</span>
                 <span className="text-xs font-bold text-slate-400">|</span>
-                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Set/Pcs</span>
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Pcs</span>
                 <span className="text-xl font-black text-blue-600 dark:text-blue-400">{totalSetPcs}</span>
               </div>
             </div>
@@ -610,7 +650,7 @@ export const CuttingReportView = () => {
                 <p className="text-xs font-semibold text-slate-500">{op.itemNumberFG} — {op.itemNameFG} · qtyOp {op.qtyOp?.toLocaleString()}</p>
               </div>
               <div className="ml-auto flex flex-wrap gap-2">
-                <button onClick={() => addEntan(op.id)} className="px-3 py-2 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 font-bold text-xs flex items-center gap-1.5 hover:bg-blue-200 transition-colors">
+                <button onClick={() => addEntan(op.id)} title="Tambah entan" className="px-3 py-2 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 font-bold text-xs flex items-center gap-1.5 hover:bg-blue-200 transition-colors">
                   <Plus size={14} /> Entan
                 </button>
                 {/* #2: tombol "Kirim ke Produksi" kini per-entan (lihat tiap entan di bawah) */}
@@ -628,7 +668,7 @@ export const CuttingReportView = () => {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-[10px] text-slate-400">Req {round2(m.qtyRequirement)}</p>
-                    <p className="text-xs font-black text-emerald-600">{m.qtySetPcs} set</p>
+                    <p className="text-xs font-black text-emerald-600">{m.qtySetPcs} pcs</p>
                   </div>
                 </div>
               ))}
@@ -644,11 +684,12 @@ export const CuttingReportView = () => {
                     {en.approved && <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1"><CheckCircle2 size={12} /> Approved</span>}
                     {en.batchCode && (
                       <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
-                        Batch {en.batchCode} · terkirim {en.postedQty || 0}
+                        Batch {en.batchCode} · terkirim {en.postedQty || 0} pcs
                       </span>
                     )}
                     <button
                       onClick={() => openPostModal(op, en)}
+                      title="Kirim hasil cut ke produksi"
                       className="ml-auto px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold text-[11px] flex items-center gap-1.5 hover:bg-emerald-700 transition-colors"
                     >
                       <Package size={13} /> Kirim ke Produksi
@@ -666,7 +707,8 @@ export const CuttingReportView = () => {
                       return (
                         <div key={m.id} className="flex items-stretch rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
                           <button
-                            onClick={() => openCut(en.id, m, existing, { variant: 'AUT' })}
+                            onClick={() => existing ? guardEdit('EDIT', `Potong ${m.setArtnr}`, () => openCut(en.id, m, existing, { variant: 'AUT' })) : openCut(en.id, m, existing, { variant: 'AUT' })}
+                            title={existing ? 'Edit potong AUT' : 'Input potong AUT'}
                             className={`px-2.5 py-1.5 text-[11px] font-bold transition-colors ${existing
                               ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
                               : 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 hover:bg-orange-100'
@@ -694,7 +736,7 @@ export const CuttingReportView = () => {
                           <tr className="text-left">
                             <th className="py-1 pr-2">Material</th>
                             <th className="py-1 px-2">Lembar×Gambar</th>
-                            <th className="py-1 px-2">Set/Pcs</th>
+                            <th className="py-1 px-2">Pcs</th>
                             <th className="py-1 px-2">Pemakaian</th>
                             <th className="py-1 px-2">Sisa</th>
                             <th className="py-1 px-2">akt.Material</th>
@@ -720,10 +762,10 @@ export const CuttingReportView = () => {
                                 <div className="flex items-center gap-1.5">
                                   {/* FIX: loading state per tombol aksi */}
                                   <button
-                                    onClick={() => openCut(en.id, d.material, d)}
+                                    onClick={() => guardEdit('EDIT', `Detail ${d.material?.setArtnr || ''}`, () => openCut(en.id, d.material, d))}
                                     disabled={actionLoadingId === d.id || actionLoadingId === `copy-${d.id}`}
                                     title="Edit"
-                                    className="text-blue-500 hover:text-blue-700 disabled:opacity-40"
+                                    className="text-blue-500 hover:text-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
                                   >
                                     <Edit size={13} />
                                   </button>
@@ -731,15 +773,15 @@ export const CuttingReportView = () => {
                                     onClick={() => copyDetail(d.id)}
                                     disabled={actionLoadingId === `copy-${d.id}`}
                                     title="Copy"
-                                    className="text-slate-400 hover:text-blue-600 disabled:opacity-40"
+                                    className="text-slate-400 hover:text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed"
                                   >
                                     {actionLoadingId === `copy-${d.id}` ? <Loader2 size={13} className="animate-spin" /> : <Copy size={13} />}
                                   </button>
                                   <button
-                                    onClick={() => deleteDetail(d.id)}
+                                    onClick={() => guardEdit('DELETE', `Detail ${d.material?.setArtnr || ''}`, () => deleteDetail(d.id))}
                                     disabled={actionLoadingId === d.id}
                                     title="Hapus"
-                                    className="text-rose-500 hover:text-rose-700 disabled:opacity-40"
+                                    className="text-rose-500 hover:text-rose-700 disabled:opacity-40 disabled:cursor-not-allowed"
                                   >
                                     {actionLoadingId === d.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
                                   </button>
@@ -853,7 +895,7 @@ export const CuttingReportView = () => {
               <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Hasil Perhitungan (otomatis)</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  ['Total Set/Pcs', 'totalSetOrPcs', 'text-blue-600'],
+                  ['Total Pcs', 'totalSetOrPcs', 'text-blue-600'],
                   ['aktualPemakaian', 'aktualPemakaian', 'text-slate-800 dark:text-white'],
                   ['Sisa', 'sisa', (val: number) => val < 0 ? 'text-rose-600' : 'text-emerald-600'],
                   ['aktualMaterial', 'aktualMaterial', 'text-slate-800 dark:text-white'],
@@ -881,6 +923,40 @@ export const CuttingReportView = () => {
           </Modal>
         )}
 
+        {/* Request Edit/Hapus (form terkunci karena sudah dikirim ke produksi) */}
+        {reqModal && (
+          <Modal title={`Request ${reqModal.type === 'DELETE' ? 'Hapus' : 'Edit'} — ${selected?.kodeForm}`} onClose={() => setReqModal(null)}>
+            {reqSent ? (
+              <div className="text-center py-6">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 flex items-center justify-center mb-3"><CheckCircle2 size={28} /></div>
+                <p className="font-black text-slate-800 dark:text-white">Request terkirim!</p>
+                <p className="text-sm text-slate-500 mt-1">Menunggu persetujuan Administrator / pemegang akses (muncul di ikon Notifikasi mereka). Setelah di-approve, Anda bisa mengedit.</p>
+                <button onClick={() => setReqModal(null)} className="mt-5 px-5 py-2.5 rounded-xl bg-slate-800 text-white font-bold text-sm">Tutup</button>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-2xl bg-rose-50 dark:bg-rose-900/20 border-2 border-rose-200 dark:border-rose-800 px-4 py-3.5 flex gap-3 mb-4">
+                  <Lock size={18} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                  <div className="text-xs font-bold text-rose-700 dark:text-rose-300 leading-relaxed">
+                    Cutting Report ini sudah <b>dikirim ke produksi</b> sehingga <b>terkunci</b>. Aksi <b>{reqModal.type === 'DELETE' ? 'hapus' : 'edit'}</b> ({reqModal.label}) tidak bisa dilakukan langsung.
+                    Anda dapat mengajukan request ke Administrator / pemegang akses untuk disetujui.
+                  </div>
+                </div>
+                <Field label="Alasan / catatan (opsional)">
+                  <textarea value={reqNote} onChange={(e) => setReqNote(e.target.value)} rows={3} className={inputCls} placeholder="Kenapa perlu diedit / dihapus?" />
+                </Field>
+                <div className="flex justify-end gap-2 mt-5">
+                  <button onClick={() => setReqModal(null)} disabled={reqLoading} className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 font-bold text-sm disabled:opacity-50">Batal</button>
+                  <button onClick={submitEditRequest} disabled={reqLoading} className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm flex items-center gap-2 disabled:opacity-50">
+                    {reqLoading ? <Loader2 size={16} className="animate-spin" /> : <SendHorizontal size={16} />}
+                    {reqLoading ? 'Mengirim...' : 'Kirim Request'}
+                  </button>
+                </div>
+              </>
+            )}
+          </Modal>
+        )}
+
         {/* Post to Production Modal — PER ENTAN (#2) */}
         {postModal && (
           <Modal
@@ -888,8 +964,8 @@ export const CuttingReportView = () => {
             onClose={() => setPostModal(null)}
           >
             <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
-              1 entan = 1 <b>batch</b>. Masukkan <b>ID batch</b> (sekali saja) dan jumlah <b>SET lengkap</b> yang dikirim.
-              Pengiriman bisa diulang saat material dipotong bertahap; ID batch dipakai otomatis saat dispatch di Cutting Entan.
+              1 entan = 1 <b>batch</b>. Masukkan jumlah <b>pcs</b> hasil cut yang dikirim (bebas sesuai hasil potong).
+              Pengiriman bisa <b>parsial &amp; berulang</b>; ID batch mengikuti identitas entan dan dipakai otomatis saat dispatch di Cutting Entan.
             </p>
             {postModal.loadingInfo ? (
               <div className="py-8 flex items-center justify-center text-slate-400">
@@ -899,8 +975,8 @@ export const CuttingReportView = () => {
               <>
                 <div className="mb-3 grid grid-cols-3 gap-2 text-center">
                   <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-700">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase">Set Tersedia</div>
-                    <div className="text-lg font-black text-slate-700 dark:text-slate-200">{postModal.info?.entanSets ?? 0}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">Hasil Cut (pcs)</div>
+                    <div className="text-lg font-black text-slate-700 dark:text-slate-200">{postModal.info?.entanPcs ?? 0}</div>
                   </div>
                   <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-700">
                     <div className="text-[10px] font-bold text-slate-400 uppercase">Sudah Dikirim</div>
@@ -917,21 +993,21 @@ export const CuttingReportView = () => {
                     <span className="text-[11px] font-semibold text-slate-500">standar: B + nomor entan</span>
                   </div>
                 </Field>
-                <Field label="Jumlah Set (dikirim sekarang)">
+                <Field label="Jumlah pcs (dikirim sekarang)">
                   <input
                     type="number"
                     min={1}
-                    max={postModal.info?.remaining ?? undefined}
                     className={inputCls}
                     value={postQty}
                     onChange={(e) => setPostQty(Number(e.target.value))}
                   />
+                  <p className="text-[11px] text-slate-400 mt-1">Bebas diisi sesuai hasil cut (pcs). Bisa dikirim parsial &amp; berulang.</p>
                 </Field>
                 <div className="flex justify-end gap-2 mt-5">
                   <button onClick={() => setPostModal(null)} disabled={postLoading} className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 font-bold text-sm disabled:opacity-50">Batal</button>
                   <button
                     onClick={confirmPostToProduction}
-                    disabled={postLoading || (postModal.info?.remaining ?? 0) <= 0}
+                    disabled={postLoading || Math.trunc(Number(postQty) || 0) <= 0}
                     className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm flex items-center gap-2 disabled:opacity-50"
                   >
                     {postLoading ? <Loader2 size={16} className="animate-spin" /> : <SendHorizontal size={16} />}
@@ -1024,7 +1100,7 @@ export const CuttingReportView = () => {
                               <tr className="text-left">
                                 <th className="py-1 pr-2">No Lot</th>
                                 <th className="py-1 px-2">Lembar×Gambar</th>
-                                <th className="py-1 px-2">Set/Pcs</th>
+                                <th className="py-1 px-2">Pcs</th>
                                 <th className="py-1 px-2">Sisa</th>
                                 <th className="py-1 px-2">Los Warna</th>
                                 <th className="py-1 px-2">Sumber</th>
@@ -1109,7 +1185,7 @@ export const CuttingReportView = () => {
           <MetricCard title="Total Sessions" value={forms.length} icon={FileText} color="orange" subtitle={`${forms.length} form`} />
           <MetricCard title="Total Entan" value={totalEntanAll} icon={Layers} color="blue" subtitle={`${totalEntanAll} entan`} />
           <MetricCard title="Total OP" value={totalOpsAll} icon={ClipboardList} color="emerald" subtitle={`${totalOpsAll} OP`} />
-          <MetricCard title="Total Set/Pcs" value={review.reduce((s, r) => s + r.totalSetOrPcs, 0)} icon={Package} color="purple" suffix="pcs" />
+          <MetricCard title="Total Pcs" value={review.reduce((s, r) => s + r.totalSetOrPcs, 0)} icon={Package} color="purple" suffix="pcs" />
         </div>
 
         <div className="px-5 pb-5 flex gap-2">
@@ -1143,7 +1219,16 @@ export const CuttingReportView = () => {
               <tbody>
                 {forms.map((f) => (
                   <tr key={f.id} className="border-t border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors" onClick={() => openForm(f.id)}>
-                    <td className="py-3 px-5 font-mono font-black text-slate-800 dark:text-white">{f.kodeForm}</td>
+                    <td className="py-3 px-5 font-mono font-black text-slate-800 dark:text-white">
+                      <span className="inline-flex items-center gap-2">
+                        {f.kodeForm}
+                        {f.locked && (
+                          <span className="inline-flex items-center gap-1 bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 font-black px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider border border-rose-200 dark:border-rose-800">
+                            <Lock size={11} /> Locked
+                          </span>
+                        )}
+                      </span>
+                    </td>
                     <td className="py-3 px-5">
                       <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-black px-2.5 py-1 rounded-lg text-xs">
                         {f.jumlahEntan || 0}
@@ -1179,7 +1264,7 @@ export const CuttingReportView = () => {
                   <th className="py-3 px-4">OP</th>
                   <th className="py-3 px-4">Material</th>
                   <th className="py-3 px-4">Var</th>
-                  <th className="py-3 px-4">Set/Pcs</th>
+                  <th className="py-3 px-4">Pcs</th>
                   <th className="py-3 px-4">Pemakaian</th>
                   <th className="py-3 px-4">Sisa</th>
                 </tr>

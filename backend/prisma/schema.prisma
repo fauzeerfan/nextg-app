@@ -50,6 +50,9 @@ model User {
   jobTitle        String?
   lineCode        String?
   isActive        Boolean  @default(true)
+  // Akses khusus: boleh edit/hapus Cutting Report yang sudah di-release (locked),
+  // dan menyetujui request edit/hapus. Administrator selalu punya akses ini.
+  canEditCuttingReport Boolean @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -826,12 +829,37 @@ model CuttingForm {
   creatorName String?
   createdById String?
   status      String    @default("OPEN") // OPEN, CLOSED
+  // Lock otomatis: form terkunci saat "released" (ada entan ber-postedQty>0).
+  // editGrantUserIds = daftar userId yang di-approve untuk mengedit form ini
+  // meski sudah terkunci (hasil approval request oleh admin/pemegang akses).
+  editGrantUserIds Json?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   ops CuttingFormOp[]
 
   @@map("cutting_forms")
+}
+
+// Request edit/hapus Cutting Report yang sudah terkunci (butuh approval).
+model CuttingReportRequest {
+  id             String   @id @default(uuid())
+  formId         String
+  kodeForm       String
+  requestType    String   @default("EDIT") // EDIT | DELETE
+  targetLabel    String?              // deskripsi singkat sasaran (mis. "Detail LSS0100129")
+  note           String?
+  requestedById  String?
+  requestedByName String
+  status         String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewedById   String?
+  reviewedByName String?
+  reviewedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([status])
+  @@index([formId])
+  @@map("cutting_report_requests")
 }
 
 model CuttingFormOp {

@@ -106,6 +106,11 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
   const [carriedBatchCode, setCarriedBatchCode] = useState<string>('');  // #2: ID batch dari entan (Cutting Report)
   const [dispQty, setDispQty] = useState<number>(0);
 
+  // Modal konfirmasi Reconcile (aksi berisiko -> perlu konfirmasi eksplisit)
+  const [reconcileTarget, setReconcileTarget] = useState<ReadyOp | null>(null);
+  const [reconcileAck, setReconcileAck] = useState(false);
+  const [reconcileLoading, setReconcileLoading] = useState(false);
+
   // SWITCH sumber data: INTERNAL (Cutting Report NextG) | EXTERNAL (API lama)
   const [cuttingSource, setCuttingSource] = useState<'INTERNAL' | 'EXTERNAL'>('INTERNAL');
   const [sourceLoading, setSourceLoading] = useState(false);
@@ -227,9 +232,23 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
       if (res.ok) {
         const info = await res.json();
         setDispInfo(info);
-        setDispQty(info.pending > 0 ? info.pending : 0);
-        // Tidak auto-pilih pola & tidak auto-pilih batch: operator menentukan sendiri.
-        setSelPatterns([]);
+        setSelPatterns([]); // pola tetap dipilih operator sendiri
+        // DEFAULT identitas batch dari entan (1 entan = 1 batch) yang sudah "Kirim ke
+        // Produksi" di Cutting Report. Pilih entan yang batch-nya BELUM dibuat; fallback
+        // ke entan pertama. Nilai ini hanya DEFAULT — tetap bisa diedit operator (tidak dikunci).
+        const posted = (info.postedEntans || []);
+        const existingBatchNums = new Set((info.batches || []).map((b: any) => b.batchNumber));
+        const defEntan = posted.find((pe: any) => !existingBatchNums.has(pe.entanKe)) || posted[0] || null;
+        if (defEntan) {
+          setBatchNumberInput(String(defEntan.entanKe));
+          setCarriedBatchCode(defEntan.batchCode || '');
+          const q = Math.min(Number(defEntan.postedQty || 0), Number(info.pending || 0));
+          setDispQty(q > 0 ? q : (info.pending > 0 ? info.pending : 0));
+        } else {
+          setBatchNumberInput('');
+          setCarriedBatchCode('');
+          setDispQty(info.pending > 0 ? info.pending : 0);
+        }
       } else {
         const err = await res.json().catch(() => ({}));
         alert(`Error: ${err.message || 'Gagal memuat info dispatch'}`);
@@ -265,7 +284,9 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
     setLoading(true);
     try {
       const body: any = { patternIndexes: pats, batchNumber: bn };
-      if (!isExistingBatch) body.qty = dispQty; // qty hanya untuk batch baru
+      // qty SELALU dikirim: batch baru butuh qty>0; batch existing memakai qty>0
+      // untuk MENAMBAH pcs (mengurangi PEND) atau 0 untuk sekadar menambah pola.
+      body.qty = dispQty;
       if (carriedBatchCode) body.batchCode = carriedBatchCode; // #2: ID batch dari entan (label)
       const res = await fetch(`${API_BASE_URL}/cutting-entan/generate/${selOp.opNumber}`, {
         method: 'POST',
@@ -311,6 +332,33 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
         setShowHist(true); 
       }
     } catch { alert('Failed to fetch history'); }
+  };
+
+  // Buka modal konfirmasi Reconcile (aksi berisiko). Eksekusi via confirmReconcile().
+  const openReconcile = (op: ReadyOp) => {
+    setReconcileTarget(op);
+    setReconcileAck(false);
+  };
+
+  // Reconcile: tandai semua hasil cut OP ini sudah terkirim ke Pond (pending -> 0).
+  // Dipakai untuk merapikan data lama saat pending tersangkut padahal Pond sudah full supply.
+  const confirmReconcile = async () => {
+    const op = reconcileTarget;
+    if (!op || !reconcileAck || reconcileLoading) return;
+    setReconcileLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/cutting-entan/op/${op.opNumber}/reconcile-pending`, { method: 'POST' });
+      if (res.ok) {
+        setReconcileTarget(null);
+        setReconcileAck(false);
+        await fetchOps();
+        await fetchTotal();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Gagal reconcile: ${err.message || res.status}`);
+      }
+    } catch { alert('Network error'); }
+    finally { setReconcileLoading(false); }
   };
 
   const reprint = async (id: string) => {
@@ -610,10 +658,15 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
                             const active = carriedBatchCode === pe.batchCode && parseInt(batchNumberInput, 10) === pe.entanKe;
                             return (
                               <button key={i} type="button"
-                                onClick={() => { setBatchNumberInput(String(pe.entanKe)); setCarriedBatchCode(pe.batchCode || ''); }}
+                                onClick={() => {
+                                  setBatchNumberInput(String(pe.entanKe));
+                                  setCarriedBatchCode(pe.batchCode || '');
+                                  const q = Math.min(Number(pe.postedQty || 0), Number(dispInfo.pending || 0));
+                                  if (q > 0) setDispQty(q);
+                                }}
                                 className={`px-3 py-2 rounded-lg border-2 text-left text-xs transition ${active ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-emerald-300'}`}>
                                 <div className="font-black text-slate-900 dark:text-white">Batch {pe.batchCode || `#${pe.entanKe}`}</div>
-                                <div className="text-slate-500 dark:text-slate-400">Entan ke-{pe.entanKe} · {pe.postedQty} set</div>
+                                <div className="text-slate-500 dark:text-slate-400">Entan ke-{pe.entanKe} · {pe.postedQty} pcs</div>
                               </button>
                             );
                           })}
@@ -632,19 +685,18 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
                       placeholder="Ketik nomor batch, mis. 1, 2, 3"
                       className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-black text-lg text-slate-900 dark:text-white focus:border-orange-500 outline-none"
                     />
-                    {isExistingBatch ? (
+                    {isExistingBatch && (
                       <div className="mt-2 text-xs font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2">
-                        Batch {batchNumberInput} sudah ada ({targetBatch.qty} set). Pola yang dipilih akan DITAMBAHKAN untuk melengkapi set (qty tetap).
-                      </div>
-                    ) : (
-                      <div className="mt-3">
-                        <div className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Qty Set (batch baru)</div>
-                        <input type="number" min={1} max={dispInfo.pending} value={dispQty}
-                          onChange={(e) => setDispQty(Math.max(0, parseInt(e.target.value) || 0))}
-                          className="w-full px-4 py-3 rounded-xl border-2 border-orange-300 dark:border-orange-700 bg-white dark:bg-slate-800 font-black text-lg text-right text-slate-900 dark:text-white outline-none" />
-                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Sisa pending: {dispInfo.pending} set</div>
+                        Batch {batchNumberInput} sudah ada ({targetBatch.qty} pcs). Isi <b>qty</b> untuk MENAMBAH pcs ke batch ini (mengurangi pending), atau <b>0</b> untuk sekadar menambah pola.
                       </div>
                     )}
+                    <div className="mt-3">
+                      <div className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">{isExistingBatch ? 'Qty tambahan (pcs)' : 'Qty (pcs) — batch baru'}</div>
+                      <input type="number" min={isExistingBatch ? 0 : 1} max={dispInfo.pending} value={dispQty}
+                        onChange={(e) => setDispQty(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full px-4 py-3 rounded-xl border-2 border-orange-300 dark:border-orange-700 bg-white dark:bg-slate-800 font-black text-lg text-right text-slate-900 dark:text-white outline-none" />
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Sisa pending: {dispInfo.pending} pcs</div>
+                    </div>
                     {(dispInfo.batches || []).length > 0 && (
                       <div className="mt-3">
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Batch sudah ada (klik untuk melanjutkan):</div>
@@ -657,7 +709,7 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
                                 onClick={() => setBatchNumberInput(String(b.batchNumber))}
                                 className={`px-3 py-2 rounded-lg border-2 text-left text-xs transition ${active ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-orange-300'}`}>
                                 <div className="font-black text-slate-900 dark:text-white">Batch {b.batchNumber}</div>
-                                <div className="text-slate-500 dark:text-slate-400">{b.qty} set · pola: {names}</div>
+                                <div className="text-slate-500 dark:text-slate-400">{b.qty} pcs · pola: {names}</div>
                               </button>
                             );
                           })}
@@ -687,7 +739,7 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
                         );
                       })}
                     </div>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">Pola yang sudah di-dispatch terkunci. Cutting Pond hanya menghitung pola yang dipilih; transfer ke Check Panel baru terbuka setelah <strong>semua pola</strong> 1 set lengkap.</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">Pola yang sudah di-dispatch terkunci. Cutting Pond hanya menghitung pola yang dipilih; transfer ke Check Panel baru terbuka setelah <strong>semua pola</strong> lengkap.</p>
                   </div>
                 </>
               )}
@@ -721,6 +773,92 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
           { key: 'createdAt', label: 'Date', render: (i:any) => new Date(i.createdAt).toLocaleString() },
           { key: 'action', label: 'Action', render: (i:any) => <button onClick={() => { setShowAll(false); reprint(i.id); }} className="px-4 py-1.5 bg-blue-600 text-white rounded-md font-bold text-xs hover:bg-blue-700 shadow-sm shadow-blue-600/30 uppercase tracking-wider">Reprint</button> }
         ]} />
+
+        {/* ===== MODAL KONFIRMASI RECONCILE (aksi berisiko — perlu konfirmasi eksplisit) ===== */}
+        {reconcileTarget && (
+          <div
+            className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={() => { if (!reconcileLoading) setReconcileTarget(null); }}
+          >
+            <div
+              className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-md shadow-2xl border-2 border-rose-200 dark:border-rose-900/60 overflow-hidden animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header danger */}
+              <div className="bg-gradient-to-br from-rose-500 to-red-600 px-6 py-5 flex items-center gap-4">
+                <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
+                  <AlertTriangle size={26} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white leading-tight">Tandai Terkirim (Reconcile)</h3>
+                  <p className="text-white/85 text-xs font-semibold mt-0.5">Aksi ini mengubah data pending — lakukan dengan hati-hati</p>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 space-y-4">
+                <p className="text-sm font-semibold text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Anda akan menandai <b>seluruh sisa cut</b> OP{' '}
+                  <b className="font-mono text-slate-900 dark:text-white">{reconcileTarget.opNumber}</b>{' '}
+                  sebagai <b>sudah terkirim ke Cutting Pond</b>.
+                </p>
+
+                <div className="flex items-center justify-between rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 px-4 py-3">
+                  <div className="text-center flex-1">
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pending Sekarang</div>
+                    <div className="text-2xl font-black text-orange-600 dark:text-orange-400 leading-none mt-1">{reconcileTarget.pending} <span className="text-xs">pcs</span></div>
+                  </div>
+                  <ArrowRight size={20} className="text-slate-400 shrink-0" />
+                  <div className="text-center flex-1">
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Menjadi</div>
+                    <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 leading-none mt-1">0 <span className="text-xs">pcs</span></div>
+                  </div>
+                </div>
+
+                {/* Warning serius */}
+                <div className="rounded-2xl bg-rose-50 dark:bg-rose-900/20 border-2 border-rose-200 dark:border-rose-900/60 px-4 py-3.5 flex gap-3">
+                  <AlertTriangle size={18} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                  <div className="text-xs font-bold text-rose-700 dark:text-rose-300 leading-relaxed">
+                    Lakukan <b>HANYA</b> bila Cutting Pond untuk OP ini benar-benar sudah <b>full supply</b>.
+                    Setelah ditandai, sisa pending <b>tidak bisa di-dispatch lagi</b> dari sini. Salah tekan dapat membuat data cutting tidak akurat.
+                  </div>
+                </div>
+
+                {/* Checkbox konfirmasi (wajib dicentang agar tombol aktif) */}
+                <label className="flex items-start gap-3 cursor-pointer select-none rounded-2xl border-2 border-slate-200 dark:border-slate-700 px-4 py-3 hover:border-rose-300 dark:hover:border-rose-800 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={reconcileAck}
+                    onChange={(e) => setReconcileAck(e.target.checked)}
+                    className="mt-0.5 w-5 h-5 accent-rose-600 shrink-0"
+                  />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200 leading-relaxed">
+                    Saya paham konsekuensinya dan memastikan Cutting Pond OP ini sudah full supply.
+                  </span>
+                </label>
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 pb-6 flex gap-3">
+                <button
+                  onClick={() => setReconcileTarget(null)}
+                  disabled={reconcileLoading}
+                  className="flex-1 py-3 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-sm uppercase tracking-wider hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={confirmReconcile}
+                  disabled={!reconcileAck || reconcileLoading}
+                  className="flex-1 py-3 rounded-2xl bg-rose-600 text-white font-black text-sm uppercase tracking-wider hover:bg-rose-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {reconcileLoading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                  {reconcileLoading ? 'Memproses...' : 'Ya, Tandai Terkirim'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Header - Solid Style */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
@@ -847,7 +985,17 @@ export const CuttingEntanView = ({ addLog }: { addLog: (msg: string, type?: 'inf
                         <div className="font-black text-orange-600 dark:text-orange-400">{op.pending}</div>
                       </div>
                     </div>
-                    
+
+                    {op.pending > 0 && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openReconcile(op); }}
+                        title="Tandai semua hasil cut sudah terkirim ke Pond (pending -> 0). Pakai bila Pond sudah full supply."
+                        className="mt-3 w-full py-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <CheckCircle size={13} /> Tandai Terkirim (Reconcile)
+                      </button>
+                    )}
+
                     {op.lastBatch && (
                       <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center text-xs">
                         <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">

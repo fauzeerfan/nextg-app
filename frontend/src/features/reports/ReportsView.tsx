@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  FileText, Download, RefreshCw, Calendar, Filter,
-  TrendingUp, AlertTriangle, CheckCircle, Package,
-  Factory, Scissors, ClipboardCheck, Shirt, Truck,
-  BarChart3, Activity, Layers, Clock, Search, X, ChevronDown, ChevronRight,
+  Download, RefreshCw, Filter,
+  AlertTriangle, Package,
+  Scissors, ClipboardCheck, Shirt, Truck,
+  BarChart3, Activity, Layers, Search, ChevronDown,
   FileSpreadsheet, FileJson
 } from 'lucide-react';
 import {
@@ -13,13 +13,14 @@ import {
 
 const API_BASE_URL = 'http://202.52.15.30:4000';
 
-type ReportStation = 
+type ReportStation =
   | 'CUTTING_ENTAN'
   | 'CUTTING_POND'
   | 'CP'
   | 'SEWING'
   | 'QC'
-  | 'PACKING';
+  | 'PACKING'
+  | 'FG';
 
 const stationOptions: { value: ReportStation; label: string; icon: any }[] = [
   { value: 'CUTTING_ENTAN', label: 'Output Cutting Entan', icon: Scissors },
@@ -28,6 +29,7 @@ const stationOptions: { value: ReportStation; label: string; icon: any }[] = [
   { value: 'SEWING', label: 'Output Sewing', icon: Shirt },
   { value: 'QC', label: 'Output Quality Control', icon: Activity },
   { value: 'PACKING', label: 'Output Packing', icon: Package },
+  { value: 'FG', label: 'Finished Goods', icon: Truck },
 ];
 
 const getAuthHeaders = () => {
@@ -329,29 +331,46 @@ export const ReportsView = () => {
 
       {data && (
         <>
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-5">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border-l-4 border-blue-500 p-5 shadow-sm">
-              <div className="text-xs font-bold uppercase text-slate-500">Total Input</div>
-              <div className="text-3xl font-black">{data.summary.totalInput}</div>
-            </div>
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border-l-4 border-amber-500 p-5 shadow-sm">
-              <div className="text-xs font-bold uppercase text-slate-500">Total Output</div>
-              <div className="text-3xl font-black">{data.summary.totalOutput}</div>
-            </div>
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border-l-4 border-emerald-500 p-5 shadow-sm">
-              <div className="text-xs font-bold uppercase text-slate-500">Total Good</div>
-              <div className="text-3xl font-black">{data.summary.totalGood}</div>
-            </div>
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border-l-4 border-rose-500 p-5 shadow-sm">
-              <div className="text-xs font-bold uppercase text-slate-500">Total NG</div>
-              <div className="text-3xl font-black">{data.summary.totalNg}</div>
-            </div>
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border-l-4 border-purple-500 p-5 shadow-sm">
-              <div className="text-xs font-bold uppercase text-slate-500">Defect Rate</div>
-              <div className="text-3xl font-black">{data.summary.defectRate.toFixed(1)}%</div>
-            </div>
-          </div>
+          {/* Summary Cards — adaptif sesuai karakter station */}
+          {(() => {
+            const s: any = data.summary;
+            const border: Record<string, string> = {
+              blue: 'border-blue-500', emerald: 'border-emerald-500', amber: 'border-amber-500',
+              rose: 'border-rose-500', purple: 'border-purple-500', cyan: 'border-cyan-500',
+            };
+            const cards =
+              selectedStation === 'FG'
+                ? [
+                    { label: 'Masuk FG', value: s.totalInput, color: 'blue' },
+                    { label: 'Terkirim (Shipping)', value: s.totalOutput, color: 'emerald' },
+                    { label: 'Stok FG', value: s.totalStock ?? 0, color: 'amber' },
+                    { label: 'Total OP', value: s.totalOps, color: 'purple' },
+                  ]
+                : ['CUTTING_ENTAN', 'SEWING', 'PACKING'].includes(selectedStation)
+                ? [
+                    { label: 'Total Input', value: s.totalInput, color: 'blue' },
+                    { label: 'Total Output', value: s.totalOutput, color: 'emerald' },
+                    { label: 'Total Good', value: s.totalGood, color: 'cyan' },
+                    { label: 'Total OP', value: s.totalOps, color: 'purple' },
+                  ]
+                : [
+                    { label: 'Total Input', value: s.totalInput, color: 'blue' },
+                    { label: 'Total Output', value: s.totalOutput, color: 'amber' },
+                    { label: 'Total Good', value: s.totalGood, color: 'emerald' },
+                    { label: 'Total NG', value: s.totalNg, color: 'rose' },
+                    { label: 'Defect Rate', value: `${(s.defectRate || 0).toFixed(1)}%`, color: 'purple' },
+                  ];
+            return (
+              <div className={`grid grid-cols-2 gap-5 ${cards.length >= 5 ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
+                {cards.map((c, i) => (
+                  <div key={i} className={`bg-white dark:bg-slate-800 rounded-2xl border-l-4 ${border[c.color]} p-5 shadow-sm`}>
+                    <div className="text-xs font-bold uppercase text-slate-500">{c.label}</div>
+                    <div className="text-3xl font-black">{c.value}</div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* OP Table */}
           <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 overflow-hidden shadow-md">

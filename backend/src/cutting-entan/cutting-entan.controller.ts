@@ -39,4 +39,10 @@ export class CuttingEntanController {
   getTotalSent() {
     return this.service.getTotalSent();
   }
+
+  // Reconcile PEND: tandai semua hasil cut OP induk sudah terkirim ke Pond (pending -> 0)
+  @Post('op/:opNumber/reconcile-pending')
+  reconcilePending(@Param('opNumber') opNumber: string) {
+    return this.service.reconcilePending(opNumber);
+  }
 }

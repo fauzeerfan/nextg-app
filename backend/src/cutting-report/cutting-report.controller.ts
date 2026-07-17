@@ -7,8 +7,18 @@ import {
   Body,
   Param,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import { CuttingReportService } from './cutting-report.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+
+// Identitas pemanggil dari JWT (untuk cek lock & approval Cutting Report).
+const actorOf = (req: any) => ({
+  userId: req?.user?.userId,
+  role: req?.user?.role,
+  username: req?.user?.username,
+});
 
 @Controller('cutting-report')
 export class CuttingReportController {
@@ -20,7 +30,6 @@ export class CuttingReportController {
     return this.service.getOpList(group, style);
   }
 
-  // Resolusi info OP langsung dari nomor OP (auto-fill Create Task)
   @Get('op-info/:opNumber')
   resolveOpInfo(@Param('opNumber') opNumber: string) {
     return this.service.resolveOpInfo(opNumber);
@@ -38,106 +47,132 @@ export class CuttingReportController {
   }
 
   @Get('forms/:id')
-  getForm(@Param('id') id: string) {
-    return this.service.getForm(id);
+  @UseGuards(JwtAuthGuard)
+  getForm(@Param('id') id: string, @Req() req: any) {
+    return this.service.getForm(id, actorOf(req));
   }
 
   @Delete('forms/:id')
-  deleteForm(@Param('id') id: string) {
-    return this.service.deleteForm(id);
+  @UseGuards(JwtAuthGuard)
+  deleteForm(@Param('id') id: string, @Req() req: any) {
+    return this.service.deleteForm(id, actorOf(req));
+  }
+
+  // ===== Request edit/hapus + Approval (notifikasi) =====
+  @Post('forms/:id/request-edit')
+  @UseGuards(JwtAuthGuard)
+  createEditRequest(@Param('id') id: string, @Body() dto: any, @Req() req: any) {
+    return this.service.createEditRequest({ ...dto, formId: id }, actorOf(req));
+  }
+
+  @Get('requests')
+  @UseGuards(JwtAuthGuard)
+  listRequests(@Req() req: any) {
+    return this.service.listRequests(actorOf(req));
+  }
+
+  @Post('requests/:reqId/review')
+  @UseGuards(JwtAuthGuard)
+  reviewRequest(@Param('reqId') reqId: string, @Body() body: { action: 'APPROVE' | 'REJECT' }, @Req() req: any) {
+    return this.service.reviewRequest(reqId, body?.action === 'REJECT' ? 'REJECT' : 'APPROVE', actorOf(req));
   }
 
   // ===== OP dalam form =====
   @Post('forms/:id/ops')
-  addOp(@Param('id') id: string, @Body() dto: any) {
-    return this.service.addOp(id, dto);
+  @UseGuards(JwtAuthGuard)
+  addOp(@Param('id') id: string, @Body() dto: any, @Req() req: any) {
+    return this.service.addOp(id, dto, actorOf(req));
   }
 
-  // Tambah OP cukup dengan nomor OP (style & group otomatis)
   @Post('forms/:id/ops-by-number')
-  addOpByNumber(@Param('id') id: string, @Body() dto: any) {
-    return this.service.addOpByNumber(id, dto);
+  @UseGuards(JwtAuthGuard)
+  addOpByNumber(@Param('id') id: string, @Body() dto: any, @Req() req: any) {
+    return this.service.addOpByNumber(id, dto, actorOf(req));
   }
 
   @Delete('ops/:opId')
-  removeOp(@Param('opId') opId: string) {
-    return this.service.removeOp(opId);
+  @UseGuards(JwtAuthGuard)
+  removeOp(@Param('opId') opId: string, @Req() req: any) {
+    return this.service.removeOp(opId, actorOf(req));
   }
 
-  // FASE 5: kirim hasil cutting report ini ke produksi (induk OP) — legacy per-OP
   @Post('ops/:opId/post-to-production')
-  postToProduction(@Param('opId') opId: string, @Body() dto: any) {
-    return this.service.postToProduction(opId, dto);
+  @UseGuards(JwtAuthGuard)
+  postToProduction(@Param('opId') opId: string, @Body() dto: any, @Req() req: any) {
+    return this.service.postToProduction(opId, dto, actorOf(req));
   }
 
   // ===== Entan =====
   @Post('ops/:opId/entans')
-  addEntan(@Param('opId') opId: string) {
-    return this.service.addEntan(opId);
+  @UseGuards(JwtAuthGuard)
+  addEntan(@Param('opId') opId: string, @Req() req: any) {
+    return this.service.addEntan(opId, actorOf(req));
   }
 
-  // #2: Info kirim-produksi per-entan (set tersedia, sudah dikirim, sisa, batchCode)
   @Get('entans/:entanId/post-info')
   getEntanPostInfo(@Param('entanId') entanId: string) {
     return this.service.getEntanPostInfo(entanId);
   }
 
-  // #2: Kirim ke Produksi PER-ENTAN (1 entan = 1 batch). Body: { batchCode?, qty? }
   @Post('entans/:entanId/post-to-production')
+  @UseGuards(JwtAuthGuard)
   postEntanToProduction(
     @Param('entanId') entanId: string,
     @Body() dto: { batchCode?: string; qty?: number },
+    @Req() req: any,
   ) {
-    return this.service.postEntanToProduction(entanId, dto);
+    return this.service.postEntanToProduction(entanId, dto, actorOf(req));
   }
 
   @Patch('entans/:entanId/approve')
-  approveEntan(@Param('entanId') entanId: string) {
-    return this.service.approveEntan(entanId);
+  @UseGuards(JwtAuthGuard)
+  approveEntan(@Param('entanId') entanId: string, @Req() req: any) {
+    return this.service.approveEntan(entanId, actorOf(req));
   }
 
   // ===== Detail cutting =====
   @Post('entans/:entanId/details')
-  saveDetail(@Param('entanId') entanId: string, @Body() dto: any) {
-    return this.service.saveDetail(entanId, dto);
+  @UseGuards(JwtAuthGuard)
+  saveDetail(@Param('entanId') entanId: string, @Body() dto: any, @Req() req: any) {
+    return this.service.saveDetail(entanId, dto, actorOf(req));
   }
 
   @Patch('details/:id')
-  updateDetail(@Param('id') id: string, @Body() dto: any) {
-    return this.service.updateDetail(id, dto);
+  @UseGuards(JwtAuthGuard)
+  updateDetail(@Param('id') id: string, @Body() dto: any, @Req() req: any) {
+    return this.service.updateDetail(id, dto, actorOf(req));
   }
 
   @Delete('details/:id')
-  deleteDetail(@Param('id') id: string) {
-    return this.service.deleteDetail(id);
+  @UseGuards(JwtAuthGuard)
+  deleteDetail(@Param('id') id: string, @Req() req: any) {
+    return this.service.deleteDetail(id, actorOf(req));
   }
 
-  // Copy / gandakan satu baris cutting
   @Post('details/:id/copy')
-  copyDetail(@Param('id') id: string) {
-    return this.service.copyDetail(id);
+  @UseGuards(JwtAuthGuard)
+  copyDetail(@Param('id') id: string, @Req() req: any) {
+    return this.service.copyDetail(id, actorOf(req));
   }
 
   // ===== Turunan (NON-AUTOMOTIVE / NAT) =====
-  // Daftar grup turunan + baris NAT + ringkasan sisa per lot untuk satu material
   @Get('materials/:materialId/turunan')
   listTurunan(@Param('materialId') materialId: string) {
     return this.service.listTurunan(materialId);
   }
 
-  // Buat grup turunan baru pada material
   @Post('materials/:materialId/turunan')
-  createTurunan(@Param('materialId') materialId: string) {
-    return this.service.createTurunan(materialId);
+  @UseGuards(JwtAuthGuard)
+  createTurunan(@Param('materialId') materialId: string, @Req() req: any) {
+    return this.service.createTurunan(materialId, actorOf(req));
   }
 
-  // Hapus grup turunan (baris NAT di dalamnya ikut terhapus)
   @Delete('turunan/:turunanId')
-  deleteTurunan(@Param('turunanId') turunanId: string) {
-    return this.service.deleteTurunan(turunanId);
+  @UseGuards(JwtAuthGuard)
+  deleteTurunan(@Param('turunanId') turunanId: string, @Req() req: any) {
+    return this.service.deleteTurunan(turunanId, actorOf(req));
   }
 
-  // Ringkasan sisa material per No Lot (dari potong AUT) sebagai bahan turunan
   @Get('materials/:materialId/sisa-by-lot')
   sisaByLot(@Param('materialId') materialId: string) {
     return this.service.getSisaByLot(materialId);
@@ -150,7 +185,6 @@ export class CuttingReportController {
     @Query('endDate') endDate?: string,
     @Query('variant') variant?: string,
   ) {
-    // Diubah sesuai instruksi: gunakan method baru reviewWithFilters
     return this.service.reviewWithFilters({ startDate, endDate, variant });
   }
 }

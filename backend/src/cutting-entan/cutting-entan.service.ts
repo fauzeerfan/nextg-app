@@ -156,10 +156,16 @@ export class CuttingEntanService {
       });
       let isNewBatch = false;
 
+      // Sisa qty (pcs) yang belum dikirim ke Pond untuk OP induk ini.
+      const pending = (parent.qtyEntan || 0) - (parent.qtySentToPond || 0);
+      const reqQty = dto.qty && dto.qty > 0 ? Math.trunc(dto.qty) : 0;
+      // Jumlah pcs BARU yang benar-benar dikirim ke Pond pada dispatch ini (untuk
+      // mengurangi PEND & mencatat output entan yang benar — tidak dobel).
+      let sentQty = 0;
+
       if (!batch) {
-        // ----- BATCH BARU (nomor manual) -----
-        const pending = parent.qtyEntan - parent.qtySentToPond;
-        const qty = dto.qty && dto.qty > 0 ? Math.trunc(dto.qty) : pending;
+        // ----- BATCH BARU (nomor manual / default dari entan) -----
+        const qty = reqQty > 0 ? reqQty : pending;
         if (qty <= 0) {
           throw new ConflictException('Tidak ada sisa qty untuk membuat batch baru');
         }
@@ -169,6 +175,7 @@ export class CuttingEntanService {
           );
         }
         isNewBatch = true;
+        sentQty = qty;
         const batchCode = `${parent.opNumber}-B${bn}`;
         batch = await tx.productionOrder.create({
           data: {
@@ -200,9 +207,39 @@ export class CuttingEntanService {
           where: { id: parent.id },
           data: { qtySentToPond: { increment: qty } },
         });
+      } else {
+        // ----- BATCH SUDAH ADA -----
+        // Bila operator mengirim qty tambahan (mis. entan yang sama menerima cut baru
+        // dari Cutting Report), TAMBAHKAN qty ke batch ini & KURANGI PEND induk. Bila
+        // qty 0, hanya menambah pola ke batch (melengkapi), qty batch tetap.
+        if (reqQty > 0) {
+          if (reqQty > pending) {
+            throw new BadRequestException(
+              `Qty (${reqQty}) melebihi sisa pending (${pending}) untuk OP ini`,
+            );
+          }
+          sentQty = reqQty;
+          await tx.productionOrder.update({
+            where: { id: batch.id },
+            data: { qtyEntan: { increment: sentQty }, qtyOp: { increment: sentQty } },
+          });
+          await tx.cuttingBatch.updateMany({
+            where: { opId: batch.id },
+            data: { qty: { increment: sentQty } },
+          });
+          await tx.productionOrder.update({
+            where: { id: parent.id },
+            data: { qtySentToPond: { increment: sentQty } },
+          });
+          batch = { ...batch, qtyEntan: (batch.qtyEntan || 0) + sentQty };
+          // Samakan target SELURUH pola batch ini ke qty baru (model seragam);
+          // reset completed agar Pond memproses tambahan qty tsb.
+          await tx.patternProgress.updateMany({
+            where: { opId: batch.id },
+            data: { target: batch.qtyEntan, completed: false },
+          });
+        }
       }
-      // else: batch dengan nomor ini SUDAH ADA -> tambah pola (melengkapi set),
-      // qty batch tetap & qtySentToPond induk tidak berubah.
 
       const target = batch.qtyEntan || 0;
       for (const idx of patternIndexes) {
@@ -227,22 +264,39 @@ export class CuttingEntanService {
           batchOpId: batch.id,
           // Utamakan ID batch dari entan (carried) sebagai label bila ada.
           batchLabel: (dto.batchCode && dto.batchCode.trim()) || batch.batchCode || batch.opNumber,
-          qty: batch.qtyEntan,
+          qty: sentQty > 0 ? sentQty : batch.qtyEntan,
           patternIndexes,
         },
       });
 
-      await tx.productionLog.create({
-        data: {
-          opId: batch.id,
-          station: StationCode.CUTTING_ENTAN,
-          type: 'QR_GENERATED',
-          qty: batch.qtyEntan,
-          note: `Batch ${batch.batchCode} pola [${patternIndexes
-            .map((i) => patternName(i))
-            .join(', ')}]${isNewBatch ? ' (batch baru)' : ' (tambah pola)'}`,
-        },
-      });
+      // Output Cutting Entan (QR_GENERATED) = HANYA pcs baru yang dikirim pada dispatch
+      // ini (sentQty). Untuk "tambah pola" tanpa qty (sentQty 0) tidak menambah output
+      // agar tidak dobel-hitung di dashboard.
+      if (sentQty > 0) {
+        await tx.productionLog.create({
+          data: {
+            opId: batch.id,
+            station: StationCode.CUTTING_ENTAN,
+            type: 'QR_GENERATED',
+            qty: sentQty,
+            note: `Batch ${batch.batchCode} pola [${patternIndexes
+              .map((i) => patternName(i))
+              .join(', ')}]${isNewBatch ? ' (batch baru)' : ' (tambah qty)'}`,
+          },
+        });
+      } else {
+        await tx.productionLog.create({
+          data: {
+            opId: batch.id,
+            station: StationCode.CUTTING_ENTAN,
+            type: 'QR_GENERATED',
+            qty: 0,
+            note: `Batch ${batch.batchCode} tambah pola [${patternIndexes
+              .map((i) => patternName(i))
+              .join(', ')}]`,
+          },
+        });
+      }
 
       return {
         success: true,
@@ -527,5 +581,29 @@ export class CuttingEntanService {
       _sum: { qty: true },
     });
     return { total: result._sum.qty || 0 };
+  }
+
+  // =====================================================
+  // Reconcile PEND (merapikan data lama)
+  // =====================================================
+  // Menandai seluruh hasil cut OP induk ini SUDAH terkirim ke Pond
+  // (qtySentToPond = qtyEntan  ->  pending 0). Dipakai untuk mengatasi kondisi
+  // pending tersangkut padahal semua sudah masuk Pond & Pond sudah full supply
+  // (mis. akibat data lama sebelum perbaikan akuntansi dispatch). Aksi manual.
+  async reconcilePending(opNumber: string) {
+    const op = await this.prisma.productionOrder.findUnique({ where: { opNumber } });
+    if (!op) throw new NotFoundException('OP not found');
+    if (op.parentOpId) {
+      throw new BadRequestException('Reconcile hanya untuk OP induk, bukan batch');
+    }
+    const pendingBefore = (op.qtyEntan || 0) - (op.qtySentToPond || 0);
+    if (pendingBefore <= 0) {
+      return { success: true, opNumber, pendingBefore, pendingAfter: pendingBefore, changed: false };
+    }
+    await this.prisma.productionOrder.update({
+      where: { id: op.id },
+      data: { qtySentToPond: op.qtyEntan },
+    });
+    return { success: true, opNumber, pendingBefore, pendingAfter: 0, changed: true };
   }
 }

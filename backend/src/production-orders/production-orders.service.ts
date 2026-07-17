@@ -608,12 +608,88 @@ if (station === 'CP') {
     return win.mode === 'hour' ? `H${date.getHours()}` : this.historyDayKey(date);
   }
 
-  async getDashboardAnalytics(range?: string, lineCode?: string, startDate?: string, endDate?: string) {
+  // ======================================================
+  // FILTER TYPE FINISHED GOODS
+  // Type diambil dari deskripsi item finished goods (itemNameFG), mis. "... TYPE 1"
+  // atau "TYPE 4". Dinormalisasi ke bentuk "TYPE <n>" (leading zero dibuang).
+  // ======================================================
+  private extractFgType(itemName?: string | null): string | null {
+    if (!itemName) return null;
+    const s = String(itemName);
+    // Cocokkan: TYPE 1 / TYPE-4 / TYPE04 / TIPE 2 (variasi umum di deskripsi FG)
+    const m = s.match(/\bT[IY]PE\s*[-_]?\s*0*(\d+)/i);
+    if (m) return `TYPE ${parseInt(m[1], 10)}`;
+    return null;
+  }
+
+  /**
+   * Daftar TYPE unik yang benar-benar ada pada finished goods yang masuk sistem.
+   * Dibaca dari SELURUH ProductionOrder (induk & batch) lewat deskripsi itemNameFG,
+   * opsional difilter per-line. Dipakai untuk mengisi dropdown filter Type di dashboard.
+   */
+  async getDashboardFgTypes(lineCode?: string): Promise<string[]> {
+    const hasLine = !!lineCode && lineCode.trim() !== '';
+    const rows = await this.prisma.productionOrder.findMany({
+      where: {
+        itemNameFG: { not: null },
+        ...(hasLine ? { line: { code: lineCode } } : {}),
+      },
+      select: { itemNameFG: true },
+    });
+    const set = new Set<string>();
+    for (const r of rows) {
+      const t = this.extractFgType(r.itemNameFG);
+      if (t) set.add(t);
+    }
+    // Urutkan numerik: TYPE 1, TYPE 2, TYPE 4, ...
+    return Array.from(set).sort((a, b) => {
+      const na = parseInt(a.replace(/\D/g, ''), 10) || 0;
+      const nb = parseInt(b.replace(/\D/g, ''), 10) || 0;
+      return na - nb;
+    });
+  }
+
+  /**
+   * Mengembalikan daftar opId (ProductionOrder) yang cocok dengan TYPE terpilih.
+   * null artinya tidak ada filter type (semua type). Filter dilakukan di aplikasi
+   * karena type harus diekstrak dari string deskripsi (tidak bisa via query murni).
+   */
+  private async resolveTypeOpIds(type?: string): Promise<string[] | null> {
+    if (!type || type.trim() === '') return null;
+    const wanted = this.extractFgType(type) || `TYPE ${parseInt(type.replace(/\D/g, ''), 10) || type}`;
+    const rows = await this.prisma.productionOrder.findMany({
+      where: { itemNameFG: { not: null } },
+      select: { id: true, itemNameFG: true },
+    });
+    const ids = rows.filter((r) => this.extractFgType(r.itemNameFG) === wanted).map((r) => r.id);
+    // Kembalikan array (boleh kosong -> query akan menghasilkan 0 baris, sesuai harapan)
+    return ids;
+  }
+
+  async getDashboardAnalytics(range?: string, lineCode?: string, startDate?: string, endDate?: string, type?: string) {
     const win = this.analyticsWindow(range, startDate, endDate);
     const buckets = this.analyticsBuckets(win);
     const idxByKey = new Map<string, number>(buckets.map((b, i) => [b.key, i] as [string, number]));
     const hasLine = !!lineCode && lineCode.trim() !== '';
-    const opLineWhere: any = hasLine ? { op: { line: { code: lineCode } } } : {};
+    // Filter TYPE (dari deskripsi FG). null => tidak difilter.
+    const typeOpIds = await this.resolveTypeOpIds(type);
+    const hasType = typeOpIds !== null;
+    // Filter level-relasi (dipakai model yang punya relasi `op` + kolom `opId`:
+    // ProductionLog, PatternProgress, CheckPanelInspection, QcInspection).
+    const opLineWhere: any = {};
+    if (hasLine) opLineWhere.op = { line: { code: lineCode } };
+    if (hasType) opLineWhere.opId = { in: typeOpIds as string[] };
+    // Filter level-ProductionOrder (dipakai untuk snapshot WIP Packing).
+    const poWhere: any = {};
+    if (hasLine) poWhere.line = { code: lineCode };
+    if (hasType) poWhere.id = { in: typeOpIds as string[] };
+    // Filter level-items (PackingSession & Shipment terhubung ke OP lewat `items`).
+    const itemConds: any[] = [];
+    if (hasLine) itemConds.push({ op: { line: { code: lineCode } } });
+    if (hasType) itemConds.push({ opId: { in: typeOpIds as string[] } });
+    const itemsWhere: any = itemConds.length
+      ? { items: { some: itemConds.length === 1 ? itemConds[0] : { AND: itemConds } } }
+      : {};
     const timeWhere: any = { createdAt: { gte: win.start, lte: win.end } };
     const round1 = (n: number) => Math.round(n * 10) / 10;
     const rate = (part: number, total: number) => (total > 0 ? round1((part / total) * 100) : 0);
@@ -669,8 +745,16 @@ if (station === 'CP') {
       pondNg += l.qty;
     }
     const pondTotal = pondGood + pondNg;
+    // Rate produktivitas Pond = output good vs input batch (pola) yang masuk Pond pada rentang.
+    // Konvensi mengikuti perhitungan progress Pond di dashboard-comprehensive (batch qty = input).
+    const pondBatchRows = await this.prisma.cuttingBatch.findMany({
+      where: { createdAt: { gte: win.start, lte: win.end }, ...opLineWhere },
+      select: { qty: true },
+    });
+    const pondInput = pondBatchRows.reduce((s, b) => s + b.qty, 0);
+    const pondProductivityRate = pondInput > 0 ? round1((pondGood / pondInput) * 100) : 0;
     const patternRows = await this.prisma.patternProgress.findMany({
-      where: { updatedAt: { gte: win.start, lte: win.end }, ...(hasLine ? { op: { line: { code: lineCode } } } : {}) },
+      where: { updatedAt: { gte: win.start, lte: win.end }, ...opLineWhere },
       select: { patternIndex: true, patternName: true, good: true, ng: true },
       orderBy: { updatedAt: 'asc' },
     });
@@ -697,11 +781,45 @@ if (station === 'CP') {
     const cpTotal = cpGood + cpNg;
     // Rate NG per Komponen/Pola (dari CheckPanelInspection, dikelompokkan per patternIndex + nama terbaru)
     const cpInspRows = await this.prisma.checkPanelInspection.findMany({
-      where: { updatedAt: { gte: win.start, lte: win.end }, ...(hasLine ? { op: { line: { code: lineCode } } } : {}) },
+      where: { updatedAt: { gte: win.start, lte: win.end }, ...opLineWhere },
       select: { patternIndex: true, patternName: true, good: true, ng: true },
       orderBy: { updatedAt: 'asc' },
     });
     const cpNgPerComponent = ngByComponent(cpInspRows);
+
+    // Helper: bangun total & TREND jumlah temuan NG per KATEGORI dari baris {createdAt, ngReasons}.
+    // Format trend "wide" (tiap bucket = { label, [kategori]: jumlah }) agar mudah difilter per
+    // kategori di frontend. Konvensi jumlah = banyaknya kemunculan alasan (findings), konsisten
+    // dengan perhitungan qcNgPerCategory yang sudah ada sebelumnya.
+    const buildNgCategoryTrend = (rows: { createdAt: Date; ngReasons: any }[]) => {
+      const catTotals = new Map<string, number>();
+      const trend: Record<string, any>[] = buckets.map((b) => ({ label: b.label }));
+      for (const r of rows) {
+        let reasons: any = r.ngReasons;
+        if (typeof reasons === 'string') { try { reasons = JSON.parse(reasons); } catch { reasons = [reasons]; } }
+        if (!Array.isArray(reasons)) continue;
+        const i = idxByKey.get(this.analyticsBucketKey(r.createdAt, win));
+        for (const rs of reasons.flat()) {
+          const key = String(rs || '').trim();
+          if (!key) continue;
+          catTotals.set(key, (catTotals.get(key) || 0) + 1);
+          if (i != null) trend[i][key] = ((trend[i][key] as number) || 0) + 1;
+        }
+      }
+      const perCategory = Array.from(catTotals.entries())
+        .map(([category, count]) => ({ category, count }))
+        .sort((a, b) => b.count - a.count);
+      const categories = perCategory.map((c) => c.category);
+      for (const t of trend) for (const c of categories) if (t[c] == null) t[c] = 0;
+      return { categories, perCategory, trend };
+    };
+
+    // Trend kategori NG Check Panel (difilter by kategori di frontend)
+    const cpNgRows = await this.prisma.checkPanelInspection.findMany({
+      where: { createdAt: { gte: win.start, lte: win.end }, ng: { gt: 0 }, ...opLineWhere },
+      select: { createdAt: true, ngReasons: true },
+    });
+    const cpNgCategory = buildNgCategoryTrend(cpNgRows);
 
     // ---------- SEWING ----------
     const sewingLogs = await this.prisma.productionLog.findMany({
@@ -719,25 +837,15 @@ if (station === 'CP') {
 
     // ---------- QUALITY CONTROL ----------
     const qcRows = await this.prisma.qcInspection.findMany({
-      where: { ...timeWhere, ...(hasLine ? { op: { line: { code: lineCode } } } : {}) },
+      where: { ...timeWhere, ...opLineWhere },
       select: { good: true, ng: true, ngReasons: true, createdAt: true },
     });
     const qcTrend = buckets.map((b) => ({ label: b.label, good: 0, ng: 0, ngRate: 0, qualityRate: 0 }));
     let qcGood = 0, qcNg = 0;
-    const qcCatMap = new Map<string, number>();
     for (const r of qcRows) {
       const i = idxByKey.get(this.analyticsBucketKey(r.createdAt, win));
       if (i != null) { qcTrend[i].good += r.good; qcTrend[i].ng += r.ng; }
       qcGood += r.good; qcNg += r.ng;
-      let reasons: any = r.ngReasons;
-      if (typeof reasons === 'string') { try { reasons = JSON.parse(reasons); } catch { reasons = [reasons]; } }
-      if (Array.isArray(reasons)) {
-        for (const rs of reasons) {
-          const key = String(rs || '').trim();
-          if (!key) continue;
-          qcCatMap.set(key, (qcCatMap.get(key) || 0) + 1);
-        }
-      }
     }
     for (const t of qcTrend) {
       const tot = t.good + t.ng;
@@ -745,9 +853,108 @@ if (station === 'CP') {
       t.qualityRate = tot > 0 ? round1((t.good / tot) * 100) : 0;
     }
     const qcTotal = qcGood + qcNg;
-    const qcNgPerCategory = Array.from(qcCatMap.entries())
-      .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count);
+    // Total & trend kategori NG QC (difilter by kategori di frontend)
+    const qcNgCategory = buildNgCategoryTrend(qcRows.filter((r) => r.ng > 0));
+    const qcNgPerCategory = qcNgCategory.perCategory;
+
+    // ---------- PACKING (tidak ada NG; fokus produktivitas & status packed) ----------
+    // Packed = PackingSession CLOSED (totalQty). receivedAt terisi => sudah dikirim ke Finished Goods.
+    const packingSessionRows = await this.prisma.packingSession.findMany({
+      where: { status: 'CLOSED', createdAt: { gte: win.start, lte: win.end }, ...itemsWhere },
+      select: { totalQty: true, createdAt: true, receivedAt: true },
+    });
+    const packingProductivity = buckets.map((b) => ({ label: b.label, packed: 0, sentToFg: 0 }));
+    let packedTotal = 0, packingSentToFg = 0;
+    for (const s of packingSessionRows) {
+      const i = idxByKey.get(this.analyticsBucketKey(s.createdAt, win));
+      if (i != null) packingProductivity[i].packed += s.totalQty;
+      packedTotal += s.totalQty;
+      if (s.receivedAt) {
+        packingSentToFg += s.totalQty;
+        const j = idxByKey.get(this.analyticsBucketKey(s.receivedAt, win));
+        if (j != null) packingProductivity[j].sentToFg += s.totalQty;
+      }
+    }
+    const packingStock = Math.max(0, packedTotal - packingSentToFg); // packed, belum diterima FG
+    // WIP Packing = qtyQC good - qtyPacking (snapshot OP WIP)
+    const packingWipOps = await this.prisma.productionOrder.findMany({
+      where: { status: 'WIP', level: { not: OpLevel.PARENT }, ...poWhere },
+      select: { qtyQC: true, qtyPacking: true },
+    });
+    const packingWip = packingWipOps.reduce((sum, o) => sum + Math.max(0, (o.qtyQC || 0) - (o.qtyPacking || 0)), 0);
+    const packingInput = qcGood; // input packing = output good QC pada rentang
+
+    // ---------- FINISHED GOODS (tidak ada NG; input dari packing, stock, output shipping) ----------
+    // Input FG = PackingSession yang DITERIMA (receivedAt) pada rentang.
+    const fgReceivedRows = await this.prisma.packingSession.findMany({
+      where: { status: 'CLOSED', receivedAt: { gte: win.start, lte: win.end }, ...itemsWhere },
+      select: { totalQty: true, receivedAt: true },
+    });
+    // Output FG = Shipment (surat jalan) pada rentang.
+    const fgShipmentRows = await this.prisma.shipment.findMany({
+      where: { createdAt: { gte: win.start, lte: win.end }, ...itemsWhere },
+      select: { totalQty: true, createdAt: true },
+    });
+    const fgProductivity = buckets.map((b) => ({ label: b.label, input: 0, shipped: 0 }));
+    let fgInput = 0, fgShipped = 0;
+    for (const r of fgReceivedRows) {
+      fgInput += r.totalQty;
+      const i = r.receivedAt ? idxByKey.get(this.analyticsBucketKey(r.receivedAt, win)) : null;
+      if (i != null) fgProductivity[i].input += r.totalQty;
+    }
+    for (const s of fgShipmentRows) {
+      fgShipped += s.totalQty;
+      const i = idxByKey.get(this.analyticsBucketKey(s.createdAt, win));
+      if (i != null) fgProductivity[i].shipped += s.totalQty;
+    }
+    // Stock FG saat ini (snapshot) = sisa FGStockItem (qty) difilter line/type via relasi op.
+    const fgStockItems = await this.prisma.fGStockItem.findMany({
+      where: { ...opLineWhere },
+      select: { qty: true },
+    });
+    const fgStock = fgStockItems.reduce((sum, it) => sum + (it.qty || 0), 0);
+
+    // Trend entan-only (tanpa pond) untuk tab Cutting Entan
+    const entanTrend = cuttingProductivity.map((p) => ({ label: p.label, entan: p.entan }));
+
+    // ---------- MATERIAL CUTTING ENTAN: SISA dianggap NG ----------
+    // Sumber: CuttingDetail (Cutting Report). "sisa" = material tersisa/terbuang
+    // (dianggap NG), "aktualPemakaian" = material yang benar-benar dipakai (good).
+    // Difilter per-line via formOp.styleCode, dan per-type via deskripsi itemNameFG.
+    const wantedType = type && type.trim()
+      ? (this.extractFgType(type) || `TYPE ${parseInt(type.replace(/\D/g, ''), 10) || 0}`)
+      : null;
+    const cutDetailRows = await this.prisma.cuttingDetail.findMany({
+      where: {
+        variant: 'AUT',
+        createdAt: { gte: win.start, lte: win.end },
+        ...(hasLine ? { entan: { formOp: { styleCode: lineCode } } } : {}),
+      },
+      select: {
+        sisa: true,
+        aktualPemakaian: true,
+        createdAt: true,
+        entan: { select: { formOp: { select: { itemNameFG: true } } } },
+      },
+    });
+    const entanMaterialTrend = buckets.map((b) => ({ label: b.label, dipakai: 0, sisa: 0, ngRate: 0 }));
+    let totalSisa = 0, totalDipakai = 0;
+    for (const d of cutDetailRows) {
+      if (wantedType && this.extractFgType(d.entan?.formOp?.itemNameFG) !== wantedType) continue;
+      const sisa = Math.max(0, d.sisa || 0);
+      const dipakai = Math.max(0, d.aktualPemakaian || 0);
+      const i = idxByKey.get(this.analyticsBucketKey(d.createdAt, win));
+      if (i != null) { entanMaterialTrend[i].sisa += sisa; entanMaterialTrend[i].dipakai += dipakai; }
+      totalSisa += sisa; totalDipakai += dipakai;
+    }
+    for (const t of entanMaterialTrend) {
+      const tot = t.sisa + t.dipakai;
+      t.ngRate = tot > 0 ? round1((t.sisa / tot) * 100) : 0;
+      t.sisa = round1(t.sisa);
+      t.dipakai = round1(t.dipakai);
+    }
+    const totalMaterial = totalSisa + totalDipakai;
+    const entanWasteRate = totalMaterial > 0 ? round1((totalSisa / totalMaterial) * 100) : 0;
 
     return {
       range: startDate && endDate ? 'custom' : range === 'today' ? 'today' : range === '30d' ? '30d' : '7d',
@@ -755,14 +962,23 @@ if (station === 'CP') {
       cutting: {
         entan: {
           productivity: cuttingProductivity,
+          trend: entanTrend,
           totalEntan,
           totalPond: pondGood,
+          // Material: sisa dianggap NG (waste)
+          materialTrend: entanMaterialTrend,
+          totalSisa: round1(totalSisa),
+          totalDipakai: round1(totalDipakai),
+          totalMaterial: round1(totalMaterial),
+          wasteRate: entanWasteRate,
         },
         pond: {
           productivity: pondProductivity,
           good: pondGood, ng: pondNg, total: pondTotal,
           ngRate: rate(pondNg, pondTotal),
           qualityRate: rate(pondGood, pondTotal),
+          productivityRate: pondProductivityRate,
+          input: pondInput,
           ngPerComponent: cuttingNgPerComponent,
         },
       },
@@ -772,6 +988,9 @@ if (station === 'CP') {
         qualityRate: cpTotal > 0 ? round1((cpGood / cpTotal) * 100) : 0,
         trend: cpTrend,
         ngPerComponent: cpNgPerComponent,
+        ngCategories: cpNgCategory.categories,
+        ngPerCategory: cpNgCategory.perCategory,
+        ngCategoryTrend: cpNgCategory.trend,
       },
       sewing: {
         totalStart, totalFinish,
@@ -784,6 +1003,22 @@ if (station === 'CP') {
         qualityRate: qcTotal > 0 ? round1((qcGood / qcTotal) * 100) : 0,
         trend: qcTrend,
         ngPerCategory: qcNgPerCategory,
+        ngCategories: qcNgCategory.categories,
+        ngCategoryTrend: qcNgCategory.trend,
+      },
+      packing: {
+        input: packingInput,
+        packed: packedTotal,
+        wip: packingWip,
+        stock: packingStock,
+        sentToFg: packingSentToFg,
+        productivity: packingProductivity,
+      },
+      finishedGoods: {
+        input: fgInput,
+        stock: fgStock,
+        shipped: fgShipped,
+        productivity: fgProductivity,
       },
     };
   }
@@ -854,7 +1089,7 @@ if (station === 'CP') {
   // ======================================================
   // DASHBOARD COMPREHENSIVE (UPDATED: + filter line, + entan output, + sewing fix)
   // ======================================================
-  async getDashboardComprehensive(startDateStr?: string, endDateStr?: string, lineCode?: string) {
+  async getDashboardComprehensive(startDateStr?: string, endDateStr?: string, lineCode?: string, type?: string) {
     // Tentukan rentang tanggal (default: hari ini)
     let startDate: Date;
     let endDate: Date;
@@ -873,9 +1108,25 @@ if (station === 'CP') {
 
     // ===== Filter line (opsional). Kosong/undefined => semua line. =====
     const hasLine = !!lineCode && lineCode.trim() !== '';
-    const lineWhere: any = hasLine ? { line: { code: lineCode } } : {};                          // model punya relasi `line` (ProductionOrder)
-    const opLineWhere: any = hasLine ? { op: { line: { code: lineCode } } } : {};                // model punya relasi `op` (ProductionLog/CheckPanelInspection/QcInspection/CuttingBatch)
-    const itemsLineWhere: any = hasLine ? { items: { some: { op: { line: { code: lineCode } } } } } : {}; // PackingSession & Shipment (lewat items -> op)
+    // ===== Filter TYPE (opsional). Diambil dari deskripsi FG (itemNameFG). =====
+    const typeOpIds = await this.resolveTypeOpIds(type);
+    const hasType = typeOpIds !== null;
+
+    const lineWhere: any = {};                       // model punya relasi `line` (ProductionOrder)
+    if (hasLine) lineWhere.line = { code: lineCode };
+    if (hasType) lineWhere.id = { in: typeOpIds as string[] };
+
+    const opLineWhere: any = {};                     // model punya relasi `op` + kolom `opId` (ProductionLog/CheckPanelInspection/QcInspection/CuttingBatch)
+    if (hasLine) opLineWhere.op = { line: { code: lineCode } };
+    if (hasType) opLineWhere.opId = { in: typeOpIds as string[] };
+
+    // PackingSession & Shipment (lewat items -> op)
+    const itemConds: any[] = [];
+    if (hasLine) itemConds.push({ op: { line: { code: lineCode } } });
+    if (hasType) itemConds.push({ opId: { in: typeOpIds as string[] } });
+    const itemsLineWhere: any = itemConds.length
+      ? { items: { some: itemConds.length === 1 ? itemConds[0] : { AND: itemConds } } }
+      : {};
 
     // 1. KPI UTAMA (dalam rentang tanggal)
     const totalOps = await this.prisma.productionOrder.count({ where: { ...lineWhere, level: { not: OpLevel.PARENT } } });
@@ -1177,6 +1428,10 @@ if (station === 'CP') {
       });
     }
 
+    // Daftar TYPE untuk dropdown filter (stabil: hanya ikut filter line, tidak ikut filter type,
+    // agar opsi tidak menghilang saat sebuah type sedang dipilih).
+    const fgTypes = await this.getDashboardFgTypes(lineCode);
+
     return {
       kpi: {
         totalOps, todayOutput, totalWip, overallEfficiency,
@@ -1189,7 +1444,8 @@ if (station === 'CP') {
       slowMovingOps,
       recentActivities,
       lineSummaries,
-      qualityTrend
+      qualityTrend,
+      fgTypes,
     };
   }
 

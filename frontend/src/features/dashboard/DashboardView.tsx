@@ -22,23 +22,30 @@ const NG_PALETTE = ['#ef4444', '#f97316', '#f59e0b', '#8b5cf6', '#06b6d4', '#3b8
 
 // ============ TYPES (analytics endpoint) ============
 interface EntanPondPoint { label: string; entan: number; pond: number; }
+interface EntanPoint { label: string; entan: number; }
+interface MaterialPoint { label: string; dipakai: number; sisa: number; ngRate: number; }
 interface PondPoint { label: string; good: number; ng: number; }
 interface NgComp { name: string; good: number; ng: number; total: number; ngRate: number; }
 interface QualityPoint { label: string; good: number; ng: number; ngRate: number; qualityRate: number; }
 interface SewingPoint { label: string; start: number; finish: number; }
+type NgCatPoint = { label: string; [category: string]: number | string };
+interface PackingPoint { label: string; packed: number; sentToFg: number; }
+interface FgPoint { label: string; input: number; shipped: number; }
 interface Analytics {
   range: string;
   mode: 'hour' | 'day';
   cutting: {
-    entan: { productivity: EntanPondPoint[]; totalEntan: number; totalPond: number; };
-    pond: { productivity: PondPoint[]; good: number; ng: number; total: number; ngRate: number; qualityRate: number; ngPerComponent: NgComp[]; };
+    entan: { productivity: EntanPondPoint[]; trend: EntanPoint[]; totalEntan: number; totalPond: number; materialTrend: MaterialPoint[]; totalSisa: number; totalDipakai: number; totalMaterial: number; wasteRate: number; };
+    pond: { productivity: PondPoint[]; good: number; ng: number; total: number; ngRate: number; qualityRate: number; productivityRate: number; input: number; ngPerComponent: NgComp[]; };
   };
-  checkPanel: { good: number; ng: number; total: number; ngRate: number; qualityRate: number; trend: QualityPoint[]; ngPerComponent: NgComp[]; };
+  checkPanel: { good: number; ng: number; total: number; ngRate: number; qualityRate: number; trend: QualityPoint[]; ngPerComponent: NgComp[]; ngCategories: string[]; ngPerCategory: { category: string; count: number }[]; ngCategoryTrend: NgCatPoint[]; };
   sewing: { totalStart: number; totalFinish: number; productivity: SewingPoint[]; trend: { label: string; output: number }[]; };
-  qc: { good: number; ng: number; total: number; ngRate: number; qualityRate: number; trend: QualityPoint[]; ngPerCategory: { category: string; count: number }[]; };
+  qc: { good: number; ng: number; total: number; ngRate: number; qualityRate: number; trend: QualityPoint[]; ngPerCategory: { category: string; count: number }[]; ngCategories: string[]; ngCategoryTrend: NgCatPoint[]; };
+  packing: { input: number; packed: number; wip: number; stock: number; sentToFg: number; productivity: PackingPoint[]; };
+  finishedGoods: { input: number; stock: number; shipped: number; productivity: FgPoint[]; };
 }
 
-type TabKey = 'flow' | 'entan' | 'pond' | 'cp' | 'sewing' | 'qc';
+type TabKey = 'flow' | 'entan' | 'pond' | 'cp' | 'sewing' | 'qc' | 'packing' | 'fg';
 type RangeKey = 'today' | '7d' | '30d' | 'custom';
 
 // ============ SMALL UI HELPERS ============
@@ -187,10 +194,14 @@ export const DashboardView = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState('');
   const [selectedLine, setSelectedLine] = useState('');
+  const [selectedType, setSelectedType] = useState('');
   const [range, setRange] = useState<RangeKey>('7d');
   const [tab, setTab] = useState<TabKey>('flow');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  // Kategori NG terpilih untuk trend (Check Panel & Quality Control). '' = semua kategori.
+  const [cpNgCat, setCpNgCat] = useState('');
+  const [qcNgCat, setQcNgCat] = useState('');
 
   const pad = (n: number) => String(n).padStart(2, '0');
   const fmtD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -223,10 +234,12 @@ export const DashboardView = () => {
       const { startDate, endDate } = rangeToDates(range);
       const compQs = new URLSearchParams({ startDate, endDate });
       if (selectedLine) compQs.set('lineCode', selectedLine);
+      if (selectedType) compQs.set('type', selectedType);
       const anaQs = new URLSearchParams();
       if (range === 'custom') { anaQs.set('startDate', startDate); anaQs.set('endDate', endDate); }
       else anaQs.set('range', range);
       if (selectedLine) anaQs.set('lineCode', selectedLine);
+      if (selectedType) anaQs.set('type', selectedType);
 
       const [compRes, anaRes] = await Promise.all([
         fetch(`${API_BASE_URL}/production-orders/dashboard-comprehensive?${compQs.toString()}`),
@@ -240,7 +253,7 @@ export const DashboardView = () => {
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, [range, selectedLine, rangeToDates]);
+  }, [range, selectedLine, selectedType, rangeToDates]);
 
   useEffect(() => {
     fetchAll();
@@ -250,6 +263,7 @@ export const DashboardView = () => {
 
   const kpi = comp?.kpi;
   const lines = comp?.lineSummaries || [];
+  const fgTypes = comp?.fgTypes || [];
 
   // Recharts shared styling
   const axisTick = { fontSize: 11, fill: isDark ? '#94a3b8' : '#64748b', fontWeight: 600 };
@@ -275,6 +289,8 @@ export const DashboardView = () => {
     { key: 'cp', label: 'Check Panel', icon: CheckSquare, color: C.green },
     { key: 'sewing', label: 'Sewing', icon: Shirt, color: C.purple },
     { key: 'qc', label: 'Quality Control', icon: ShieldCheck, color: C.red },
+    { key: 'packing', label: 'Packing', icon: Package, color: C.blue },
+    { key: 'fg', label: 'Finished Goods', icon: Truck, color: C.cyan },
   ];
 
   const donutData = (good: number, ng: number) => [{ name: 'Good', value: good }, { name: 'Not Good', value: ng }];
@@ -295,6 +311,69 @@ export const DashboardView = () => {
       )}
     </ChartCard>
   );
+
+  // Bar horizontal: jumlah temuan NG per kategori (count murni)
+  const ngCategoryBar = (data: { category: string; count: number }[], color: string, title: string, subtitle: string) => (
+    <ChartCard title={title} subtitle={subtitle} icon={AlertTriangle} color={color}>
+      {data.length === 0 ? <EmptyState label="Tidak ada NG pada rentang ini" /> : (
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart layout="vertical" data={data.slice(0, 8)} margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
+            <XAxis type="number" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} allowDecimals={false} />
+            <YAxis type="category" dataKey="category" tick={axisTick} tickLine={false} axisLine={false} width={108} />
+            <Tooltip {...tooltipStyle} formatter={(v: any) => [`${v} temuan`, 'Jumlah NG']} />
+            <Bar dataKey="count" name="Jumlah NG" radius={[0, 6, 6, 0]} maxBarSize={22}>
+              {data.slice(0, 8).map((_, i) => <Cell key={i} fill={NG_PALETTE[i % NG_PALETTE.length]} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </ChartCard>
+  );
+
+  // Trend NG per kategori, bisa difilter per kategori (atau "Semua Kategori" = total temuan)
+  const ngCatTrend = (
+    trend: NgCatPoint[], categories: string[], selected: string,
+    setSelected: (v: string) => void, color: string, idKey: string, title: string,
+  ) => {
+    const data = (trend || []).map(pt => {
+      let value = 0;
+      if (selected) value = Number(pt[selected] || 0);
+      else for (const c of categories) value += Number(pt[c] || 0);
+      return { label: pt.label as string, value };
+    });
+    const empty = data.every(d => d.value === 0);
+    return (
+      <ChartCard title={title} subtitle={selected ? `Kategori: ${selected}` : 'Semua kategori (total temuan NG)'} icon={AlertTriangle} color={color}>
+        <div className="mb-2.5">
+          <select
+            value={selected}
+            onChange={e => setSelected(e.target.value)}
+            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500"
+          >
+            <option value="">Semua Kategori{categories.length ? ` (${categories.length})` : ''}</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        {empty ? <EmptyState label="Tidak ada NG pada rentang ini" /> : (
+          <ResponsiveContainer width="100%" height={232}>
+            <AreaChart data={data} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
+              <defs>
+                <linearGradient id={`ngcat-${idKey}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={color} stopOpacity={0.35} /><stop offset="95%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+              <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} />
+              <YAxis tick={axisTick} tickLine={false} axisLine={false} allowDecimals={false} />
+              <Tooltip {...tooltipStyle} formatter={(v: any) => [`${v} temuan`, selected || 'Total NG']} />
+              <Area type="monotone" dataKey="value" name={selected || 'Total NG'} stroke={color} strokeWidth={2.5} fill={`url(#ngcat-${idKey})`} dot={{ r: 2 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </ChartCard>
+    );
+  };
 
   return (
     <div className={`font-poppins text-slate-800 dark:text-slate-100 ${isFullscreen ? 'fixed inset-0 z-[200] bg-slate-50 dark:bg-slate-900 overflow-auto p-4' : ''} animate-in fade-in duration-300`}>
@@ -350,11 +429,23 @@ export const DashboardView = () => {
             {/* Line filter */}
             <select
               value={selectedLine}
-              onChange={(e) => setSelectedLine(e.target.value)}
+              onChange={(e) => { setSelectedLine(e.target.value); setSelectedType(''); }}
               className="px-3 py-2 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500"
             >
               <option value="">Semua Line</option>
               {lines.map(l => <option key={l.lineCode} value={l.lineCode}>{l.lineCode}</option>)}
+            </select>
+
+            {/* Type filter (dari deskripsi finished goods) */}
+            <select
+              value={selectedType}
+              onChange={(e) => setSelectedType(e.target.value)}
+              disabled={fgTypes.length === 0}
+              title={fgTypes.length === 0 ? 'Tidak ada TYPE terdeteksi pada finished goods' : 'Filter berdasarkan TYPE finished goods'}
+              className="px-3 py-2 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="">Semua Type</option>
+              {fgTypes.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
 
             <button
@@ -426,43 +517,70 @@ export const DashboardView = () => {
             </div>
           )}
 
-          {/* ---------- CUTTING ENTAN ---------- */}
-          {tab === 'entan' && analytics && (
-            <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <StatTile label="Output Entan" value={analytics.cutting.entan.totalEntan} suffix="pcs" color={C.orange} icon={Scissors} caption="Total dikirim ke Pond" />
-                <StatTile label="Output Pond" value={analytics.cutting.entan.totalPond} suffix="pcs" color={C.amber} icon={Layers} caption="Total pola lolos hitung" />
-                <StatTile
-                  label="Throughput Pond"
-                  value={analytics.cutting.entan.totalEntan > 0 ? Math.round((analytics.cutting.entan.totalPond / analytics.cutting.entan.totalEntan) * 100) : 0}
-                  suffix="%" color={C.green} icon={Gauge} caption="Output Pond / Output Entan"
-                />
+          {/* ---------- CUTTING ENTAN (fokus data Entan; tanpa Cutting Pond) ---------- */}
+          {tab === 'entan' && analytics && (() => {
+            const trend = analytics.cutting.entan.trend || [];
+            const active = trend.filter(p => p.entan > 0).length;
+            const avg = active > 0 ? Math.round(analytics.cutting.entan.totalEntan / active) : 0;
+            const peak = trend.reduce((m, p) => Math.max(m, p.entan), 0);
+            const mat = analytics.cutting.entan.materialTrend || [];
+            const hasMat = analytics.cutting.entan.totalMaterial > 0;
+            return (
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <StatTile label="Output Entan" value={analytics.cutting.entan.totalEntan} suffix="pcs" color={C.orange} icon={Scissors} caption="Total pcs dipotong & dikirim ke Pond" />
+                  <StatTile label="Rata-rata / Periode" value={avg} suffix="pcs" color={C.blue} icon={Gauge} caption={`Rerata output pada ${active || 0} periode aktif`} />
+                  <StatTile label="Output Tertinggi" value={peak} suffix="pcs" color={C.green} icon={TrendingUp} caption="Puncak output per periode" />
+                  <StatTile label="Rate NG Material (Sisa)" value={analytics.cutting.entan.wasteRate} suffix="%" color={C.red} icon={AlertTriangle} caption={`Sisa ${fmtNum(analytics.cutting.entan.totalSisa)} / material ${fmtNum(analytics.cutting.entan.totalMaterial)}`} />
+                </div>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <ChartCard title="Trend Produktivitas Cutting Entan" subtitle="Output pcs Cutting Entan per periode (dikirim ke Pond)" icon={TrendingUp} color={C.orange}>
+                    {trend.every(p => p.entan === 0) ? <EmptyState /> : (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <AreaChart data={trend} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="entanTrend" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.orange} stopOpacity={0.4} /><stop offset="95%" stopColor={C.orange} stopOpacity={0} /></linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+                          <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} />
+                          <YAxis tick={axisTick} tickLine={false} axisLine={false} />
+                          <Tooltip {...tooltipStyle} formatter={(v: any) => [`${fmtNum(v)} pcs`, 'Output Entan']} />
+                          <Area type="monotone" dataKey="entan" name="Output Entan" stroke={C.orange} strokeWidth={3} fill="url(#entanTrend)" dot={{ r: 2 }} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartCard>
+
+                  <ChartCard title="Material: Dipakai vs Sisa (NG)" subtitle="Material aktual dipakai vs sisa/terbuang (dianggap NG) & rate NG per periode" icon={AlertTriangle} color={C.red}>
+                    {!hasMat ? <EmptyState label="Belum ada data material cutting" /> : (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <ComposedChart data={mat} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+                          <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} />
+                          <YAxis yAxisId="l" tick={axisTick} tickLine={false} axisLine={false} />
+                          <YAxis yAxisId="r" orientation="right" tick={axisTick} tickLine={false} axisLine={false} unit="%" />
+                          <Tooltip {...tooltipStyle} />
+                          <Legend wrapperStyle={{ fontSize: 12, fontWeight: 700 }} />
+                          <Bar yAxisId="l" dataKey="dipakai" name="Dipakai (good)" fill={C.green} radius={[4, 4, 0, 0]} maxBarSize={22} />
+                          <Bar yAxisId="l" dataKey="sisa" name="Sisa (NG)" fill={C.red} radius={[4, 4, 0, 0]} maxBarSize={22} />
+                          <Line yAxisId="r" type="monotone" dataKey="ngRate" name="Rate NG" stroke={C.amber} strokeWidth={3} dot={{ r: 2 }} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartCard>
+                </div>
               </div>
-              <ChartCard title="Grafik Produktivitas Entan & Pond" subtitle="Output Cutting Entan vs Cutting Pond per periode" icon={TrendingUp} color={C.orange}>
-                {analytics.cutting.entan.productivity.every(p => p.entan + p.pond === 0) ? <EmptyState /> : (
-                  <ResponsiveContainer width="100%" height={320}>
-                    <ComposedChart data={analytics.cutting.entan.productivity} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
-                      <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} />
-                      <YAxis tick={axisTick} tickLine={false} axisLine={false} />
-                      <Tooltip {...tooltipStyle} />
-                      <Legend wrapperStyle={{ fontSize: 12, fontWeight: 700 }} />
-                      <Bar dataKey="entan" name="Output Entan" fill={C.orange} radius={[4, 4, 0, 0]} maxBarSize={30} />
-                      <Line type="monotone" dataKey="pond" name="Output Pond" stroke={C.amber} strokeWidth={3} dot={{ r: 3 }} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                )}
-              </ChartCard>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ---------- CUTTING POND ---------- */}
           {tab === 'pond' && analytics && (
             <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <StatTile label="Rate Kualitas" value={analytics.cutting.pond.qualityRate} suffix="%" color={C.green} icon={Gauge} caption={`${fmtNum(analytics.cutting.pond.good)} good`} />
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+                <StatTile label="Rate Produktivitas" value={analytics.cutting.pond.productivityRate} suffix="%" color={C.amber} icon={Gauge} caption={`Output good / input ${fmtNum(analytics.cutting.pond.input)} pola`} />
+                <StatTile label="Rate Kualitas" value={analytics.cutting.pond.qualityRate} suffix="%" color={C.green} icon={Award} caption={`${fmtNum(analytics.cutting.pond.good)} good`} />
                 <StatTile label="Rate NG" value={analytics.cutting.pond.ngRate} suffix="%" color={C.red} icon={AlertTriangle} caption={`${fmtNum(analytics.cutting.pond.ng)} NG (pola)`} />
-                <StatTile label="Total Pola" value={analytics.cutting.pond.total} suffix="pcs" color={C.amber} icon={Layers} caption="Good + NG" />
+                <StatTile label="Total Pola" value={analytics.cutting.pond.total} suffix="pcs" color={C.blue} icon={Layers} caption="Good + NG" />
                 <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-2 shadow-sm">
                   {analytics.cutting.pond.total === 0 ? <EmptyState label="Belum ada data" /> : (
                     <ResponsiveContainer width="100%" height={96}>
@@ -539,7 +657,11 @@ export const DashboardView = () => {
                     </ResponsiveContainer>
                   )}
                 </ChartCard>
+                {ngCatTrend(analytics.checkPanel.ngCategoryTrend, analytics.checkPanel.ngCategories, cpNgCat, setCpNgCat, C.red, 'cp', 'Trend Kategori NG')}
+              </div>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 {ngBar(analytics.checkPanel.ngPerComponent, C.red, 'Rate NG per Komponen / Pola', 'Persentase NG tiap pola (Check Panel)')}
+                {ngCategoryBar(analytics.checkPanel.ngPerCategory, C.orange, 'Jumlah NG per Kategori', 'Total temuan NG per kategori (Check Panel)')}
               </div>
             </div>
           )}
@@ -635,22 +757,68 @@ export const DashboardView = () => {
                   )}
                 </ChartCard>
 
-                <ChartCard title="Rate NG per Kategori" subtitle="Jumlah temuan NG per kategori defect (QC)" icon={AlertTriangle} color={C.red}>
-                  {analytics.qc.ngPerCategory.length === 0 ? <EmptyState label="Tidak ada NG pada rentang ini" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
-                      <BarChart layout="vertical" data={analytics.qc.ngPerCategory.slice(0, 8)} margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
-                        <XAxis type="number" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} allowDecimals={false} />
-                        <YAxis type="category" dataKey="category" tick={axisTick} tickLine={false} axisLine={false} width={104} />
-                        <Tooltip {...tooltipStyle} formatter={(v: any) => [`${v} temuan`, 'Jumlah NG']} />
-                        <Bar dataKey="count" name="Jumlah NG" radius={[0, 6, 6, 0]} maxBarSize={22}>
-                          {analytics.qc.ngPerCategory.slice(0, 8).map((_, i) => <Cell key={i} fill={NG_PALETTE[i % NG_PALETTE.length]} />)}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </ChartCard>
+                {ngCatTrend(analytics.qc.ngCategoryTrend, analytics.qc.ngCategories, qcNgCat, setQcNgCat, C.red, 'qc', 'Trend Kategori NG')}
               </div>
+              <div className="grid grid-cols-1 gap-4">
+                {ngCategoryBar(analytics.qc.ngPerCategory, C.orange, 'Rate NG per Kategori', 'Jumlah temuan NG per kategori defect (QC)')}
+              </div>
+            </div>
+          )}
+
+          {/* ---------- PACKING ---------- */}
+          {tab === 'packing' && analytics && (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+                <StatTile label="Input dari QC" value={analytics.packing.input} suffix="sets" color={C.green} icon={ArrowDownToLine} caption="Good QC siap dipacking" />
+                <StatTile label="Packed" value={analytics.packing.packed} suffix="sets" color={C.blue} icon={PackageCheck} caption="Total set di-packing (box closed)" />
+                <StatTile label="WIP Packing" value={analytics.packing.wip} suffix="sets" color={C.amber} icon={Activity} caption="Menunggu di-packing" />
+                <StatTile label="Stock (belum ke FG)" value={analytics.packing.stock} suffix="sets" color={C.purple} icon={Boxes} caption="Packed, belum diterima FG" />
+                <StatTile label="Terkirim ke FG" value={analytics.packing.sentToFg} suffix="sets" color={C.cyan} icon={Truck} caption="Sudah diterima Finished Goods" />
+              </div>
+              <ChartCard title="Produktivitas Packing" subtitle="Set di-packing vs dikirim ke Finished Goods per periode" icon={Package} color={C.blue}>
+                {analytics.packing.productivity.every(p => p.packed + p.sentToFg === 0) ? <EmptyState /> : (
+                  <ResponsiveContainer width="100%" height={320}>
+                    <ComposedChart data={analytics.packing.productivity} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+                      <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} />
+                      <YAxis tick={axisTick} tickLine={false} axisLine={false} />
+                      <Tooltip {...tooltipStyle} />
+                      <Legend wrapperStyle={{ fontSize: 12, fontWeight: 700 }} />
+                      <Bar dataKey="packed" name="Packed" fill={C.blue} radius={[4, 4, 0, 0]} maxBarSize={30} />
+                      <Line type="monotone" dataKey="sentToFg" name="Ke Finished Goods" stroke={C.cyan} strokeWidth={3} dot={{ r: 3 }} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                )}
+              </ChartCard>
+            </div>
+          )}
+
+          {/* ---------- FINISHED GOODS ---------- */}
+          {tab === 'fg' && analytics && (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <StatTile label="Input dari Packing" value={analytics.finishedGoods.input} suffix="sets" color={C.blue} icon={ArrowDownToLine} caption="Diterima dari Packing pada rentang" />
+                <StatTile label="Stock Finished Goods" value={analytics.finishedGoods.stock} suffix="sets" color={C.amber} icon={Boxes} caption="Sisa stok FG saat ini" />
+                <StatTile label="Output (Shipping)" value={analytics.finishedGoods.shipped} suffix="sets" color={C.green} icon={ArrowUpFromLine} caption="Dikirim via surat jalan" />
+              </div>
+              <ChartCard title="Trend Finished Goods" subtitle="Input dari Packing vs Output Shipping per periode" icon={Truck} color={C.cyan}>
+                {analytics.finishedGoods.productivity.every(p => p.input + p.shipped === 0) ? <EmptyState /> : (
+                  <ResponsiveContainer width="100%" height={320}>
+                    <ComposedChart data={analytics.finishedGoods.productivity} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="fgInput" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.blue} stopOpacity={0.35} /><stop offset="95%" stopColor={C.blue} stopOpacity={0} /></linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+                      <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} />
+                      <YAxis tick={axisTick} tickLine={false} axisLine={false} />
+                      <Tooltip {...tooltipStyle} />
+                      <Legend wrapperStyle={{ fontSize: 12, fontWeight: 700 }} />
+                      <Area type="monotone" dataKey="input" name="Input dari Packing" stroke={C.blue} strokeWidth={2.5} fill="url(#fgInput)" />
+                      <Bar dataKey="shipped" name="Output Shipping" fill={C.green} radius={[4, 4, 0, 0]} maxBarSize={30} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                )}
+              </ChartCard>
             </div>
           )}
         </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Search, Package, Truck, FileText, Layers, ClipboardCheck,
   CheckCircle, AlertCircle, Clock, Box, Archive,
@@ -11,6 +11,7 @@ const API_BASE_URL = 'http://202.52.15.30:4000';
 // Types
 interface BcDocument {
   nomor_el: number;
+  tanggal_el?: string;
   kode_bc: string;
   nomor_dokumen_bc: string;
   tanggal_dokumen_bc: string;
@@ -210,6 +211,7 @@ interface MaterialDetail {
 
 interface BcDocumentMaterial {
   nomor_el: number;
+  tanggal_el?: string;
   kode_bc: string;
   nomor_dokumen_bc: string;
   tanggal_dokumen_bc: string;
@@ -240,16 +242,6 @@ const getAuthHeaders = () => {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
-};
-
-const uniqueBy = <T, K extends keyof T>(arr: T[], key: K): T[] => {
-  const seen = new Set();
-  return arr.filter(item => {
-    const val = item[key];
-    if (seen.has(val)) return false;
-    seen.add(val);
-    return true;
-  });
 };
 
 const uniqueBcDocuments = (docs: BcDocument[]): BcDocument[] => {
@@ -384,7 +376,7 @@ const OpDetailCard = ({
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Tanggal</span> 
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200 text-right leading-tight">Dok: {new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}{doc.tanggal_el ? ` · EL: ${new Date(doc.tanggal_el).toLocaleDateString()}` : ''}</span>
                     </div>
                   </div>
                 ))}
@@ -449,7 +441,7 @@ const OpDetailCard = ({
                                 </div>
                                 <div className="flex justify-between items-center">
                                   <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Tanggal</span>
-                                  <span className="font-bold text-slate-800 dark:text-slate-200">{new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}</span>
+                                  <span className="font-bold text-slate-800 dark:text-slate-200 text-right leading-tight">Dok: {new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}{doc.tanggal_el ? ` · EL: ${new Date(doc.tanggal_el).toLocaleDateString()}` : ''}</span>
                                 </div>
                               </div>
                             ))}
@@ -475,7 +467,7 @@ const OpDetailCard = ({
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Tanggal</span>
-                        <span className="font-bold text-slate-800 dark:text-slate-200">{new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200 text-right leading-tight">Dok: {new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}{doc.tanggal_el ? ` · EL: ${new Date(doc.tanggal_el).toLocaleDateString()}` : ''}</span>
                       </div>
                     </div>
                   ))}
@@ -1295,11 +1287,15 @@ export const TraceabilityExtendedView = () => {
                                     <span className="font-mono font-bold">{doc.nomor_el}</span>
                                   </div>
                                   <div className="flex justify-between text-sm mt-1">
+                                    <span className="font-bold text-slate-600 dark:text-slate-300">Tgl EL:</span>
+                                    <span>{doc.tanggal_el ? new Date(doc.tanggal_el).toLocaleDateString('id-ID') : '-'}</span>
+                                  </div>
+                                  <div className="flex justify-between text-sm mt-1">
                                     <span className="font-bold text-slate-600 dark:text-slate-300">Kode BC:</span>
                                     <span>{doc.kode_bc}</span>
                                   </div>
                                   <div className="flex justify-between text-sm mt-1">
-                                    <span className="font-bold text-slate-600 dark:text-slate-300">Tanggal:</span>
+                                    <span className="font-bold text-slate-600 dark:text-slate-300">Tgl Dok BC:</span>
                                     <span>{new Date(doc.tanggal_dokumen_bc).toLocaleDateString('id-ID')}</span>
                                   </div>
                                 </div>

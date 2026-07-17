@@ -705,6 +705,8 @@ const ops = await this.prisma.productionOrder.findMany({
     sewingStartProgress: true,
     sewingFinishProgress: true,
     packingItems: { include: { session: true } },
+    fgItems: true,                                   // <-- FG: stok saat ini
+    shipmentItems: { include: { shipment: true } },  // <-- FG: sudah dikirim
   },
   orderBy: { opNumber: 'asc' },
 });
@@ -763,6 +765,17 @@ const ops = await this.prisma.productionOrder.findMany({
             }
           }
           break;
+        case 'FG':
+          {
+            const fgDates = (op.fgItems || []).map((f: any) => f.createdAt);
+            const shipDates = (op.shipmentItems || []).map((si: any) => si.shipment?.createdAt).filter(Boolean);
+            const allDates = [...fgDates, ...shipDates];
+            if (allDates.length) {
+              first = new Date(Math.min(...allDates.map((d: any) => d.getTime())));
+              last = new Date(Math.max(...allDates.map((d: any) => d.getTime())));
+            }
+          }
+          break;
       }
 
       // Jika tidak ada data, gunakan updatedAt OP sebagai fallback (jika OP sudah pernah masuk station ini)
@@ -779,6 +792,7 @@ const ops = await this.prisma.productionOrder.findMany({
       let outputQty = 0;
       let goodQty = 0;
       let ngQty = 0;
+      let stockQty = 0; // dipakai untuk FG (sisa stok)
       let ngDetails: any[] = [];
 
       const { first, last } = getStationDateRange(op, station);
@@ -833,6 +847,19 @@ const ops = await this.prisma.productionOrder.findMany({
           outputQty = op.qtyPacking;
           goodQty = outputQty;
           break;
+        case 'FG':
+          {
+            // FG tidak ada NG. Input = total masuk FG (stok + terkirim),
+            // Output = yang sudah dikirim (surat jalan), Stock = sisa di gudang FG.
+            const stock = (op.fgItems || []).reduce((s: number, f: any) => s + (f.qty || 0), 0);
+            const shipped = (op.shipmentItems || []).reduce((s: number, si: any) => s + (si.qty || 0), 0);
+            stockQty = stock;
+            inputQty = stock + shipped;
+            outputQty = shipped;
+            goodQty = shipped;
+            ngQty = 0;
+          }
+          break;
       }
 
       const defectRate = outputQty > 0 ? (ngQty / outputQty) * 100 : 0;
@@ -849,6 +876,7 @@ const ops = await this.prisma.productionOrder.findMany({
         outputQty,
         goodQty,
         ngQty,
+        stockQty,
         defectRate,
         ngDetails,
       };
@@ -876,6 +904,7 @@ const ops = await this.prisma.productionOrder.findMany({
     const totalOutput = filtered.reduce((sum, op) => sum + op.outputQty, 0);
     const totalGood = filtered.reduce((sum, op) => sum + op.goodQty, 0);
     const totalNg = filtered.reduce((sum, op) => sum + op.ngQty, 0);
+    const totalStock = filtered.reduce((sum, op) => sum + (op.stockQty || 0), 0);
     const overallDefectRate = totalOutput > 0 ? (totalNg / totalOutput) * 100 : 0;
 
     return {
@@ -885,6 +914,7 @@ const ops = await this.prisma.productionOrder.findMany({
         totalOutput,
         totalGood,
         totalNg,
+        totalStock,
         defectRate: overallDefectRate,
         totalOps: filtered.length,
         period: { start: startDate, end: endDate },

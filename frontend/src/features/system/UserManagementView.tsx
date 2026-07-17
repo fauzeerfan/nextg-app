@@ -126,6 +126,7 @@ export const UserManagementView = () => {
     username: '', fullName: '', email: '', role: 'OPERATOR' as SystemUser['role'],
     department: '', jobTitle: '', lineCode: '', isActive: true,
     allowedMenus: [] as string[],
+    canEditCuttingReport: false,
     password: ''
   });
 
@@ -147,7 +148,7 @@ export const UserManagementView = () => {
 
   const select = (u: SystemUser) => { setSel(u); setEdit(false); setCreate(false); };
   const newUser = () => {
-    setF({ username: '', fullName: '', email: '', role: 'OPERATOR', department: '', jobTitle: '', lineCode: '', isActive: true, allowedMenus: [], password: 'password123' });
+    setF({ username: '', fullName: '', email: '', role: 'OPERATOR', department: '', jobTitle: '', lineCode: '', isActive: true, allowedMenus: [], canEditCuttingReport: false, password: 'password123' });
     setChPw(false); setSel(null); setCreate(true); setEdit(true);
   };
   const editUser = () => {
@@ -156,6 +157,7 @@ export const UserManagementView = () => {
       department: sel.department || '', jobTitle: sel.jobTitle || '', lineCode: sel.lineCode || '',
       isActive: sel.isActive ?? true,
       allowedMenus: (sel as any).allowedMenus || [],
+      canEditCuttingReport: !!(sel as any).canEditCuttingReport,
       password: ''
     });
     setChPw(false); setEdit(true); setCreate(false);
@@ -167,7 +169,8 @@ export const UserManagementView = () => {
       const payload: any = {
         username: f.username, fullName: f.fullName, email: f.email, role: f.role,
         department: f.department, jobTitle: f.jobTitle, lineCode: f.lineCode,
-        allowedMenus: f.allowedMenus, isActive: f.isActive
+        allowedMenus: f.allowedMenus, isActive: f.isActive,
+        canEditCuttingReport: f.canEditCuttingReport,
       };
       if (create) payload.password = f.password || '123456';
       else if (chPw && f.password) payload.password = f.password;
@@ -578,13 +581,14 @@ export const UserManagementView = () => {
                     <button
                       onClick={() => { 
                         setEdit(false); setCreate(false); 
-                        if (sel) setF({ 
-                          username: sel.username, fullName: sel.fullName, email: sel.email || '', role: sel.role, 
-                          department: sel.department || '', jobTitle: sel.jobTitle || '', lineCode: sel.lineCode || '', 
-                          isActive: sel.isActive ?? true, 
-                          allowedMenus: (sel as any).allowedMenus || [], 
-                          password: '' 
-                        }); 
+                        if (sel) setF({
+                          username: sel.username, fullName: sel.fullName, email: sel.email || '', role: sel.role,
+                          department: sel.department || '', jobTitle: sel.jobTitle || '', lineCode: sel.lineCode || '',
+                          isActive: sel.isActive ?? true,
+                          allowedMenus: (sel as any).allowedMenus || [],
+                          canEditCuttingReport: !!(sel as any).canEditCuttingReport,
+                          password: ''
+                        });
                       }}
                       className="flex-1 lg:flex-none px-5 py-2.5 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:border-slate-400 transition-all text-sm shadow-sm active:scale-95"
                     >
@@ -662,6 +666,23 @@ export const UserManagementView = () => {
                         <option value="MANAGER">Manager</option>
                         <option value="ADMINISTRATOR">Administrator</option>
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+                        Akses Edit Cutting Report (terkunci)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setF({ ...f, canEditCuttingReport: !f.canEditCuttingReport })}
+                        className={`w-full px-4 py-3 rounded-xl border-2 flex items-center justify-between transition-all ${f.canEditCuttingReport ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'}`}
+                      >
+                        <span className="text-xs font-bold text-slate-600 dark:text-slate-300 text-left">
+                          {f.canEditCuttingReport ? 'Boleh edit/hapus & approve CR terkunci' : 'Tidak (default). Administrator selalu bisa.'}
+                        </span>
+                        <span className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${f.canEditCuttingReport ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                          <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${f.canEditCuttingReport ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                        </span>
+                      </button>
                     </div>
                   </div>
                 </div>

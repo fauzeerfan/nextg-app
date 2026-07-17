@@ -230,37 +230,115 @@ export class AiService {
   }
 
   // ========== PANGGIL AI EKSTERNAL ==========
-  private async callExternalAI(message: string): Promise<string> {
+  // Ringkasan DATA REAL-TIME aplikasi (hari ini) untuk grounding jawaban Feby.
+  // Dibuat tahan-error: bila sebagian query gagal, tetap kembalikan yang tersedia.
+  private async buildDataContext(): Promise<string> {
+    try {
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const endOfDay = new Date(startOfDay); endOfDay.setDate(endOfDay.getDate() + 1);
+      const today = { gte: startOfDay, lte: now };
+
+      const [
+        totalOps, wipOps, entan, pondGood, pondNg, cpAgg, qcAgg,
+        sewFinish, packing, shipped, fgStock, lines, manpower,
+        cpNgRows, qcNgRows, wipList, activeOps,
+      ] = await Promise.all([
+        this.prisma.productionOrder.count({ where: { level: { not: 'PARENT' } } }),
+        this.prisma.productionOrder.count({ where: { status: 'WIP', level: { not: 'PARENT' } } }),
+        this.prisma.productionLog.aggregate({ where: { station: 'CUTTING_ENTAN', type: 'QR_GENERATED', createdAt: today }, _sum: { qty: true } }),
+        this.prisma.productionLog.aggregate({ where: { station: 'CUTTING_POND', type: 'GOOD', createdAt: today }, _sum: { qty: true } }),
+        this.prisma.productionLog.aggregate({ where: { station: 'CUTTING_POND', type: 'NG', createdAt: today }, _sum: { qty: true } }),
+        this.prisma.checkPanelInspection.aggregate({ where: { createdAt: today }, _sum: { good: true, ng: true } }),
+        this.prisma.qcInspection.aggregate({ where: { createdAt: today }, _sum: { good: true, ng: true } }),
+        this.prisma.productionLog.aggregate({ where: { station: 'SEWING', type: 'SEWING_FINISH', createdAt: today }, _sum: { qty: true } }),
+        this.prisma.packingSession.aggregate({ where: { status: 'CLOSED', createdAt: today }, _sum: { totalQty: true } }),
+        this.prisma.shipment.aggregate({ where: { createdAt: today }, _sum: { totalQty: true } }),
+        this.prisma.fGStock.aggregate({ _sum: { totalQty: true } }),
+        this.prisma.lineMaster.findMany({ select: { code: true, name: true } }),
+        this.prisma.manpowerAttendance.count({ where: { tanggal: { gte: startOfDay, lt: endOfDay }, checkOut: null } }),
+        this.prisma.checkPanelInspection.findMany({ where: { createdAt: today, ng: { gt: 0 } }, select: { ngReasons: true } }),
+        this.prisma.qcInspection.findMany({ where: { createdAt: today, ng: { gt: 0 } }, select: { ngReasons: true } }),
+        this.prisma.productionOrder.findMany({ where: { status: 'WIP', level: { not: 'PARENT' } }, select: { currentStation: true } }),
+        this.prisma.productionOrder.findMany({ where: { status: 'WIP', level: { not: 'PARENT' } }, orderBy: { updatedAt: 'desc' }, take: 8, select: { opNumber: true, styleCode: true, currentStation: true, itemNameFG: true } }),
+      ]);
+
+      const n = (v: any) => Number(v ?? 0).toLocaleString('id-ID');
+      const cpGood = cpAgg._sum.good || 0, cpNg = cpAgg._sum.ng || 0;
+      const qcGood = qcAgg._sum.good || 0, qcNg = qcAgg._sum.ng || 0;
+      const totalNg = (pondNg._sum.qty || 0) + cpNg + qcNg;
+
+      // WIP per station
+      const wipByStation: Record<string, number> = {};
+      for (const w of wipList) { const s = w.currentStation || 'UNKNOWN'; wipByStation[s] = (wipByStation[s] || 0) + 1; }
+      const wipStr = Object.entries(wipByStation).map(([s, c]) => `${s}: ${c}`).join(', ') || '-';
+
+      // NG per kategori (CP + QC) hari ini
+      const catMap = new Map<string, number>();
+      for (const r of [...cpNgRows, ...qcNgRows]) {
+        let reasons: any = r.ngReasons;
+        if (typeof reasons === 'string') { try { reasons = JSON.parse(reasons); } catch { reasons = [reasons]; } }
+        if (Array.isArray(reasons)) for (const rs of reasons.flat()) { const k = String(rs || '').trim(); if (k) catMap.set(k, (catMap.get(k) || 0) + 1); }
+      }
+      const topNg = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => `${k} (${v})`).join(', ') || '-';
+
+      const activeStr = activeOps.map(o => `${o.opNumber} [${o.styleCode}] @${o.currentStation || '-'}${o.itemNameFG ? ' — ' + o.itemNameFG : ''}`).join('; ') || '-';
+
+      return [
+        `Tanggal: ${now.toLocaleString('id-ID')}`,
+        `Line/style: ${lines.map(l => l.code).join(', ') || '-'}`,
+        `Total OP (non-induk): ${n(totalOps)} | WIP aktif: ${n(wipOps)}`,
+        `WIP per station: ${wipStr}`,
+        `OUTPUT HARI INI -> Cutting Entan: ${n(entan._sum.qty)} pcs | Cutting Pond good: ${n(pondGood._sum.qty)} / NG: ${n(pondNg._sum.qty)} | Check Panel good: ${n(cpGood)} / NG: ${n(cpNg)} | Sewing finish: ${n(sewFinish._sum.qty)} sets | QC good: ${n(qcGood)} / NG: ${n(qcNg)} | Packing: ${n(packing._sum.totalQty)} sets | Shipping (FG out): ${n(shipped._sum.totalQty)} sets`,
+        `Total NG hari ini (Pond+CP+QC): ${n(totalNg)}`,
+        `Top kategori NG hari ini: ${topNg}`,
+        `Stok Finished Goods saat ini: ${n(fgStock._sum.totalQty)} sets`,
+        `Manpower hadir (aktif) hari ini: ${n(manpower)}`,
+        `OP WIP terbaru: ${activeStr}`,
+      ].join('\n');
+    } catch (e: any) {
+      this.logger.warn(`buildDataContext error: ${e?.message ?? e}`);
+      return 'Data real-time tidak tersedia saat ini.';
+    }
+  }
+
+  private async callExternalAI(message: string, context?: string): Promise<string> {
     if (!this.groqClient) {
-      return "Maaf, saya belum bisa menjawab pertanyaan itu. Silakan coba tanyakan tentang produksi, NG, atau minta report.";
+      return "Maaf, mesin AI Feby belum aktif (GROQ_API_KEY belum diset). Untuk data produksi, gunakan menu Dashboard / Reports / Traceability.";
     }
 
     try {
+      const dataBlock = context
+        ? `\n\n=== DATA REAL-TIME APLIKASI NEXTG (grounding, jangan mengarang di luar ini) ===\n${context}\n=== AKHIR DATA ===`
+        : '';
       const chatCompletion = await this.groqClient.chat.completions.create({
         messages: [
           {
             role: "system",
-            content: `Anda adalah Feby, asisten AI untuk sistem produksi pabrik garmen (NextG App).
-Anda membantu operator dan manajer produksi. Jawablah dengan bahasa Indonesia yang ramah, singkat, dan jelas.
-Jika ditanya tentang data produksi (NG, output, WIP, manpower, dll), arahkan user untuk menggunakan menu yang tersedia.
-Anda memahami istilah produksi garmen: OP (production order), WIP (work in progress), NG (not good/reject), CP (check panel), QC (quality control), FG (finished goods), sets, pcs, cutting, sewing, packing.
-Jangan pernah memberikan informasi palsu. Jika tidak tahu, katakan tidak tahu dengan ramah.`
+            content: `Anda adalah "Feby", asisten AI cerdas untuk NextG App (MES pabrik jok/garmen otomotif) sekaligus asisten serba bisa.
+
+KEMAMPUAN:
+- Jawab PERTANYAAN APAPUN secara cerdas, akurat, dan membantu — layaknya asisten AI kelas atas (pengetahuan umum, penjelasan, analisis, perhitungan, ide, penulisan, penerjemahan, dsb).
+- Untuk pertanyaan OPERASIONAL pabrik (produksi, NG, output, WIP, stok, manpower, shipping, dll), JAWAB DENGAN ANGKA AKTUAL dari "DATA REAL-TIME APLIKASI" di bawah.
+
+ATURAN:
+- Balas dalam bahasa yang dipakai user (Indonesia/Inggris). Ramah, jelas, langsung ke inti. Pakai poin/tabel bila membantu.
+- Untuk data yang TIDAK ada di konteks (mis. per-OP spesifik, rentang tanggal lampau), jangan mengarang angka; katakan datanya tidak ada di ringkasan ini lalu arahkan ke menu terkait (Dashboard, Reports, Traceability, Manpower).
+- Pahami istilah: OP (production order) induk/batch, WIP, NG (reject), pcs, pola (pattern), Cutting Entan, Cutting Pond, Check Panel (CP), Sewing, QC, Packing, Finished Goods (FG), surat jalan, dokumen BC, dispatch, reconcile.
+- Jangan menolak menjawab pertanyaan umum yang wajar — Anda pintar dan boleh menjawab apa saja.${dataBlock}`,
           },
-          {
-            role: "user",
-            content: message
-          }
+          { role: "user", content: message },
         ],
         model: "llama-3.3-70b-versatile",
-        temperature: 0.7,
-        max_tokens: 400,
+        temperature: 0.6,
+        max_tokens: 1024,
       });
 
       const reply = chatCompletion.choices[0]?.message?.content || "Maaf, saya tidak bisa menjawab saat ini.";
       return reply;
     } catch (error: any) {
       this.logger.error(`Groq API error: ${error.message}`);
-      return "Maaf, terjadi gangguan teknis. Silakan coba lagi nanti.";
+      return "Maaf, terjadi gangguan teknis pada mesin AI. Silakan coba lagi sebentar lagi.";
     }
   }
 
@@ -440,7 +518,9 @@ Jangan pernah memberikan informasi palsu. Jika tidak tahu, katakan tidak tahu de
           if (knowledge) {
             responseText = `Berdasarkan informasi yang saya simpan:\n\n${knowledge.content}`;
           } else {
-            responseText = await this.callExternalAI(message);
+            // Feby cerdas + grounded ke data real-time aplikasi
+            const dataContext = await this.buildDataContext();
+            responseText = await this.callExternalAI(message, dataContext);
           }
           options = [{ label: '🏠 Menu Utama', value: 'menu_main' }];
         }

@@ -52,6 +52,8 @@ interface ShipmentRecord {
   suratJalan: string;
   tanggal: string;
   customerName?: string;
+  tanggalSuratJalan?: string | null;
+  totalItems?: number;
   fgNumber: string;
   totalQty: number;
   status: 'SHIPPED' | 'DELIVERED';
@@ -146,6 +148,8 @@ export const FinishedGoodsView = () => {
   const [shipments, setShipments] = useState<ShipmentRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  // FG Master: wajib semua item FG full qty sebelum shipping? (default true)
+  const [fgEnforceFullQty, setFgEnforceFullQty] = useState(true);
 
   // Auth headers helper
   const getAuthHeaders = () => {
@@ -198,7 +202,9 @@ export const FinishedGoodsView = () => {
           id: item.id,
           suratJalan: item.suratJalan,
           tanggal: item.createdAt,
-          customerName: '-',
+          customerName: item.customerName || '-',
+          tanggalSuratJalan: item.tanggalSuratJalan || null,
+          totalItems: item.totalItems ?? (item.items?.length || 0),
           fgNumber: item.fgNumber,
           totalQty: item.totalQty,
           status: 'SHIPPED',
@@ -220,6 +226,11 @@ export const FinishedGoodsView = () => {
     fetchStocks();
     fetchShippingDocs();
     fetchShipments();
+    // FG Master setting: wajib full qty semua item sebelum shipping
+    fetch(`${API_BASE_URL}/settings/fg-enforce-full-qty`, { headers: getAuthHeaders() })
+      .then((r) => (r.ok ? r.json() : { enabled: true }))
+      .then((d) => setFgEnforceFullQty(d?.enabled !== false))
+      .catch(() => setFgEnforceFullQty(true));
     const interval = setInterval(fetchStocks, 10000);
     return () => clearInterval(interval);
   }, [fetchStocks, fetchShippingDocs, fetchShipments]);
@@ -387,16 +398,34 @@ export const FinishedGoodsView = () => {
       alert('Select a shipping document first');
       return;
     }
+    if (docItems.length === 0) {
+      alert('No items in this shipping document');
+      return;
+    }
 
+    // VALIDASI (opsional, diatur di FG Master): bila diaktifkan, SEMUA item finished
+    // goods pada dokumen ini WAJIB full quantity sebelum diproses (tidak boleh sebagian).
+    if (fgEnforceFullQty) {
+      const incomplete = docItems.filter(
+        (item) => (shippingQuantities[item.kode_item] || 0) < item.qty,
+      );
+      if (incomplete.length > 0) {
+        alert(
+          'Belum bisa diproses. Semua item finished goods harus FULL quantity terlebih dahulu.\n\nBelum lengkap:\n' +
+          incomplete
+            .map((i) => `- ${i.kode_item}: ${shippingQuantities[i.kode_item] || 0}/${i.qty}`)
+            .join('\n'),
+        );
+        return;
+      }
+    }
+
+    // Bila enforce OFF -> boleh kirim sebagian: ambil item yang qty-nya > 0.
     const itemsToShip = docItems
-      .filter(item => (shippingQuantities[item.kode_item] || 0) > 0)
-      .map(item => ({
-        fgNumber: item.kode_item,
-        qty: shippingQuantities[item.kode_item],
-      }));
-
+      .filter((item) => (shippingQuantities[item.kode_item] || 0) > 0)
+      .map((item) => ({ fgNumber: item.kode_item, qty: shippingQuantities[item.kode_item] }));
     if (itemsToShip.length === 0) {
-      alert('No items selected for shipment');
+      alert('Tidak ada item dengan qty untuk dikirim.');
       return;
     }
 
@@ -911,16 +940,36 @@ export const FinishedGoodsView = () => {
               )}
 
               {/* Action Button */}
-              {selectedDoc && (
-                <button
-                  onClick={handleShip}
-                  disabled={processingShip || loadingDocItems}
-                  className="w-full py-5 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-black flex items-center justify-center gap-3 text-lg transition-all shadow-lg shadow-amber-500/30 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed hover:-translate-y-1 active:translate-y-0 uppercase tracking-wider"
-                >
-                  {processingShip ? <Loader2 className="animate-spin" size={24} /> : <Truck size={24} />}
-                  Process Shipment Document
-                </button>
-              )}
+              {selectedDoc && (() => {
+                const allFull = docItems.length > 0 && docItems.every((it) => (shippingQuantities[it.kode_item] || 0) >= it.qty);
+                const anyQty = docItems.some((it) => (shippingQuantities[it.kode_item] || 0) > 0);
+                const filledCount = docItems.filter((it) => (shippingQuantities[it.kode_item] || 0) >= it.qty).length;
+                const blocked = fgEnforceFullQty ? !allFull : !anyQty;
+                return (
+                  <div className="space-y-2.5">
+                    {fgEnforceFullQty && docItems.length > 0 && !allFull && (
+                      <div className="text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 flex items-center gap-2">
+                        <AlertCircle size={16} className="shrink-0" />
+                        Semua item finished goods harus FULL quantity dulu ({filledCount}/{docItems.length} item lengkap) sebelum dokumen bisa diproses.
+                      </div>
+                    )}
+                    {!fgEnforceFullQty && docItems.length > 0 && (
+                      <div className="text-xs font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 flex items-center gap-2">
+                        <AlertCircle size={16} className="shrink-0" />
+                        Pengiriman sebagian diizinkan (kunci full-qty dimatikan di FG Master). Item dengan qty &gt; 0 akan dikirim.
+                      </div>
+                    )}
+                    <button
+                      onClick={handleShip}
+                      disabled={processingShip || loadingDocItems || blocked}
+                      className="w-full py-5 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-black flex items-center justify-center gap-3 text-lg transition-all shadow-lg shadow-amber-500/30 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed hover:-translate-y-1 active:translate-y-0 uppercase tracking-wider"
+                    >
+                      {processingShip ? <Loader2 className="animate-spin" size={24} /> : <Truck size={24} />}
+                      Process Shipment Document
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -960,10 +1009,12 @@ export const FinishedGoodsView = () => {
                   <table className="w-full text-sm">
                     <thead className="bg-slate-100 dark:bg-slate-700/50">
                       <tr className="text-left text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                        <th className="py-4 px-5">Date</th>
+                        <th className="py-4 px-5">Tgl Proses</th>
                         <th className="py-4 px-5">Doc Number</th>
+                        <th className="py-4 px-5">Tgl Surat Jalan</th>
                         <th className="py-4 px-5">Customer</th>
                         <th className="py-4 px-5">FG Item</th>
+                        <th className="py-4 px-5 text-center">Items</th>
                         <th className="py-4 px-5 text-right">Qty</th>
                         <th className="py-4 px-5">Status</th>
                       </tr>
@@ -973,13 +1024,15 @@ export const FinishedGoodsView = () => {
                         <tr key={ship.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
                           <td className="py-4 px-5 font-semibold text-slate-700 dark:text-slate-300">{new Date(ship.tanggal).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</td>
                           <td className="py-4 px-5 font-mono font-black text-slate-900 dark:text-white">{ship.suratJalan}</td>
+                          <td className="py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">{ship.tanggalSuratJalan ? new Date(ship.tanggalSuratJalan).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '-'}</td>
                           <td className="py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">{ship.customerName || '-'}</td>
                           <td className="py-4 px-5 font-black text-indigo-600 dark:text-indigo-400">{ship.fgNumber}</td>
+                          <td className="py-4 px-5 text-center font-black text-slate-700 dark:text-slate-300">{ship.totalItems ?? (ship.items?.length || 0)}</td>
                           <td className="py-4 px-5 font-black text-right">{ship.totalQty}</td>
                           <td className="py-4 px-5">
                             <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest ${
-                              ship.status === 'SHIPPED' 
-                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800' 
+                              ship.status === 'SHIPPED'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
                                 : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
                             }`}>
                               {ship.status}

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   Factory, Layers, Plus, Edit, Trash2, Save, ArrowLeft,
-  CheckCircle, XCircle, Search, Users, Package, ChevronRight,
+  CheckCircle, XCircle, Search, Users, Package,
   ImageIcon, RefreshCw, Loader2, Cpu, Server, Network, Hash,
   Tag, User, Grid, TrendingUp, Eye, FileImage, X, Info, 
-  Activity, Zap, Target, Settings, Cpu as CpuIcon
+  Activity, Zap, Target, Settings, Truck, Lock, Cpu as CpuIcon
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://202.52.15.30:4000';
@@ -137,7 +137,10 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
   const [edit, setEdit] = useState(false);
   const [create, setCreate] = useState(false);
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<'details' | 'patterns' | 'sewing' | 'packing'>('details');
+  const [tab, setTab] = useState<'details' | 'patterns' | 'sewing' | 'packing' | 'fgmaster'>('details');
+  // FG Master (global): kunci "semua item FG full qty sebelum shipping"
+  const [fgEnforce, setFgEnforce] = useState(true);
+  const [fgSaving, setFgSaving] = useState(false);
   const [fd, setFd] = useState<Partial<LineMaster>>({ code: '', name: '', description: '', patternMultiplier: 1, stations: availStations.map(s => ({ ...s, required: true })) });
   const [patModal, setPatModal] = useState(false);
   const [patEdit, setPatEdit] = useState(false);
@@ -223,6 +226,27 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
   // ==========================================================
 
   useEffect(() => { fetchLs(); }, []);
+  // FG Master: baca setting global sekali di awal
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/settings/fg-enforce-full-qty`)
+      .then((r) => (r.ok ? r.json() : { enabled: true }))
+      .then((d) => setFgEnforce(d?.enabled !== false))
+      .catch(() => setFgEnforce(true));
+  }, []);
+  const saveFgEnforce = async (enabled: boolean) => {
+    setFgSaving(true);
+    const prev = fgEnforce;
+    setFgEnforce(enabled); // optimistic
+    try {
+      const res = await fetch(`${API_BASE_URL}/settings/fg-enforce-full-qty`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      if (!res.ok) { setFgEnforce(prev); alert('Gagal menyimpan pengaturan FG Master'); }
+    } catch { setFgEnforce(prev); alert('Gagal terhubung ke server'); }
+    finally { setFgSaving(false); }
+  };
   
   // ========== MODIFIED useEffect untuk menangani perubahan line ==========
   useEffect(() => {
@@ -662,7 +686,8 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                     { id: 'details', label: 'Line Details', icon: Settings },
                     { id: 'patterns', label: 'Pattern Master', icon: Layers },
                     { id: 'sewing', label: 'Sewing Master', icon: CpuIcon },
-                    { id: 'packing', label: 'Packing Master', icon: Package }
+                    { id: 'packing', label: 'Packing Master', icon: Package },
+                    { id: 'fgmaster', label: 'FG Master', icon: Truck }
                   ].map(t => (
                     <button
                       key={t.id}
@@ -1043,7 +1068,7 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                         </div>
                       )}
                     </div>
-                  ) : (
+                  ) : tab === 'packing' ? (
                     // ========== PACKING MASTER TAB ==========
                     <div className="space-y-6">
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1098,6 +1123,45 @@ export const LineMasterView: React.FC<LineMasterViewProps> = ({ onNavigate }) =>
                       )}
                     </div>
                     // =========================================
+                  ) : (
+                    // ========== FG MASTER TAB (pengaturan GLOBAL) ==========
+                    <div className="space-y-6">
+                      <div>
+                        <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1">Finished Goods · Global</div>
+                        <h3 className="text-xl font-black text-slate-900 dark:text-white">FG Master</h3>
+                        <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mt-1">Pengaturan berlaku untuk seluruh line (bukan per-line).</p>
+                      </div>
+
+                      <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className="w-11 h-11 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                              <Lock size={20} />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-black text-slate-800 dark:text-white">Wajib full quantity sebelum shipping</div>
+                              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                                Jika <b>AKTIF</b>: semua item finished goods pada satu shipping document harus terpenuhi penuh dulu sebelum bisa diproses.
+                                Jika <b>NONAKTIF</b>: pengiriman sebagian diizinkan (item dengan qty &gt; 0 boleh dikirim lebih dulu).
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => saveFgEnforce(!fgEnforce)}
+                            disabled={fgSaving}
+                            title={fgEnforce ? 'Klik untuk menonaktifkan' : 'Klik untuk mengaktifkan'}
+                            className={`relative inline-flex h-9 w-16 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${fgEnforce ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                          >
+                            <span className={`inline-block h-7 w-7 transform rounded-full bg-white shadow transition-transform ${fgEnforce ? 'translate-x-8' : 'translate-x-1'}`} />
+                          </button>
+                        </div>
+                        <div className="mt-4 flex items-center gap-2">
+                          <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${fgEnforce ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
+                            {fgSaving ? 'Menyimpan…' : fgEnforce ? 'AKTIF (dikunci)' : 'NONAKTIF (fleksibel)'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>

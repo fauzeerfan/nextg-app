@@ -21,4 +21,18 @@ export class SettingsController {
   async setCuttingSource(@Body() body: { source: CuttingSource; updatedBy?: string }) {
     return this.service.setCuttingSource(body?.source, body?.updatedBy);
   }
+
+  // ===== FG Master: kunci "semua item FG harus full qty sebelum shipping" =====
+  // Default: enabled (true) -> mempertahankan perilaku sekarang.
+  @Get('fg-enforce-full-qty')
+  async getFgEnforce() {
+    const v = await this.service.get('FG_ENFORCE_FULL_QTY', 'true');
+    return { enabled: v !== 'false' };
+  }
+
+  @Put('fg-enforce-full-qty')
+  async setFgEnforce(@Body() body: { enabled: boolean; updatedBy?: string }) {
+    await this.service.set('FG_ENFORCE_FULL_QTY', body?.enabled ? 'true' : 'false', body?.updatedBy);
+    return { enabled: !!body?.enabled };
+  }
 }

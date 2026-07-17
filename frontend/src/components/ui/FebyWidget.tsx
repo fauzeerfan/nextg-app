@@ -9,6 +9,10 @@ export const FebyWidget: React.FC = () => {
   const [isMaximized, setIsMaximized] = useState(false);
   const [activeTab, setActiveTab] = useState<'copilot' | 'space' | 'support'>('copilot');
   const [unreadCount, setUnreadCount] = useState(0);
+  // Sembunyikan seluruh widget (termasuk bubble) untuk sesi ini. Sengaja TIDAK
+  // dipersist -> muncul lagi setelah aplikasi di-refresh. Berguna saat bubble
+  // menghalangi data/tampilan.
+  const [dismissed, setDismissed] = useState(false);
 
   const toggleChat = () => {
     if (!isOpen) {
@@ -27,31 +31,40 @@ export const FebyWidget: React.FC = () => {
 
   const toggleMaximize = () => setIsMaximized(!isMaximized);
 
-  // Jika tidak terbuka, tampilkan tombol ikon dengan badge unread
+  // Jika di-dismiss, sembunyikan total (muncul lagi setelah refresh)
+  if (dismissed) return null;
+
+  // Jika tidak terbuka, tampilkan bubble ikon + tombol X untuk menyembunyikan
   if (!isOpen) {
     return (
-      <button
-        onClick={toggleChat}
-        className="fixed bottom-6 right-6 z-50 hover:scale-105 hover:-translate-y-1 transition-all duration-300"
-        style={{ 
-          background: 'transparent', 
-          border: 'none', 
-          padding: 0,
-          fontFamily: "'Poppins', sans-serif" 
-        }}
-      >
-        <img
-          src="/feby.png"
-          alt="Feby"
-          className="w-48 h-48 object-contain"
-          style={{ filter: 'drop-shadow(0 10px 15px rgba(0,0,0,0.25))' }}
-        />
-        {unreadCount > 0 && (
-          <span className="absolute top-2 right-4 bg-rose-500 text-white text-xs font-bold rounded-full h-7 w-7 flex items-center justify-center shadow-lg shadow-rose-500/40 border-2 border-white">
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
-        )}
-      </button>
+      <div className="fixed bottom-6 right-6 z-50" style={{ fontFamily: "'Poppins', sans-serif" }}>
+        <button
+          onClick={toggleChat}
+          className="block hover:scale-105 hover:-translate-y-1 transition-all duration-300"
+          style={{ background: 'transparent', border: 'none', padding: 0 }}
+          title="Buka Feby"
+        >
+          <img
+            src="/feby.png"
+            alt="Feby"
+            className="w-48 h-48 object-contain"
+            style={{ filter: 'drop-shadow(0 10px 15px rgba(0,0,0,0.25))' }}
+          />
+          {unreadCount > 0 && (
+            <span className="absolute top-2 right-4 bg-rose-500 text-white text-xs font-bold rounded-full h-7 w-7 flex items-center justify-center shadow-lg shadow-rose-500/40 border-2 border-white">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </button>
+        {/* Tombol X: sembunyikan widget (muncul lagi setelah refresh) */}
+        <button
+          onClick={() => setDismissed(true)}
+          title="Sembunyikan Feby (muncul lagi setelah refresh)"
+          className="absolute top-3 right-5 w-8 h-8 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-300 hover:text-rose-600 hover:border-rose-300 dark:hover:text-rose-400 shadow-md transition-colors"
+        >
+          <X size={16} strokeWidth={2.5} />
+        </button>
+      </div>
     );
   }
 

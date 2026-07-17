@@ -24,6 +24,7 @@ export interface ExternalTraceabilityResponse {
 
 export interface BcDocument {
   nomor_el: number;      // ganti dari nomor_er
+  tanggal_el?: string;   // BARU: tanggal EL (bisa berbeda dari tanggal dokumen BC)
   kode_bc: string;
   nomor_dokumen_bc: string;
   tanggal_dokumen_bc: string;
@@ -276,6 +277,7 @@ export class TraceabilityExtendedService {
         list_dokumen_bc: Array.isArray(m.list_dokumen_bc)
           ? m.list_dokumen_bc.map((doc: any) => ({
               nomor_el: doc.nomor_el,
+              tanggal_el: doc.tanggal_el,
               kode_bc: doc.kode_bc,
               nomor_dokumen_bc: doc.nomor_dokumen_bc,
               tanggal_dokumen_bc: doc.tanggal_dokumen_bc,
@@ -303,6 +305,7 @@ export class TraceabilityExtendedService {
           seen.add(key);
           bcDocuments.push({
             nomor_el: doc.nomor_el,
+            tanggal_el: doc.tanggal_el,
             kode_bc: doc.kode_bc,
             nomor_dokumen_bc: doc.nomor_dokumen_bc,
             tanggal_dokumen_bc: doc.tanggal_dokumen_bc,
@@ -332,6 +335,7 @@ export class TraceabilityExtendedService {
       where: { opNumber },
       include: {
         line: true,
+        parent: true,
         cuttingBatches: { orderBy: { batchNumber: 'asc' } },
         patternProgress: { orderBy: { patternIndex: 'asc' } },
         checkPanelInspections: { orderBy: { patternIndex: 'asc' } },
@@ -461,9 +465,13 @@ export class TraceabilityExtendedService {
     // ===== PENERIMAAN MATERIAL & DOKUMEN BC (disimpan di AWAL hasil trace OP) =====
     // Diambil langsung dari external traceability API berbasis OP + FG, sehingga tetap
     // muncul walaupun OP belum dikirim / masih berada di Finished Goods.
+    // External traceability API memakai OP INDUK; bila OP yang ditrace adalah batch
+    // (punya parent), pakai opNumber induk agar material & dokumen BC muncul.
+    const rootOpForExternal = (op as any).parent?.opNumber || op.opNumber;
+    const rootFgForExternal = op.itemNumberFG || (op as any).parent?.itemNumberFG;
     const { bcDocuments, materialReceipts } = await this.getReceivingDetailsForOp(
-      op.opNumber,
-      op.itemNumberFG,
+      rootOpForExternal,
+      rootFgForExternal,
     );
 
     // ===== SURAT JALAN PENGIRIMAN (disimpan di AKHIR hasil trace OP) =====
@@ -847,94 +855,121 @@ export class TraceabilityExtendedService {
 
     // Normalisasi input (hilangkan leading zero)
     const searchDoc = bcNomorDokumen ? this.normalizeDocNumber(bcNomorDokumen) : null;
-    const searchEl = bcNomorEl ? bcNomorEl.toString() : null;
+    const searchEl = bcNomorEl ? bcNomorEl.toString().trim() : null;
 
-    // 1. Ambil semua surat jalan (shipment) dari database
+    // 1. Ambil SELURUH shipment beserta OP + item_fg di dalamnya (satu query).
     const shipments = await this.prisma.shipment.findMany({
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        suratJalan: true,
-        createdAt: true,
-        totalQty: true,
+      include: {
+        items: { include: { op: { select: { opNumber: true, itemNumberFG: true, parent: { select: { opNumber: true, itemNumberFG: true } } } } } },
       },
     });
 
     this.logger.log(`📦 Total shipments: ${shipments.length}`);
 
-    const matchedShipments: {
-      suratJalan: string;
-      shipmentDate: Date;
-      totalQty: number;
-      ops: { opNumber: string; qty: number }[];
-      matchedMaterials: {
-        materialName: string;
-        bcDocuments: BcDocument[];
-      }[];
-    }[] = [];
+    // 2. Bangun: pasangan unik {op_number, item_fg}, peta op->(suratJalan->qty), dan metadata SJ.
+    // Pakai OP INDUK (parent) untuk pemanggilan external API (item shipment = OP batch).
+    const pairMap = new Map<string, { op_number: string; item_fg: string }>();
+    const opToShipments = new Map<string, Map<string, number>>();
+    const shipmentMeta = new Map<string, { suratJalan: string; shipmentDate: Date; totalQty: number }>();
 
-    // 2. Untuk setiap shipment, cek material & dokumen BC dari external API
-    for (const shipment of shipments) {
-      try {
-        // Ambil detail material dari external API
-        const externalData = await this.getSuratJalanMaterialDetails(shipment.suratJalan);
-        
-        if (!externalData || !externalData.list_material) continue;
-
-        // Cari material yang memiliki dokumen BC cocok
-        const matchedMaterials: any[] = [];
-        for (const materialItem of externalData.list_material) {
-          const matchedDocs = materialItem.list_dokumen_bc.filter(doc => {
-            const docNum = this.normalizeDocNumber(doc.nomor_dokumen_bc);
-            const docEl = doc.nomor_el.toString();
-            return (searchDoc && docNum === searchDoc) || (searchEl && docEl === searchEl);
-          });
-          if (matchedDocs.length > 0) {
-            matchedMaterials.push({
-              materialName: materialItem.material.Art_name,
-              bcDocuments: matchedDocs,
-            });
-          }
-        }
-
-        if (matchedMaterials.length > 0) {
-          // Ambil OP list dari externalData
-          const opsList = externalData.list_op_number.map(op => ({ opNumber: op, qty: 0 })); // qty tidak tersedia, bisa diisi 0 atau diambil dari shipment items jika perlu
-          matchedShipments.push({
-            suratJalan: shipment.suratJalan,
-            shipmentDate: shipment.createdAt,
-            totalQty: shipment.totalQty,
-            ops: opsList,
-            matchedMaterials,
-          });
-          this.logger.log(`✅ Match found in shipment: ${shipment.suratJalan}`);
-        }
-  } catch (error) {
-    // ✅ Perbaikan: gunakan type guard atau konversi ke string
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    this.logger.warn(`⚠️ Failed to get material for shipment ${shipment.suratJalan}: ${errorMessage}`);
-        // Lanjutkan ke shipment berikutnya
+    for (const s of shipments) {
+      shipmentMeta.set(s.suratJalan, { suratJalan: s.suratJalan, shipmentDate: s.createdAt, totalQty: s.totalQty });
+      for (const it of s.items) {
+        const opNum = it.op.parent?.opNumber || it.op.opNumber;
+        const itemFg = it.op.itemNumberFG || it.op.parent?.itemNumberFG || s.fgNumber;
+        pairMap.set(`${opNum}|${itemFg}`, { op_number: opNum, item_fg: itemFg });
+        if (!opToShipments.has(opNum)) opToShipments.set(opNum, new Map());
+        const m = opToShipments.get(opNum)!;
+        m.set(s.suratJalan, (m.get(s.suratJalan) || 0) + it.qty);
       }
     }
 
-    if (matchedShipments.length === 0) {
+    const pairs = Array.from(pairMap.values());
+    if (pairs.length === 0) {
       throw new NotFoundException(
-        `Tidak ditemukan surat jalan yang menggunakan dokumen BC ${bcNomorDokumen || bcNomorEl}. ` +
-        `Pastikan nomor dokumen BC atau EL benar.`
+        `Belum ada surat jalan (shipment) pada sistem, sehingga dokumen BC belum dapat ditelusuri.`,
       );
     }
 
-    // Format response sesuai dengan yang diharapkan frontend
-    const relatedShipments = matchedShipments.map(s => ({
-      suratJalan: s.suratJalan,
-      shipmentDate: s.shipmentDate,
-      totalQty: s.totalQty,
-      ops: s.ops,
-      matchedMaterials: s.matchedMaterials, // tambahan info material yang match
-    }));
+    // 3. Panggil external API secara BATCH (chunk), bukan satu-per-shipment (hindari timeout).
+    const chunkSize = 40;
+    const externalEntries: any[] = [];
+    for (let i = 0; i < pairs.length; i += chunkSize) {
+      const chunk = pairs.slice(i, i + chunkSize);
+      try {
+        const response = await firstValueFrom(
+          this.httpService.post(this.externalApiUrl, chunk).pipe(timeout(15000)),
+        );
+        const data = Array.isArray(response.data) ? response.data : (response.data ? [response.data] : []);
+        externalEntries.push(...data);
+      } catch (error) {
+        this.logger.warn(
+          `BC search: batch ${i}-${i + chunk.length} gagal: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    // 4. Cari material dengan dokumen BC cocok; kumpulkan per OP.
+    const matchedOpMaterials = new Map<string, { materialName: string; bcDocuments: BcDocument[] }[]>();
+    for (const entry of externalEntries) {
+      if (!entry) continue;
+      const ops: string[] = Array.isArray(entry.list_op_number) ? entry.list_op_number : [];
+      const mats = Array.isArray(entry.list_material) ? entry.list_material : [];
+      const matchedMats: { materialName: string; bcDocuments: BcDocument[] }[] = [];
+      for (const m of mats) {
+        const docs = Array.isArray(m.list_dokumen_bc) ? m.list_dokumen_bc : [];
+        const matchedDocs = docs.filter((doc: any) => {
+          const docNum = this.normalizeDocNumber(doc.nomor_dokumen_bc);
+          const docEl = doc.nomor_el != null ? doc.nomor_el.toString() : '';
+          return (searchDoc && docNum === searchDoc) || (searchEl && docEl === searchEl);
+        });
+        if (matchedDocs.length > 0) {
+          matchedMats.push({ materialName: m.material?.Art_name ?? '', bcDocuments: matchedDocs });
+        }
+      }
+      if (matchedMats.length > 0) {
+        for (const op of ops) {
+          matchedOpMaterials.set(op, (matchedOpMaterials.get(op) || []).concat(matchedMats));
+        }
+      }
+    }
+
+    // 5. Petakan OP yang cocok -> surat jalan (dengan qty riil per OP).
+    const shipMap = new Map<string, {
+      suratJalan: string; shipmentDate: Date; totalQty: number;
+      ops: { opNumber: string; qty: number }[];
+      matchedMaterials: { materialName: string; bcDocuments: BcDocument[] }[];
+    }>();
+
+    for (const [opNum, mats] of matchedOpMaterials.entries()) {
+      const ships = opToShipments.get(opNum);
+      if (!ships) continue; // OP ini tidak ada di surat jalan mana pun
+      for (const [sj, qty] of ships.entries()) {
+        const meta = shipmentMeta.get(sj)!;
+        if (!shipMap.has(sj)) shipMap.set(sj, { ...meta, ops: [], matchedMaterials: [] });
+        const e = shipMap.get(sj)!;
+        if (!e.ops.some((o) => o.opNumber === opNum)) e.ops.push({ opNumber: opNum, qty });
+        for (const mm of mats) {
+          if (!e.matchedMaterials.some((x) => x.materialName === mm.materialName)) e.matchedMaterials.push(mm);
+        }
+      }
+    }
+
+    const relatedShipments = Array.from(shipMap.values())
+      .sort((a, b) => new Date(b.shipmentDate).getTime() - new Date(a.shipmentDate).getTime());
+
+    if (relatedShipments.length === 0) {
+      throw new NotFoundException(
+        `Tidak ditemukan surat jalan yang menggunakan dokumen BC ${bcNomorDokumen || bcNomorEl}. ` +
+        `Pastikan nomor dokumen BC atau EL benar.`,
+      );
+    }
+
+    this.logger.log(`✅ BC match: ${relatedShipments.length} surat jalan`);
 
     return {
-      bcDocument: bcNomorDokumen,
+      bcDocument: bcNomorDokumen || '',
       bcEl: bcNomorEl || null,
       relatedShipments,
     };
@@ -946,12 +981,12 @@ export class TraceabilityExtendedService {
    * @returns Data dari external API atau fallback jika gagal
    */
 async getSuratJalanMaterialDetails(suratJalan: string): Promise<any> {
-  // 1. Cari shipment berdasarkan surat jalan
+  // 1. Cari shipment berdasarkan surat jalan (beserta OP + INDUK-nya)
   const shipment = await this.prisma.shipment.findFirst({
     where: { suratJalan },
     include: {
       items: {
-        include: { op: true }
+        include: { op: { include: { parent: true } } }
       }
     }
   });
@@ -960,42 +995,91 @@ async getSuratJalanMaterialDetails(suratJalan: string): Promise<any> {
     throw new NotFoundException(`Surat Jalan ${suratJalan} tidak ditemukan`);
   }
 
-  // 2. Kumpulkan semua OP number dan FG number unik
-  const opNumbers = [...new Set(shipment.items.map(item => item.op.opNumber))];
-  const fgNumber = shipment.fgNumber;
+  // 2. Kumpulkan OP unik + item_fg MASING-MASING OP (bukan satu fgNumber untuk semua).
+  //    PENTING: item shipment/FG terhubung ke OP BATCH (child, mis. "K1YH260064-B1"),
+  //    sedangkan external traceability API memakai OP INDUK ("K1YH260064"). Karena itu
+  //    kita pakai opNumber INDUK (parent) bila ada. item_fg = itemNumberFG (batch = induk).
+  const opInfo = new Map<string, { item_fg: string; qty: number }>();
+  for (const item of shipment.items) {
+    const rootOp = item.op.parent?.opNumber || item.op.opNumber;
+    const itemFg = item.op.itemNumberFG || item.op.parent?.itemNumberFG || shipment.fgNumber;
+    const cur = opInfo.get(rootOp) || { item_fg: itemFg, qty: 0 };
+    cur.qty += item.qty;
+    opInfo.set(rootOp, cur);
+  }
+  const totalQtyShipped = shipment.items.reduce((sum, item) => sum + item.qty, 0);
 
-  // 3. Hitung total quantity per FG (jumlah semua OP untuk FG ini)
-  const totalQtyFG = shipment.items.reduce((sum, item) => sum + item.qty, 0);
-
-  // 4. Panggil external API untuk setiap OP
-  const requestBody = opNumbers.map(opNumber => ({
-    op_number: opNumber,
-    item_fg: fgNumber
+  // 3. Panggil external API SEKALIGUS untuk seluruh OP pada surat jalan ini.
+  const requestBody = Array.from(opInfo.entries()).map(([op_number, v]) => ({
+    op_number,
+    item_fg: v.item_fg,
   }));
 
+  let externalData: any[] = [];
   try {
     const response = await firstValueFrom(
-      this.httpService.post('http://202.52.15.30:998/miniapps/admin/api/traceability', requestBody).pipe(timeout(10000))
+      this.httpService.post(this.externalApiUrl, requestBody).pipe(timeout(15000)),
     );
-    
-    // 5. Enrich response dengan total konsumsi per material
-    const enrichedData = Array.isArray(response.data) ? response.data[0] : response.data;
-    if (enrichedData && enrichedData.list_material) {
-      enrichedData.list_material = enrichedData.list_material.map((materialItem: any) => ({
-        ...materialItem,
-        totalQtyShipped: totalQtyFG,
-        totalConsumption: (materialItem.material.total || 0) * totalQtyFG
-      }));
-    }
-    
-    return enrichedData;
+    externalData = Array.isArray(response.data) ? response.data : (response.data ? [response.data] : []);
   } catch (error) {
-    console.error('Failed to fetch external traceability data:', error);
-    return {
-      itemFinishgood: fgNumber,
-      list_op_number: opNumbers,
-      list_material: []
-    };
+    this.logger.warn(
+      `Gagal mengambil material eksternal untuk surat jalan ${suratJalan}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    externalData = [];
   }
+
+  // 4. Gabungkan material dari SELURUH OP; dedupe per part number (set_artnr_u) dan
+  //    gabungkan batch + dokumen BC-nya. Hitung total konsumsi = per-unit * total qty SJ.
+  const matMap = new Map<string, any>();
+  const opSet = new Set<string>();
+  for (const entry of externalData) {
+    if (!entry) continue;
+    if (Array.isArray(entry.list_op_number)) entry.list_op_number.forEach((o: string) => opSet.add(o));
+    const mats = Array.isArray(entry.list_material) ? entry.list_material : [];
+    for (const m of mats) {
+      const key = m?.material?.set_artnr_u || m?.material?.Art_name;
+      if (!key) continue;
+      if (!matMap.has(key)) {
+        matMap.set(key, {
+          material: {
+            set_artnr_u: m.material?.set_artnr_u ?? '',
+            Art_name: m.material?.Art_name ?? '',
+            total: m.material?.total ?? 0,
+            Art_einheit: m.material?.Art_einheit ?? '',
+            Art_ekletzt: m.material?.Art_ekletzt ?? 0,
+          },
+          list_batch: Array.isArray(m.list_batch) ? [...m.list_batch] : [],
+          list_dokumen_bc: Array.isArray(m.list_dokumen_bc) ? [...m.list_dokumen_bc] : [],
+          totalQtyShipped,
+          totalConsumption: (m.material?.total || 0) * totalQtyShipped,
+        });
+      } else {
+        const ex = matMap.get(key);
+        const batchSet = new Set<string>(ex.list_batch);
+        for (const b of (Array.isArray(m.list_batch) ? m.list_batch : [])) batchSet.add(b);
+        ex.list_batch = Array.from(batchSet);
+        const bcSeen = new Set<string>(ex.list_dokumen_bc.map((d: any) => `${d.nomor_dokumen_bc}|${d.nomor_el}`));
+        for (const d of (Array.isArray(m.list_dokumen_bc) ? m.list_dokumen_bc : [])) {
+          const k = `${d.nomor_dokumen_bc}|${d.nomor_el}`;
+          if (!bcSeen.has(k)) { bcSeen.add(k); ex.list_dokumen_bc.push(d); }
+        }
+      }
+    }
+  }
+
+  const list_op_number = opSet.size > 0 ? Array.from(opSet) : Array.from(opInfo.keys());
+  // itemFinishgood: gabungan FG unik pada surat jalan (umumnya satu, bisa lebih)
+  const fgSet = new Set<string>();
+  for (const v of opInfo.values()) if (v.item_fg) fgSet.add(v.item_fg);
+  const itemFinishgood = Array.from(fgSet).join(', ') || shipment.fgNumber;
+
+  return {
+    suratJalan: shipment.suratJalan,
+    shipmentDate: shipment.createdAt,
+    itemFinishgood,
+    totalQtyShipped,
+    list_op_number,
+    list_material: Array.from(matMap.values()),
+  };
 }
 }

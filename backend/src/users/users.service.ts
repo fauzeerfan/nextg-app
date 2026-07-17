@@ -98,6 +98,11 @@ export class UsersService {
       allowedMenus: allowedMenus,
     };
 
+    // Akses khusus: boleh edit/approve Cutting Report yang sudah terkunci
+    if (dto.canEditCuttingReport !== undefined) {
+      data.canEditCuttingReport = !!dto.canEditCuttingReport;
+    }
+
     // 🔥 reset password optional
     if (dto.password && dto.password.trim() !== '') {
       data.password = await bcrypt.hash(dto.password, 10);

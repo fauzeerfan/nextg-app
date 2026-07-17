@@ -7,6 +7,7 @@ import {
   BarChart3, History, Scan, Calendar, Target, LogIn, Cpu, Bot, TrendingUp, Box, MapPin
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { NotificationBell } from '../ui/NotificationBell';
 import { useNavigation } from '../../context/NavigationContext'; // <-- tambah import
 import { NextGLogo } from '../ui/Logo';
 
@@ -391,8 +392,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           
           <div className={`flex gap-2 ${isCollapsed ? 'flex-col items-center' : 'justify-between'}`}>
             <div className={`flex gap-2 ${isCollapsed ? 'flex-col' : ''}`}>
-              <button 
-                onClick={toggleTheme} 
+              <NotificationBell />
+              <button
+                onClick={toggleTheme}
                 className="p-2.5 rounded-xl bg-slate-200/60 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition-all duration-200 group outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 title="Toggle Theme"
               >

@@ -194,15 +194,46 @@ export class FinishedGoodsService {
    * Mendapatkan history pengiriman
    */
   async getShipments() {
-    return this.prisma.shipment.findMany({
+    const shipments = await this.prisma.shipment.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
         items: {
           include: {
-            op: { select: { opNumber: true } },
+            op: { select: { opNumber: true, itemNameFG: true, parent: { select: { opNumber: true } } } },
           },
         },
       },
+    });
+
+    // Perkaya history dengan info customer & tanggal surat jalan dari dokumen eksternal
+    // (doksuratjalan). Bila eksternal tidak tersedia, customer dibiarkan null (UI '-').
+    const docMap = new Map<string, { customer: string; tanggal: string }>();
+    try {
+      const docs = await this.externalShipping.getDokumenSuratJalan();
+      if (Array.isArray(docs)) {
+        for (const d of docs as any[]) {
+          const key = String(d.no_surat_jalan ?? d.noSuratJalan ?? '').trim();
+          if (key) {
+            docMap.set(key, {
+              customer: d.customer ?? d.nama_customer ?? '',
+              tanggal: d.tanggal_surat_jalan ?? d.tanggal ?? '',
+            });
+          }
+        }
+      }
+    } catch {
+      // eksternal tidak tersedia -> lewati enrichment
+    }
+
+    return shipments.map((s) => {
+      const doc = docMap.get(String(s.suratJalan).trim());
+      return {
+        ...s,
+        customerName: doc?.customer || null,
+        tanggalSuratJalan: doc?.tanggal || null,
+        totalItems: s.items.length,
+        totalQtyItems: s.items.reduce((sum, it) => sum + it.qty, 0),
+      };
     });
   }
 
