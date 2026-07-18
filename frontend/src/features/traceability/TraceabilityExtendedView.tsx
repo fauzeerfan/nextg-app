@@ -34,6 +34,7 @@ interface DeliveryNote {
   fgNumber: string;
   qty: number;
   shipmentTotalQty: number;
+  outChain?: OutChain;
 }
 
 interface PatternProgress {
@@ -186,6 +187,11 @@ interface TraceResult {
   }[];
 }
 
+interface BcMatchedMaterial {
+  materialName: string;
+  bcDocuments: BcDocument[];
+}
+
 interface BcTraceResult {
   bcDocument: string;
   bcEl: string | null;
@@ -193,7 +199,10 @@ interface BcTraceResult {
     suratJalan: string;
     shipmentDate: string;
     totalQty: number;
-    ops: { opNumber: string; qty: number }[];
+    fgNumbers?: string[];
+    ops: { opNumber: string; qty: number; fgNumber?: string | null }[];
+    matchedMaterials?: BcMatchedMaterial[];
+    outChain?: OutChain;
   }[];
   foundInProduction?: boolean;
   relatedOps?: string[];
@@ -225,10 +234,48 @@ interface MaterialItem {
   totalConsumption?: number;
 }
 
+interface OutChainDoc {
+  noDokBcPengeluaran: string;
+  tanggalDokBc: string | null;
+  kodeBc: string | null;
+  invoice: string | null;
+  tanggalInvoice: string | null;
+}
+
+interface OutChain {
+  invoice: string | null;
+  tanggalInvoice: string | null;
+  dokumenBcPengeluaran: OutChainDoc[];
+}
+
 interface SuratJalanTraceResult {
+  suratJalan?: string;
+  shipmentDate?: string;
+  totalQtyShipped?: number;
   itemFinishgood: string;
   list_op_number: string[];
   list_material: MaterialItem[];
+  outChain?: OutChain;
+}
+
+// Hasil trace berdasarkan Dokumen BC Pengeluaran
+interface BcPengeluaranHeader {
+  dokBcPengeluaran: string;
+  tanggalDokBcPengeluaran: string | null;
+  kodeBc: string | null;
+  invoice: string | null;
+  tanggalInvoice: string | null;
+}
+interface BcPengeluaranItem {
+  item: string;
+  descItem: string;
+  uom: string;
+  suratJalan: string;
+}
+interface BcPengeluaranTraceResult {
+  bcPengeluaran: BcPengeluaranHeader;
+  items: BcPengeluaranItem[];
+  suratJalanList: { suratJalan: string; detail: SuratJalanTraceResult | null }[];
 }
 
 // === TYPE GUARD ===
@@ -862,6 +909,26 @@ const OpDetailCard = ({
                         <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Tanggal</span>
                         <span className="font-bold text-slate-800 dark:text-slate-200">{new Date(dn.shipmentDate).toLocaleDateString()}</span>
                       </div>
+                      {dn.outChain && (dn.outChain.invoice || (dn.outChain.dokumenBcPengeluaran?.length ?? 0) > 0) && (
+                        <div className="mt-3 pt-3 border-t border-blue-100 dark:border-slate-700/50 space-y-2">
+                          {dn.outChain.invoice && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Invoice</span>
+                              <span className="font-mono font-black text-purple-600 dark:text-purple-400">{dn.outChain.invoice}</span>
+                            </div>
+                          )}
+                          {(dn.outChain.dokumenBcPengeluaran ?? []).length > 0 && (
+                            <div>
+                              <span className="text-slate-500 font-bold text-xs uppercase tracking-wider block mb-1.5">BC Pengeluaran</span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {dn.outChain.dokumenBcPengeluaran.map((d, i) => (
+                                  <span key={i} className="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 px-2 py-1 rounded-lg text-[11px] font-mono font-black text-purple-700 dark:text-purple-300">{d.noDokBcPengeluaran}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -884,12 +951,12 @@ const OpDetailCard = ({
 };
 
 export const TraceabilityExtendedView = () => {
-  const [searchType, setSearchType] = useState<'surat-jalan' | 'bc-document' | 'op'>('surat-jalan');
+  const [searchType, setSearchType] = useState<'bc-document' | 'bc-pengeluaran' | 'surat-jalan' | 'op'>('bc-document');
   const [searchQuery, setSearchQuery] = useState('');
   const [bcNomorEl, setBcNomorEl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<OpTraceResult | TraceResult | BcTraceResult | SuratJalanTraceResult | null>(null);
+  const [result, setResult] = useState<OpTraceResult | TraceResult | BcTraceResult | SuratJalanTraceResult | BcPengeluaranTraceResult | null>(null);
   const [expandedFg, setExpandedFg] = useState<Set<string>>(new Set());
   const [expandedOp, setExpandedOp] = useState<Set<string>>(new Set());
 
@@ -917,6 +984,8 @@ export const TraceabilityExtendedView = () => {
         url = `${API_BASE_URL}/traceability-extended/op/${encodeURIComponent(searchQuery)}`;
       } else if (searchType === 'surat-jalan') {
         url = `${API_BASE_URL}/traceability-extended/surat-jalan/${encodeURIComponent(searchQuery)}`;
+      } else if (searchType === 'bc-pengeluaran') {
+        url = `${API_BASE_URL}/traceability-extended/bc-pengeluaran/${encodeURIComponent(searchQuery)}`;
       } else {
         // Pencarian BC: kirim nomor dokumen jika ada, kosongkan jika tidak
         const params = new URLSearchParams();
@@ -1190,6 +1259,43 @@ export const TraceabilityExtendedView = () => {
             </div>
           </div>
 
+          {/* Alur Keluar: Invoice + Dokumen BC Pengeluaran (ekspor) */}
+          {data.outChain && (data.outChain.invoice || (data.outChain.dokumenBcPengeluaran?.length ?? 0) > 0) && (
+            <div className="mb-8">
+              <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600">
+                  <FileText size={18} />
+                </div>
+                Alur Keluar (Invoice &amp; BC Pengeluaran)
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-2xl p-4">
+                  <div className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-1">Invoice</div>
+                  <div className="font-black text-lg text-purple-700 dark:text-purple-300 font-mono">{data.outChain.invoice || '-'}</div>
+                  {data.outChain.tanggalInvoice && (
+                    <div className="text-xs font-semibold text-slate-500 mt-1">{new Date(data.outChain.tanggalInvoice).toLocaleDateString('id-ID')}</div>
+                  )}
+                </div>
+                <div className="md:col-span-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Dokumen BC Pengeluaran</div>
+                  {(data.outChain.dokumenBcPengeluaran?.length ?? 0) === 0 ? (
+                    <div className="text-sm font-semibold text-slate-400">Belum ada dokumen BC pengeluaran</div>
+                  ) : (
+                    <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2">
+                      {data.outChain.dokumenBcPengeluaran.map((d, i) => (
+                        <div key={i} className="flex flex-wrap items-center justify-between gap-2 bg-white dark:bg-slate-800 rounded-xl px-3 py-2 border border-slate-200 dark:border-slate-700">
+                          <span className="font-mono font-black text-purple-700 dark:text-purple-300">{d.noDokBcPengeluaran}</span>
+                          <span className="text-xs font-bold text-slate-500">{d.kodeBc || '-'}</span>
+                          <span className="text-xs font-semibold text-slate-500">{d.tanggalDokBc ? new Date(d.tanggalDokBc).toLocaleDateString('id-ID') : '-'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Daftar OP Numbers */}
           <div className="mb-8">
             <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-3">
@@ -1315,6 +1421,98 @@ export const TraceabilityExtendedView = () => {
     );
   };
 
+  const renderBcPengeluaranResult = (res: BcPengeluaranTraceResult) => {
+    const h = res.bcPengeluaran;
+    return (
+      <div className="space-y-8">
+        {/* Header BC Pengeluaran */}
+        <div className="bg-white dark:bg-slate-800 rounded-3xl border-2 border-slate-200 dark:border-slate-700 p-6 md:p-8 shadow-md">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-6 pb-6 border-b-2 border-slate-100 dark:border-slate-700/50">
+            <div className="flex items-center gap-5">
+              <div className="w-16 h-16 bg-purple-600 text-white rounded-2xl shadow-lg shadow-purple-600/30 flex items-center justify-center shrink-0">
+                <FileText size={32} />
+              </div>
+              <div>
+                <div className="text-xs font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-lg inline-block shadow-sm">
+                  Dokumen BC Pengeluaran
+                </div>
+                <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight mt-1 font-mono">{h.dokBcPengeluaran}</h2>
+                {h.tanggalDokBcPengeluaran && (
+                  <div className="text-sm font-bold text-slate-500 mt-1">{new Date(h.tanggalDokBcPengeluaran).toLocaleDateString('id-ID')}</div>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 text-sm bg-slate-50 dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm min-w-[220px]">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-bold text-slate-500">Kode BC:</span>
+                <span className="font-black text-slate-700 dark:text-slate-200">{h.kodeBc || '-'}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-bold text-slate-500">Invoice:</span>
+                <span className="font-mono font-black text-purple-600 dark:text-purple-400">{h.invoice || '-'}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-bold text-slate-500">Tgl Invoice:</span>
+                <span className="font-semibold text-slate-600 dark:text-slate-300">{h.tanggalInvoice ? new Date(h.tanggalInvoice).toLocaleDateString('id-ID') : '-'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Item FG pada dokumen ini */}
+          <div>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+                <Package size={18} />
+              </div>
+              Item Finished Goods
+            </h3>
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-900/50 text-left text-xs font-black text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3">Item</th>
+                    <th className="px-4 py-3">Deskripsi</th>
+                    <th className="px-4 py-3">UOM</th>
+                    <th className="px-4 py-3">Surat Jalan</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                  {res.items.map((it, i) => (
+                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                      <td className="px-4 py-3 font-mono font-bold text-slate-800 dark:text-slate-200">{it.item}</td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{it.descItem}</td>
+                      <td className="px-4 py-3 text-slate-500">{it.uom}</td>
+                      <td className="px-4 py-3 font-mono font-bold text-blue-600 dark:text-blue-400">{it.suratJalan}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Rincian tiap Surat Jalan → material → BC penerimaan (mundur) */}
+        {res.suratJalanList.map((sj, i) => (
+          <div key={i} className="space-y-3">
+            <div className="flex items-center gap-3 px-1">
+              <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+                <Truck size={18} />
+              </div>
+              <h3 className="text-lg font-black text-slate-800 dark:text-slate-200">Surat Jalan: <span className="font-mono text-blue-600 dark:text-blue-400">{sj.suratJalan}</span></h3>
+            </div>
+            {sj.detail ? (
+              <SuratJalanLegacyResultView data={sj.detail} />
+            ) : (
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 text-sm font-bold text-amber-700 dark:text-amber-400">
+                Detail material untuk surat jalan ini tidak dapat dimuat dari sistem produksi.
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const renderBcResult = (res: BcTraceResult) => (
     <div className="bg-white dark:bg-slate-800 rounded-3xl border-2 border-slate-200 dark:border-slate-700 p-6 md:p-8 shadow-md">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 pb-6 border-b-2 border-slate-100 dark:border-slate-700/50">
@@ -1365,16 +1563,62 @@ export const TraceabilityExtendedView = () => {
                   <div className="font-black text-blue-800 dark:text-blue-300 text-lg mt-0.5">{ship.totalQty}</div>
                 </div>
               </div>
+              {/* Item Finished Goods pada surat jalan ini */}
+              {ship.fgNumbers && ship.fgNumbers.length > 0 && (
+                <div className="text-sm mb-4">
+                  <div className="text-slate-500 font-black text-xs uppercase tracking-wider mb-3 flex items-center gap-2"><Package size={13} /> Item Finished Goods:</div>
+                  <div className="flex flex-wrap gap-2.5">
+                    {ship.fgNumbers.map((fg, idx) => (
+                      <span key={idx} className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-lg text-xs font-black text-emerald-700 dark:text-emerald-400 shadow-sm">
+                        {fg}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="text-sm">
-                <div className="text-slate-500 font-black text-xs uppercase tracking-wider mb-3">Order Produksi (OP):</div>
+                <div className="text-slate-500 font-black text-xs uppercase tracking-wider mb-3 flex items-center gap-2"><Layers size={13} /> Order Produksi (OP):</div>
                 <div className="flex flex-wrap gap-2.5">
                   {ship.ops.map((o, idx) => (
-                    <span key={idx} className="bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm hover:bg-slate-200 transition-colors cursor-default">
-                      {o.opNumber}
+                    <span key={idx} title={o.fgNumber ? `FG: ${o.fgNumber}` : undefined} className="bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm hover:bg-slate-200 transition-colors cursor-default">
+                      {o.opNumber}{o.fgNumber ? <span className="text-slate-400 font-semibold"> · {o.fgNumber}</span> : null}
                     </span>
                   ))}
                 </div>
               </div>
+
+              {/* Material dari dokumen BC ini yang dipakai pada surat jalan */}
+              {ship.matchedMaterials && ship.matchedMaterials.length > 0 && (
+                <div className="mt-5 pt-4 border-t-2 border-slate-100 dark:border-slate-700 text-sm">
+                  <div className="text-slate-500 font-black text-xs uppercase tracking-wider mb-2 flex items-center gap-2"><Package size={13} /> Material dari Dokumen BC ini:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {ship.matchedMaterials.map((mm, idx) => (
+                      <span key={idx} className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-700 dark:text-amber-400">
+                        {mm.materialName || '-'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Rantai keluar: invoice + dokumen BC pengeluaran */}
+              {ship.outChain && (ship.outChain.invoice || (ship.outChain.dokumenBcPengeluaran?.length ?? 0) > 0) && (
+                <div className="mt-5 pt-4 border-t-2 border-slate-100 dark:border-slate-700 text-sm">
+                  <div className="text-slate-500 font-black text-xs uppercase tracking-wider mb-2 flex items-center gap-2"><FileText size={13} /> Alur Keluar (Ekspor):</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {ship.outChain.invoice && (
+                      <span className="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 px-3 py-1.5 rounded-lg text-xs font-bold text-purple-700 dark:text-purple-300">
+                        Invoice: <span className="font-mono font-black">{ship.outChain.invoice}</span>
+                      </span>
+                    )}
+                    {(ship.outChain.dokumenBcPengeluaran ?? []).map((d, idx) => (
+                      <span key={idx} className="bg-purple-100 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 px-3 py-1.5 rounded-lg text-xs font-bold text-purple-800 dark:text-purple-300">
+                        BC Keluar: <span className="font-mono font-black">{d.noDokBcPengeluaran}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1448,8 +1692,9 @@ export const TraceabilityExtendedView = () => {
                     setSearchType(e.target.value as any);
                   }}
                 >
+                  <option value="bc-document" className="font-bold">Berdasarkan Dokumen BC Pemasukan</option>
+                  <option value="bc-pengeluaran" className="font-bold">Berdasarkan Dokumen BC Pengeluaran</option>
                   <option value="surat-jalan" className="font-bold">Berdasarkan Surat Jalan</option>
-                  <option value="bc-document" className="font-bold">Berdasarkan Dokumen BC</option>
                   <option value="op" className="font-bold">Berdasarkan OP Number</option>
                 </select>
                 <div className="absolute inset-y-0 right-0 flex items-center pr-5 pointer-events-none text-slate-400">
@@ -1493,7 +1738,7 @@ export const TraceabilityExtendedView = () => {
             {searchType !== 'bc-document' && (
               <div className="w-full md:flex-1">
                 <label className={labelClassName}>
-                  {searchType === 'op' ? 'Nomor OP' : 'Nomor Surat Jalan'}
+                  {searchType === 'op' ? 'Nomor OP' : searchType === 'bc-pengeluaran' ? 'Nomor Dokumen BC Pengeluaran' : 'Nomor Surat Jalan'}
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 flex items-center pl-5 pointer-events-none text-slate-400">
@@ -1503,7 +1748,7 @@ export const TraceabilityExtendedView = () => {
                     type="text"
                     className={`${inputClassName} pl-14`}
                     placeholder={
-                      searchType === 'op' ? 'Contoh: K1YH260001' : 'Contoh: 26007466'
+                      searchType === 'op' ? 'Contoh: K1YH260001' : searchType === 'bc-pengeluaran' ? 'Contoh: 008932' : 'Contoh: 26009010'
                     }
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
@@ -1559,6 +1804,7 @@ export const TraceabilityExtendedView = () => {
                 })()
               )}
               {searchType === 'bc-document' && renderBcResult(result as BcTraceResult)}
+              {searchType === 'bc-pengeluaran' && renderBcPengeluaranResult(result as BcPengeluaranTraceResult)}
               {searchType === 'op' && renderOpResult(result as OpTraceResult)}
             </div>
           )}

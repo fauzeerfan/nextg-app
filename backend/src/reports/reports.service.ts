@@ -786,6 +786,30 @@ const ops = await this.prisma.productionOrder.findMany({
       return { first, last };
     };
 
+    // ===== CUTTING REPORT (dulu "Cutting Entan") =====
+    // Ambil data pengelolaan cutting dari Cutting Report (CuttingDetail) per OP:
+    // pcs hasil cut, material dipakai (aktualPemakaian), dan sisa material (dianggap NG).
+    const crMap = new Map<string, { pcs: number; dipakai: number; sisa: number }>();
+    if (station === 'CUTTING_ENTAN') {
+      const opNums = ops.map((o) => o.opNumber);
+      const details = await this.prisma.cuttingDetail.findMany({
+        where: { variant: 'AUT', entan: { formOp: { opNumber: { in: opNums } } } },
+        select: {
+          totalSetOrPcs: true, aktualPemakaian: true, sisa: true,
+          entan: { select: { formOp: { select: { opNumber: true } } } },
+        },
+      });
+      for (const d of details as any[]) {
+        const on = d.entan?.formOp?.opNumber;
+        if (!on) continue;
+        const cur = crMap.get(on) || { pcs: 0, dipakai: 0, sisa: 0 };
+        cur.pcs += d.totalSetOrPcs || 0;
+        cur.dipakai += d.aktualPemakaian || 0;
+        cur.sisa += Math.max(0, d.sisa || 0);
+        crMap.set(on, cur);
+      }
+    }
+
     // Hitung data per OP
     const opDetails = ops.map(op => {
       let inputQty = 0;
@@ -793,16 +817,24 @@ const ops = await this.prisma.productionOrder.findMany({
       let goodQty = 0;
       let ngQty = 0;
       let stockQty = 0; // dipakai untuk FG (sisa stok)
+      let materialUsed = 0; // Cutting Report: material aktual dipakai
+      let sisaMaterial = 0; // Cutting Report: sisa material (dianggap NG)
       let ngDetails: any[] = [];
 
       const { first, last } = getStationDateRange(op, station);
 
       switch (station) {
-        case 'CUTTING_ENTAN':
-          inputQty = op.qtyOp;
-          outputQty = op.qtyEntan;
-          goodQty = outputQty; // semua dianggap good (tidak ada NG)
+        case 'CUTTING_ENTAN': {
+          // Output = pcs hasil cut dari Cutting Report (fallback ke qtyEntan yang sudah dikirim).
+          const cr = crMap.get(op.opNumber) || { pcs: 0, dipakai: 0, sisa: 0 };
+          inputQty = op.qtyOp;                       // target OP
+          outputQty = cr.pcs || op.qtyEntan;         // pcs dipotong
+          goodQty = outputQty;
+          ngQty = 0;                                 // set tidak ber-NG; sisa material di kolom terpisah
+          materialUsed = cr.dipakai;
+          sisaMaterial = cr.sisa;
           break;
+        }
         case 'CUTTING_POND':
           inputQty = op.qtyEntan * (op.line?.patternMultiplier || 1);
           goodQty = op.patternProgress.reduce((sum: number, p: any) => sum + p.good, 0);
@@ -877,6 +909,8 @@ const ops = await this.prisma.productionOrder.findMany({
         goodQty,
         ngQty,
         stockQty,
+        materialUsed,
+        sisaMaterial,
         defectRate,
         ngDetails,
       };
@@ -905,6 +939,8 @@ const ops = await this.prisma.productionOrder.findMany({
     const totalGood = filtered.reduce((sum, op) => sum + op.goodQty, 0);
     const totalNg = filtered.reduce((sum, op) => sum + op.ngQty, 0);
     const totalStock = filtered.reduce((sum, op) => sum + (op.stockQty || 0), 0);
+    const totalMaterialUsed = filtered.reduce((sum, op) => sum + (op.materialUsed || 0), 0);
+    const totalSisaMaterial = filtered.reduce((sum, op) => sum + (op.sisaMaterial || 0), 0);
     const overallDefectRate = totalOutput > 0 ? (totalNg / totalOutput) * 100 : 0;
 
     return {
@@ -915,6 +951,8 @@ const ops = await this.prisma.productionOrder.findMany({
         totalGood,
         totalNg,
         totalStock,
+        totalMaterialUsed: Math.round(totalMaterialUsed * 100) / 100,
+        totalSisaMaterial: Math.round(totalSisaMaterial * 100) / 100,
         defectRate: overallDefectRate,
         totalOps: filtered.length,
         period: { start: startDate, end: endDate },

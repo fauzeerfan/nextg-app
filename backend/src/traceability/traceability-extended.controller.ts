@@ -26,6 +26,12 @@ async traceByBcDocument(
   return this.service.traceByBcDocument(nomorDokumen, nomorEl);
 }
 
+// BARU: tracing berdasarkan Dokumen BC PENGELUARAN (setelah surat jalan -> invoice -> BC keluar)
+@Get('bc-pengeluaran/:noDok')
+async traceByBcPengeluaran(@Param('noDok') noDok: string) {
+  return this.service.traceByBcPengeluaran(noDok);
+}
+
   @Get('surat-jalan-material/:suratJalan')
   async getSuratJalanMaterial(@Param('suratJalan') suratJalan: string) {
     return this.service.getSuratJalanMaterialDetails(suratJalan);

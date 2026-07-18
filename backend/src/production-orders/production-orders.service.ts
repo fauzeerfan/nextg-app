@@ -761,17 +761,20 @@ if (station === 'CP') {
     const cuttingNgPerComponent = ngByComponent(patternRows);
 
     // ---------- CHECK PANEL ----------
-    const cpInspectLogs = await this.prisma.productionLog.findMany({
-      where: { station: StationCode.CP, type: 'INSPECT', ...timeWhere, ...opLineWhere },
-      select: { qty: true, note: true, createdAt: true },
+    // FIX: good/ng diambil LANGSUNG dari CheckPanelInspection (kolom good & ng eksplisit),
+    // BUKAN dari ProductionLog INSPECT. Log INSPECT ber-qty = (good+ng) & note hanya
+    // menandai adanya alasan NG -> pendekatan lama salah menghitung SELURUH qty sebagai
+    // NG saat ada 1 temuan, sehingga rate NG & kualitas tampak tertukar.
+    const cpRows = await this.prisma.checkPanelInspection.findMany({
+      where: { createdAt: { gte: win.start, lte: win.end }, ...opLineWhere },
+      select: { good: true, ng: true, createdAt: true },
     });
     const cpTrend = buckets.map((b) => ({ label: b.label, good: 0, ng: 0, ngRate: 0, qualityRate: 0 }));
     let cpGood = 0, cpNg = 0;
-    for (const l of cpInspectLogs) {
-      const isNg = !!(l.note && String(l.note).trim() !== '');
-      const i = idxByKey.get(this.analyticsBucketKey(l.createdAt, win));
-      if (i != null) { if (isNg) cpTrend[i].ng += l.qty; else cpTrend[i].good += l.qty; }
-      if (isNg) cpNg += l.qty; else cpGood += l.qty;
+    for (const r of cpRows) {
+      const i = idxByKey.get(this.analyticsBucketKey(r.createdAt, win));
+      if (i != null) { cpTrend[i].good += r.good; cpTrend[i].ng += r.ng; }
+      cpGood += r.good; cpNg += r.ng;
     }
     for (const t of cpTrend) {
       const tot = t.good + t.ng;
@@ -1219,12 +1222,17 @@ if (station === 'CP') {
     const stationStats: Record<string, { input: number; output: number; ng: number }> = {};
     stationKeys.forEach(key => { stationStats[key] = { input: 0, output: 0, ng: 0 }; });
 
-    // Cutting Pond input dari CuttingBatch dalam rentang
+    // Cutting Pond input dari CuttingBatch dalam rentang.
+    // CuttingBatch.qty disimpan dalam SET (unit dispatch Entan), sedangkan output Pond
+    // dihitung dalam POLA (= set * patternMultiplier). Konversi ke pola agar unit In/Out
+    // pada kartu Pond konsisten (menghindari progress yang menggelembung ~x multiplier).
     const batchesInRange = await this.prisma.cuttingBatch.findMany({
       where: { createdAt: { gte: startDate, lte: endDate }, ...opLineWhere },
-      select: { qty: true }
+      select: { qty: true, op: { select: { line: { select: { patternMultiplier: true } } } } }
     });
-    stationStats['CUTTING_POND'].input = batchesInRange.reduce((sum, b) => sum + b.qty, 0);
+    stationStats['CUTTING_POND'].input = batchesInRange.reduce(
+      (sum, b) => sum + b.qty * (b.op?.line?.patternMultiplier || 1), 0,
+    );
 
     // Cutting Pond output & NG dari ProductionLog
     const pondLogs = await this.prisma.productionLog.findMany({
@@ -1301,8 +1309,13 @@ if (station === 'CP') {
       where: { station: StationCode.CUTTING_ENTAN, type: 'QR_GENERATED', createdAt: { gte: startDate, lte: endDate }, ...opLineWhere },
       select: { qty: true }
     });
-    stationStats['CUTTING_ENTAN'].input = 0; // tidak ada sumber "input harian" untuk Entan (qtyEntan dari sync eksternal)
     stationStats['CUTTING_ENTAN'].output = entanQrLogs.reduce((sum, l) => sum + l.qty, 0);
+    // Entan = stasiun DISPATCH (tidak ada event "input harian"). Agar progress tidak
+    // selalu 0%, definisikan In = yang sudah dikirim + sisa antrian yang belum dikirim.
+    // Sehingga progress = dikirim / (dikirim + antrian) = seberapa banyak beban Entan
+    // yang telah didispatch ke Pond.
+    stationStats['CUTTING_ENTAN'].input =
+      stationStats['CUTTING_ENTAN'].output + stationMap['CUTTING_ENTAN'].wipQty;
     stationStats['CUTTING_ENTAN'].ng = 0;
 
     const stationFlow = stationKeys.map(station => ({

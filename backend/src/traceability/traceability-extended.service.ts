@@ -46,6 +46,11 @@ export interface DeliveryNoteDetail {
   fgNumber: string;             // finished goods pada surat jalan
   qty: number;                  // qty OP ini yang dikirim pada surat jalan tsb
   shipmentTotalQty: number;     // total qty surat jalan tsb
+  outChain?: {                  // rantai keluar: invoice + dokumen BC pengeluaran
+    invoice: any;
+    tanggalInvoice: any;
+    dokumenBcPengeluaran: any[];
+  };
 }
 // ===== AKHIR TAMBAHAN =====
 
@@ -232,12 +237,124 @@ export interface FgMaterialSummary {
 @Injectable()
 export class TraceabilityExtendedService {
   private readonly externalApiUrl = 'http://202.52.15.30:998/miniapps/admin/api/traceability';
+  private readonly externalBase = 'http://202.52.15.30:998/miniapps/admin/api';
   private readonly logger = new Logger(TraceabilityExtendedService.name);
 
   constructor(
     private prisma: PrismaService,
     private httpService: HttpService,
   ) {}
+
+  // ===== RANTAI KELUAR: invoice + dokumen BC pengeluaran per surat jalan =====
+  // API: POST tracebysuratjalan  body: [{ surat_jalan, item_fg }, ...]
+  //   -> [{ parent, surat_jalan, tanggal_surat_jalan, child, invoice, tanggal_invoice,
+  //         item, desc_item, dok_bc, tanggal_dok_bc, no_dok_bc }]
+  // PENTING: endpoint ini bersifat POST dan MEMBUTUHKAN pasangan { surat_jalan, item_fg }.
+  // Pemanggilan GET tanpa body mengembalikan array kosong (invoice & BC pengeluaran tidak muncul).
+  // Bila daftar item_fg tidak diberikan, item_fg diambil otomatis dari DB (FG pada surat jalan).
+  async getSuratJalanOutChain(suratJalan: string, itemFgs?: string[]): Promise<any[]> {
+    try {
+      let fgList = (itemFgs || []).filter(Boolean);
+
+      // Ambil item_fg dari DB bila caller tidak menyediakannya.
+      if (fgList.length === 0) {
+        const shipment = await this.prisma.shipment.findFirst({
+          where: { suratJalan },
+          include: { items: { include: { op: { include: { parent: true } } } } },
+        });
+        const set = new Set<string>();
+        if (shipment) {
+          for (const it of shipment.items) {
+            const fg = it.op.itemNumberFG || it.op.parent?.itemNumberFG || shipment.fgNumber;
+            if (fg) set.add(fg);
+          }
+          if (set.size === 0 && shipment.fgNumber) set.add(shipment.fgNumber);
+        }
+        fgList = Array.from(set);
+      }
+
+      const body =
+        fgList.length > 0
+          ? fgList.map((item_fg) => ({ surat_jalan: suratJalan, item_fg }))
+          : [{ surat_jalan: suratJalan }];
+
+      const res = await firstValueFrom(
+        this.httpService
+          .post(`${this.externalBase}/tracebysuratjalan`, body)
+          .pipe(timeout(15000)),
+      );
+      return Array.isArray(res.data) ? res.data : res.data ? [res.data] : [];
+    } catch (e) {
+      this.logger.warn(
+        `tracebysuratjalan (POST) gagal ${suratJalan}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      return [];
+    }
+  }
+
+  // Ringkas out-chain: header invoice + dokumen BC pengeluaran (dedupe per no_dok_bc)
+  private summarizeOutChain(rows: any[]) {
+    const seen = new Set<string>();
+    const docs: any[] = [];
+    let invoice: any = null, tanggalInvoice: any = null;
+    for (const r of rows) {
+      if (r?.invoice != null && invoice == null) { invoice = r.invoice; tanggalInvoice = r.tanggal_invoice ?? null; }
+      const key = String(r?.no_dok_bc ?? '');
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        docs.push({
+          noDokBcPengeluaran: r.no_dok_bc,
+          tanggalDokBc: r.tanggal_dok_bc ?? null,
+          kodeBc: r.dok_bc ?? null,
+          invoice: r.invoice ?? null,
+          tanggalInvoice: r.tanggal_invoice ?? null,
+        });
+      }
+    }
+    return { invoice, tanggalInvoice, dokumenBcPengeluaran: docs };
+  }
+
+  // ===== TRACE BY DOKUMEN BC PENGELUARAN =====
+  // API: GET tracebydokumenbcpengeluaran/{no} -> [{ child, invoice, tanggal_invoice,
+  //   item, desc_item, uom, dok_bc_pengeluaran, tanggal_dok_bc_pengeluaran, surat_jalan, dok_bc }]
+  async traceByBcPengeluaran(noDok: string): Promise<any> {
+    if (!noDok || !noDok.trim()) throw new BadRequestException('Nomor dokumen BC pengeluaran wajib diisi');
+    let rows: any[] = [];
+    try {
+      const res = await firstValueFrom(
+        this.httpService.get(`${this.externalBase}/tracebydokumenbcpengeluaran/${encodeURIComponent(noDok.trim())}`).pipe(timeout(15000)),
+      );
+      rows = Array.isArray(res.data) ? res.data : (res.data ? [res.data] : []);
+    } catch (e) {
+      this.logger.warn(`tracebydokumenbcpengeluaran gagal ${noDok}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    if (rows.length === 0) {
+      throw new NotFoundException(`Dokumen BC pengeluaran ${noDok} tidak ditemukan.`);
+    }
+
+    const first = rows[0];
+    const header = {
+      dokBcPengeluaran: first.dok_bc_pengeluaran ?? noDok,
+      tanggalDokBcPengeluaran: first.tanggal_dok_bc_pengeluaran ?? null,
+      kodeBc: first.dok_bc ?? null,
+      invoice: first.invoice ?? null,
+      tanggalInvoice: first.tanggal_invoice ?? null,
+    };
+    const items = rows.map((r) => ({
+      item: r.item, descItem: r.desc_item, uom: r.uom, suratJalan: String(r.surat_jalan ?? ''),
+    }));
+    const sjSet = [...new Set(rows.map((r) => String(r.surat_jalan ?? '')).filter(Boolean))];
+
+    // Untuk tiap surat jalan: tracing lengkap (material + OP + BC penerimaan) — mundur ke belakang.
+    const suratJalanList: any[] = [];
+    for (const sj of sjSet) {
+      let detail: any = null;
+      try { detail = await this.getSuratJalanMaterialDetails(sj); } catch { detail = null; }
+      suratJalanList.push({ suratJalan: sj, detail });
+    }
+
+    return { bcPengeluaran: header, items, suratJalanList };
+  }
 
   /**
    * Normalize BC document number by removing leading zeros
@@ -477,17 +594,21 @@ export class TraceabilityExtendedService {
     // ===== SURAT JALAN PENGIRIMAN (disimpan di AKHIR hasil trace OP) =====
     // Diambil dari relasi shipmentItems -> shipment. Bila OP belum dikirim, array ini kosong
     // (frontend akan menampilkan status "masih di Finished Goods").
-    const deliveryNotes: DeliveryNoteDetail[] = op.shipmentItems
-      .map((si) => ({
-        suratJalan: si.shipment.suratJalan,
-        shipmentDate: si.shipment.createdAt,
-        fgNumber: si.shipment.fgNumber,
-        qty: si.qty,
-        shipmentTotalQty: si.shipment.totalQty,
-      }))
-      .sort(
-        (a, b) => new Date(a.shipmentDate).getTime() - new Date(b.shipmentDate).getTime(),
-      );
+    const deliveryNotes: DeliveryNoteDetail[] = (
+      await Promise.all(
+        op.shipmentItems.map(async (si) => ({
+          suratJalan: si.shipment.suratJalan,
+          shipmentDate: si.shipment.createdAt,
+          fgNumber: si.shipment.fgNumber,
+          qty: si.qty,
+          shipmentTotalQty: si.shipment.totalQty,
+          // Rantai keluar (maju): invoice + dokumen BC pengeluaran untuk surat jalan ini.
+          outChain: this.summarizeOutChain(await this.getSuratJalanOutChain(si.shipment.suratJalan)),
+        })),
+      )
+    ).sort(
+      (a, b) => new Date(a.shipmentDate).getTime() - new Date(b.shipmentDate).getTime(),
+    );
     const isShipped = deliveryNotes.length > 0;
 
     const getDateRange = (dates: Date[]): string => {
@@ -871,6 +992,7 @@ export class TraceabilityExtendedService {
     // Pakai OP INDUK (parent) untuk pemanggilan external API (item shipment = OP batch).
     const pairMap = new Map<string, { op_number: string; item_fg: string }>();
     const opToShipments = new Map<string, Map<string, number>>();
+    const opToFg = new Map<string, string>();
     const shipmentMeta = new Map<string, { suratJalan: string; shipmentDate: Date; totalQty: number }>();
 
     for (const s of shipments) {
@@ -879,6 +1001,7 @@ export class TraceabilityExtendedService {
         const opNum = it.op.parent?.opNumber || it.op.opNumber;
         const itemFg = it.op.itemNumberFG || it.op.parent?.itemNumberFG || s.fgNumber;
         pairMap.set(`${opNum}|${itemFg}`, { op_number: opNum, item_fg: itemFg });
+        if (itemFg) opToFg.set(opNum, itemFg);
         if (!opToShipments.has(opNum)) opToShipments.set(opNum, new Map());
         const m = opToShipments.get(opNum)!;
         m.set(s.suratJalan, (m.get(s.suratJalan) || 0) + it.qty);
@@ -938,18 +1061,21 @@ export class TraceabilityExtendedService {
     // 5. Petakan OP yang cocok -> surat jalan (dengan qty riil per OP).
     const shipMap = new Map<string, {
       suratJalan: string; shipmentDate: Date; totalQty: number;
-      ops: { opNumber: string; qty: number }[];
+      fgNumbers: string[];
+      ops: { opNumber: string; qty: number; fgNumber: string | null }[];
       matchedMaterials: { materialName: string; bcDocuments: BcDocument[] }[];
     }>();
 
     for (const [opNum, mats] of matchedOpMaterials.entries()) {
       const ships = opToShipments.get(opNum);
       if (!ships) continue; // OP ini tidak ada di surat jalan mana pun
+      const fgForOp = opToFg.get(opNum) || null;
       for (const [sj, qty] of ships.entries()) {
         const meta = shipmentMeta.get(sj)!;
-        if (!shipMap.has(sj)) shipMap.set(sj, { ...meta, ops: [], matchedMaterials: [] });
+        if (!shipMap.has(sj)) shipMap.set(sj, { ...meta, fgNumbers: [], ops: [], matchedMaterials: [] });
         const e = shipMap.get(sj)!;
-        if (!e.ops.some((o) => o.opNumber === opNum)) e.ops.push({ opNumber: opNum, qty });
+        if (!e.ops.some((o) => o.opNumber === opNum)) e.ops.push({ opNumber: opNum, qty, fgNumber: fgForOp });
+        if (fgForOp && !e.fgNumbers.includes(fgForOp)) e.fgNumbers.push(fgForOp);
         for (const mm of mats) {
           if (!e.matchedMaterials.some((x) => x.materialName === mm.materialName)) e.matchedMaterials.push(mm);
         }
@@ -968,10 +1094,20 @@ export class TraceabilityExtendedService {
 
     this.logger.log(`✅ BC match: ${relatedShipments.length} surat jalan`);
 
+    // Rantai KELUAR (maju): untuk tiap surat jalan, ambil invoice + dokumen BC pengeluaran.
+    const relatedShipmentsWithOut = await Promise.all(
+      relatedShipments.map(async (s: any) => ({
+        ...s,
+        outChain: this.summarizeOutChain(
+          await this.getSuratJalanOutChain(s.suratJalan, s.fgNumbers),
+        ),
+      })),
+    );
+
     return {
       bcDocument: bcNomorDokumen || '',
       bcEl: bcNomorEl || null,
-      relatedShipments,
+      relatedShipments: relatedShipmentsWithOut,
     };
   }
 
@@ -1073,6 +1209,12 @@ async getSuratJalanMaterialDetails(suratJalan: string): Promise<any> {
   for (const v of opInfo.values()) if (v.item_fg) fgSet.add(v.item_fg);
   const itemFinishgood = Array.from(fgSet).join(', ') || shipment.fgNumber;
 
+  // Rantai KELUAR (maju): invoice + dokumen BC pengeluaran untuk surat jalan ini.
+  // item_fg sudah tersedia (fgSet) sehingga tidak perlu query DB ulang.
+  const outChain = this.summarizeOutChain(
+    await this.getSuratJalanOutChain(suratJalan, Array.from(fgSet)),
+  );
+
   return {
     suratJalan: shipment.suratJalan,
     shipmentDate: shipment.createdAt,
@@ -1080,6 +1222,7 @@ async getSuratJalanMaterialDetails(suratJalan: string): Promise<any> {
     totalQtyShipped,
     list_op_number,
     list_material: Array.from(matMap.values()),
+    outChain,
   };
 }
 }

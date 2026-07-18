@@ -23,12 +23,12 @@ type ReportStation =
   | 'FG';
 
 const stationOptions: { value: ReportStation; label: string; icon: any }[] = [
-  { value: 'CUTTING_ENTAN', label: 'Output Cutting Entan', icon: Scissors },
-  { value: 'CUTTING_POND', label: 'Output Cutting Pond', icon: Layers },
-  { value: 'CP', label: 'Output Check Panel', icon: ClipboardCheck },
-  { value: 'SEWING', label: 'Output Sewing', icon: Shirt },
-  { value: 'QC', label: 'Output Quality Control', icon: Activity },
-  { value: 'PACKING', label: 'Output Packing', icon: Package },
+  { value: 'CUTTING_ENTAN', label: 'Cutting Report', icon: Scissors },
+  { value: 'CUTTING_POND', label: 'Cutting Pond', icon: Layers },
+  { value: 'CP', label: 'Check Panel', icon: ClipboardCheck },
+  { value: 'SEWING', label: 'Sewing', icon: Shirt },
+  { value: 'QC', label: 'Quality Control', icon: Activity },
+  { value: 'PACKING', label: 'Packing', icon: Package },
   { value: 'FG', label: 'Finished Goods', icon: Truck },
 ];
 
@@ -339,14 +339,21 @@ export const ReportsView = () => {
               rose: 'border-rose-500', purple: 'border-purple-500', cyan: 'border-cyan-500',
             };
             const cards =
-              selectedStation === 'FG'
+              selectedStation === 'CUTTING_ENTAN'
+                ? [
+                    { label: 'Output (pcs)', value: s.totalOutput, color: 'emerald' },
+                    { label: 'Material Dipakai', value: (s.totalMaterialUsed ?? 0).toLocaleString('id-ID'), color: 'blue' },
+                    { label: 'Sisa / NG (mtr)', value: (s.totalSisaMaterial ?? 0).toLocaleString('id-ID'), color: 'rose' },
+                    { label: 'Total OP', value: s.totalOps, color: 'purple' },
+                  ]
+                : selectedStation === 'FG'
                 ? [
                     { label: 'Masuk FG', value: s.totalInput, color: 'blue' },
                     { label: 'Terkirim (Shipping)', value: s.totalOutput, color: 'emerald' },
                     { label: 'Stok FG', value: s.totalStock ?? 0, color: 'amber' },
                     { label: 'Total OP', value: s.totalOps, color: 'purple' },
                   ]
-                : ['CUTTING_ENTAN', 'SEWING', 'PACKING'].includes(selectedStation)
+                : ['SEWING', 'PACKING'].includes(selectedStation)
                 ? [
                     { label: 'Total Input', value: s.totalInput, color: 'blue' },
                     { label: 'Total Output', value: s.totalOutput, color: 'emerald' },
@@ -372,85 +379,109 @@ export const ReportsView = () => {
             );
           })()}
 
-          {/* OP Table */}
-          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 overflow-hidden shadow-md">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-100 dark:bg-slate-700/50 text-xs font-bold uppercase">
-                  <tr>
-                    <th className="py-4 px-4 w-10">
-                      <input
-                        type="checkbox"
-                        checked={data?.ops && selectedOps.size === data.ops.length && data.ops.length > 0}
-                        onChange={toggleSelectAll}
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                    </th>
-                    <th className="py-4 px-4">OP Number</th>
-                    <th className="py-4 px-4">Style</th>
-                    <th className="py-4 px-4">Line</th>
-                    <th className="py-4 px-4">Start Date</th>
-                    <th className="py-4 px-4">End Date</th>
-                    <th className="py-4 px-4">Input</th>
-                    <th className="py-4 px-4">Output</th>
-                    <th className="py-4 px-4">Good</th>
-                    <th className="py-4 px-4">NG</th>
-                    <th className="py-4 px-4">Defect Rate</th>
-                    <th className="py-4 px-4">NG Details</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                  {data.ops.map((op: any) => (
-                    <React.Fragment key={op.opNumber}>
-                      <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
-                        <td className="py-4 px-4" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={selectedOps.has(op.opNumber)}
-                            onChange={() => toggleSelectOp(op.opNumber)}
-                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="py-4 px-4 font-mono font-bold cursor-pointer" onClick={() => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber)}>{op.opNumber}</td>
-                        <td className="py-4 px-4 cursor-pointer" onClick={() => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber)}>{op.styleCode}</td>
-                        <td className="py-4 px-4 cursor-pointer" onClick={() => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber)}>{op.lineCode}</td>
-                        <td className="py-4 px-4 cursor-pointer" onClick={() => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber)}>{op.startDate ? new Date(op.startDate).toLocaleDateString() : '-'}</td>
-                        <td className="py-4 px-4 cursor-pointer" onClick={() => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber)}>{op.endDate ? new Date(op.endDate).toLocaleDateString() : 'In Progress'}</td>
-                        <td className="py-4 px-4 cursor-pointer" onClick={() => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber)}>{op.inputQty}</td>
-                        <td className="py-4 px-4 cursor-pointer" onClick={() => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber)}>{op.outputQty}</td>
-                        <td className="py-4 px-4 text-emerald-600 font-bold cursor-pointer" onClick={() => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber)}>{op.goodQty}</td>
-                        <td className="py-4 px-4 text-rose-600 font-bold cursor-pointer" onClick={() => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber)}>{op.ngQty}</td>
-                        <td className="py-4 px-4 cursor-pointer" onClick={() => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber)}>{op.defectRate.toFixed(1)}%</td>
-                        <td className="py-4 px-4 text-xs cursor-pointer" onClick={() => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber)}>
-                          {op.ngDetails?.length > 0 ? (
-                            <span className="text-blue-600 underline">View ({op.ngDetails.length})</span>
-                          ) : '-'}
-                        </td>
+          {/* OP Table — kolom menyesuaikan karakter station */}
+          {(() => {
+            const n = (v: any) => (v ?? 0);
+            const hasNg = ['CUTTING_POND', 'CP', 'QC'].includes(selectedStation);
+            // Definisi kolom metrik per-station
+            const metricCols: { header: string; render: (o: any) => any; cls?: string }[] =
+              selectedStation === 'CUTTING_ENTAN'
+                ? [
+                    { header: 'Target', render: (o) => n(o.inputQty) },
+                    { header: 'Output (pcs)', render: (o) => n(o.outputQty), cls: 'text-emerald-600 font-bold' },
+                    { header: 'Material Dipakai', render: (o) => n(o.materialUsed).toFixed(2) },
+                    { header: 'Sisa / NG (mtr)', render: (o) => n(o.sisaMaterial).toFixed(2), cls: 'text-rose-600 font-bold' },
+                  ]
+                : selectedStation === 'SEWING'
+                ? [
+                    { header: 'Start (in)', render: (o) => n(o.inputQty) },
+                    { header: 'Finish (out)', render: (o) => n(o.outputQty), cls: 'text-emerald-600 font-bold' },
+                  ]
+                : selectedStation === 'PACKING'
+                ? [
+                    { header: 'Input (QC)', render: (o) => n(o.inputQty) },
+                    { header: 'Packed', render: (o) => n(o.outputQty), cls: 'text-emerald-600 font-bold' },
+                  ]
+                : selectedStation === 'FG'
+                ? [
+                    { header: 'Masuk FG', render: (o) => n(o.inputQty) },
+                    { header: 'Terkirim', render: (o) => n(o.outputQty), cls: 'text-emerald-600 font-bold' },
+                    { header: 'Stok', render: (o) => n(o.stockQty), cls: 'text-amber-600 font-bold' },
+                  ]
+                : [
+                    { header: 'Input', render: (o) => n(o.inputQty) },
+                    { header: 'Output', render: (o) => n(o.outputQty) },
+                    { header: 'Good', render: (o) => n(o.goodQty), cls: 'text-emerald-600 font-bold' },
+                    { header: 'NG', render: (o) => n(o.ngQty), cls: 'text-rose-600 font-bold' },
+                    { header: 'Defect Rate', render: (o) => `${n(o.defectRate).toFixed(1)}%` },
+                  ];
+            const totalCols = 6 + metricCols.length + (hasNg ? 1 : 0);
+            return (
+              <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 overflow-hidden shadow-md">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-100 dark:bg-slate-700/50 text-xs font-bold uppercase">
+                      <tr>
+                        <th className="py-4 px-4 w-10">
+                          <input type="checkbox" checked={data?.ops && selectedOps.size === data.ops.length && data.ops.length > 0} onChange={toggleSelectAll} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        </th>
+                        <th className="py-4 px-4">OP Number</th>
+                        <th className="py-4 px-4">Style</th>
+                        <th className="py-4 px-4">Line</th>
+                        <th className="py-4 px-4">Start Date</th>
+                        <th className="py-4 px-4">End Date</th>
+                        {metricCols.map((c, i) => <th key={i} className="py-4 px-4">{c.header}</th>)}
+                        {hasNg && <th className="py-4 px-4">NG Details</th>}
                       </tr>
-                      {expandedOp === op.opNumber && op.ngDetails?.length > 0 && (
-                        <tr>
-                          <td colSpan={12} className="bg-slate-50 dark:bg-slate-800/50 p-4">
-                            <div className="text-xs font-bold mb-2">NG Details:</div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                              {op.ngDetails.map((d: any, i: number) => (
-                                <div key={i} className="bg-white dark:bg-slate-900 p-3 rounded border">
-                                  <span className="font-bold">{d.patternName || 'Set'}:</span> {d.ngQty} pcs
-                                  {d.reasons?.length > 0 && <div className="text-slate-500 mt-1">Reasons: {d.reasons.join(', ')}</div>}
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {data.ops.length === 0 && (
-              <div className="p-8 text-center text-slate-500">No data for selected filters.</div>
-            )}
-          </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                      {data.ops.map((op: any) => {
+                        const toggle = () => setExpandedOp(expandedOp === op.opNumber ? null : op.opNumber);
+                        return (
+                          <React.Fragment key={op.opNumber}>
+                            <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                              <td className="py-4 px-4" onClick={(e) => e.stopPropagation()}>
+                                <input type="checkbox" checked={selectedOps.has(op.opNumber)} onChange={() => toggleSelectOp(op.opNumber)} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                              </td>
+                              <td className="py-4 px-4 font-mono font-bold cursor-pointer" onClick={toggle}>{op.opNumber}</td>
+                              <td className="py-4 px-4 cursor-pointer" onClick={toggle}>{op.styleCode}</td>
+                              <td className="py-4 px-4 cursor-pointer" onClick={toggle}>{op.lineCode}</td>
+                              <td className="py-4 px-4 cursor-pointer" onClick={toggle}>{op.startDate ? new Date(op.startDate).toLocaleDateString() : '-'}</td>
+                              <td className="py-4 px-4 cursor-pointer" onClick={toggle}>{op.endDate ? new Date(op.endDate).toLocaleDateString() : 'In Progress'}</td>
+                              {metricCols.map((c, i) => <td key={i} className={`py-4 px-4 cursor-pointer ${c.cls || ''}`} onClick={toggle}>{c.render(op)}</td>)}
+                              {hasNg && (
+                                <td className="py-4 px-4 text-xs cursor-pointer" onClick={toggle}>
+                                  {op.ngDetails?.length > 0 ? <span className="text-blue-600 underline">View ({op.ngDetails.length})</span> : '-'}
+                                </td>
+                              )}
+                            </tr>
+                            {hasNg && expandedOp === op.opNumber && op.ngDetails?.length > 0 && (
+                              <tr>
+                                <td colSpan={totalCols} className="bg-slate-50 dark:bg-slate-800/50 p-4">
+                                  <div className="text-xs font-bold mb-2">NG Details:</div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    {op.ngDetails.map((d: any, i: number) => (
+                                      <div key={i} className="bg-white dark:bg-slate-900 p-3 rounded border">
+                                        <span className="font-bold">{d.patternName || 'Set'}:</span> {d.ngQty} pcs
+                                        {d.reasons?.length > 0 && <div className="text-slate-500 mt-1">Reasons: {d.reasons.join(', ')}</div>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {data.ops.length === 0 && (
+                  <div className="p-8 text-center text-slate-500">No data for selected filters.</div>
+                )}
+              </div>
+            );
+          })()}
         </>
       )}
     </div>
