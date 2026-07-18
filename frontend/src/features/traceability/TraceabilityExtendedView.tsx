@@ -195,6 +195,8 @@ interface BcMatchedMaterial {
 interface BcTraceResult {
   bcDocument: string;
   bcEl: string | null;
+  bcKode?: string | null;
+  bcTanggal?: string | null;
   relatedShipments: {
     suratJalan: string;
     shipmentDate: string;
@@ -278,6 +280,30 @@ interface BcPengeluaranTraceResult {
   suratJalanList: { suratJalan: string; detail: SuratJalanTraceResult | null }[];
 }
 
+// Hasil trace berdasarkan Invoice (Surat Jalan -> Invoice -> BC Pengeluaran)
+interface InvoiceHeader {
+  invoice: string | number | null;
+  tanggalInvoice: string | null;
+}
+interface InvoiceBcPengeluaran {
+  noDokBcPengeluaran: string;
+  kodeBc: string | null;
+  tanggalDokBc: string | null;
+}
+interface InvoiceItem {
+  item: string;
+  descItem: string;
+  suratJalan: string;
+  noDokBcPengeluaran: string | null;
+  kodeBc: string | null;
+}
+interface InvoiceTraceResult {
+  invoice: InvoiceHeader;
+  dokumenBcPengeluaran: InvoiceBcPengeluaran[];
+  items: InvoiceItem[];
+  suratJalanList: { suratJalan: string; detail: SuratJalanTraceResult | null }[];
+}
+
 // === TYPE GUARD ===
 function isTraceResult(obj: any): obj is TraceResult {
   return obj && typeof obj === 'object' && 'suratJalan' in obj && Array.isArray((obj as any).fgItems);
@@ -300,6 +326,29 @@ const uniqueBcDocuments = (docs: BcDocument[]): BcDocument[] => {
     return true;
   });
 };
+
+// Kartu identitas satu Dokumen BC Penerimaan — LENGKAP (No. EL, No. Dokumen, Kode BC, Tanggal).
+// Dipakai bersama di semua lokasi agar identitas dokumen (termasuk Kode BC) selalu konsisten.
+const BcDocCard = ({ doc }: { doc: BcDocument }) => (
+  <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-rose-100 dark:border-rose-800/50 text-sm text-slate-700 dark:text-slate-300 shadow-sm hover:shadow-md transition-shadow">
+    <div className="flex justify-between items-center mb-3 pb-3 border-b border-rose-100 dark:border-slate-700/50">
+      <span className="text-slate-500 font-bold uppercase text-xs tracking-wider">No. EL</span>
+      <span className="font-black text-rose-600 dark:text-rose-400 text-base">{doc.nomor_el}</span>
+    </div>
+    <div className="flex justify-between items-center mb-2">
+      <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Dokumen</span>
+      <span className="font-bold text-slate-800 dark:text-slate-200">{doc.nomor_dokumen_bc}</span>
+    </div>
+    <div className="flex justify-between items-center mb-2">
+      <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Kode BC</span>
+      <span className="font-black text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-2.5 py-0.5 rounded-md">{doc.kode_bc || '-'}</span>
+    </div>
+    <div className="flex justify-between items-center">
+      <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Tanggal</span>
+      <span className="font-bold text-slate-800 dark:text-slate-200 text-right leading-tight">Dok: {new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}{doc.tanggal_el ? ` · EL: ${new Date(doc.tanggal_el).toLocaleDateString()}` : ''}</span>
+    </div>
+  </div>
+);
 
 const OpDetailCard = ({
   op,
@@ -412,20 +461,7 @@ const OpDetailCard = ({
               </h5>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {uniqueBcDocuments(op.bcDocuments).map((doc, idx) => (
-                  <div key={idx} className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-rose-100 dark:border-rose-800/50 text-sm text-slate-700 dark:text-slate-300 shadow-sm hover:shadow-md transition-shadow">
-<div className="flex justify-between items-center mb-3 pb-3 border-b border-rose-100 dark:border-slate-700/50">
-  <span className="text-slate-500 font-bold uppercase text-xs tracking-wider">No. EL</span> 
-  <span className="font-black text-rose-600 dark:text-rose-400 text-base">{doc.nomor_el}</span>
-</div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Dokumen</span> 
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{doc.nomor_dokumen_bc}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Tanggal</span> 
-                      <span className="font-bold text-slate-800 dark:text-slate-200 text-right leading-tight">Dok: {new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}{doc.tanggal_el ? ` · EL: ${new Date(doc.tanggal_el).toLocaleDateString()}` : ''}</span>
-                    </div>
-                  </div>
+                  <BcDocCard key={idx} doc={doc} />
                 ))}
               </div>
             </div>
@@ -477,20 +513,7 @@ const OpDetailCard = ({
                         {mat.list_dokumen_bc && mat.list_dokumen_bc.length > 0 ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-3 border-t border-rose-100 dark:border-slate-700/50">
                             {uniqueBcDocuments(mat.list_dokumen_bc).map((doc, di) => (
-                              <div key={di} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-rose-100 dark:border-rose-800/50 text-sm text-slate-700 dark:text-slate-300 shadow-sm">
-                                <div className="flex justify-between items-center mb-3 pb-3 border-b border-rose-100 dark:border-slate-700/50">
-                                  <span className="text-slate-500 font-bold uppercase text-xs tracking-wider">No. EL</span>
-                                  <span className="font-black text-rose-600 dark:text-rose-400 text-base">{doc.nomor_el}</span>
-                                </div>
-                                <div className="flex justify-between items-center mb-2">
-                                  <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Dokumen</span>
-                                  <span className="font-bold text-slate-800 dark:text-slate-200">{doc.nomor_dokumen_bc}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Tanggal</span>
-                                  <span className="font-bold text-slate-800 dark:text-slate-200 text-right leading-tight">Dok: {new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}{doc.tanggal_el ? ` · EL: ${new Date(doc.tanggal_el).toLocaleDateString()}` : ''}</span>
-                                </div>
-                              </div>
+                              <BcDocCard key={di} doc={doc} />
                             ))}
                           </div>
                         ) : (
@@ -503,20 +526,7 @@ const OpDetailCard = ({
               ) : op.bcDocuments && op.bcDocuments.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {uniqueBcDocuments(op.bcDocuments).map((doc, idx) => (
-                    <div key={idx} className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-rose-100 dark:border-rose-800/50 text-sm text-slate-700 dark:text-slate-300 shadow-sm">
-                      <div className="flex justify-between items-center mb-3 pb-3 border-b border-rose-100 dark:border-slate-700/50">
-                        <span className="text-slate-500 font-bold uppercase text-xs tracking-wider">No. EL</span>
-                        <span className="font-black text-rose-600 dark:text-rose-400 text-base">{doc.nomor_el}</span>
-                      </div>
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Dokumen</span>
-                        <span className="font-bold text-slate-800 dark:text-slate-200">{doc.nomor_dokumen_bc}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Tanggal</span>
-                        <span className="font-bold text-slate-800 dark:text-slate-200 text-right leading-tight">Dok: {new Date(doc.tanggal_dokumen_bc).toLocaleDateString()}{doc.tanggal_el ? ` · EL: ${new Date(doc.tanggal_el).toLocaleDateString()}` : ''}</span>
-                      </div>
-                    </div>
+                    <BcDocCard key={idx} doc={doc} />
                   ))}
                 </div>
               ) : (
@@ -922,7 +932,7 @@ const OpDetailCard = ({
                               <span className="text-slate-500 font-bold text-xs uppercase tracking-wider block mb-1.5">BC Pengeluaran</span>
                               <div className="flex flex-wrap gap-1.5">
                                 {dn.outChain.dokumenBcPengeluaran.map((d, i) => (
-                                  <span key={i} className="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 px-2 py-1 rounded-lg text-[11px] font-mono font-black text-purple-700 dark:text-purple-300">{d.noDokBcPengeluaran}</span>
+                                  <span key={i} className="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 px-2 py-1 rounded-lg text-[11px] font-mono font-black text-purple-700 dark:text-purple-300">{d.noDokBcPengeluaran}{d.kodeBc ? ` · BC ${d.kodeBc}` : ''}</span>
                                 ))}
                               </div>
                             </div>
@@ -951,12 +961,12 @@ const OpDetailCard = ({
 };
 
 export const TraceabilityExtendedView = () => {
-  const [searchType, setSearchType] = useState<'bc-document' | 'bc-pengeluaran' | 'surat-jalan' | 'op'>('bc-document');
+  const [searchType, setSearchType] = useState<'bc-document' | 'bc-pengeluaran' | 'surat-jalan' | 'invoice' | 'op'>('bc-document');
   const [searchQuery, setSearchQuery] = useState('');
   const [bcNomorEl, setBcNomorEl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<OpTraceResult | TraceResult | BcTraceResult | SuratJalanTraceResult | BcPengeluaranTraceResult | null>(null);
+  const [result, setResult] = useState<OpTraceResult | TraceResult | BcTraceResult | SuratJalanTraceResult | BcPengeluaranTraceResult | InvoiceTraceResult | null>(null);
   const [expandedFg, setExpandedFg] = useState<Set<string>>(new Set());
   const [expandedOp, setExpandedOp] = useState<Set<string>>(new Set());
 
@@ -969,7 +979,7 @@ export const TraceabilityExtendedView = () => {
       }
     } else {
       if (!searchQuery.trim()) {
-        setError('Masukkan nomor OP atau surat jalan');
+        setError('Masukkan nomor OP, surat jalan, invoice, atau dokumen BC pengeluaran');
         return;
       }
     }
@@ -986,6 +996,8 @@ export const TraceabilityExtendedView = () => {
         url = `${API_BASE_URL}/traceability-extended/surat-jalan/${encodeURIComponent(searchQuery)}`;
       } else if (searchType === 'bc-pengeluaran') {
         url = `${API_BASE_URL}/traceability-extended/bc-pengeluaran/${encodeURIComponent(searchQuery)}`;
+      } else if (searchType === 'invoice') {
+        url = `${API_BASE_URL}/traceability-extended/invoice/${encodeURIComponent(searchQuery)}`;
       } else {
         // Pencarian BC: kirim nomor dokumen jika ada, kosongkan jika tidak
         const params = new URLSearchParams();
@@ -1285,7 +1297,7 @@ export const TraceabilityExtendedView = () => {
                       {data.outChain.dokumenBcPengeluaran.map((d, i) => (
                         <div key={i} className="flex flex-wrap items-center justify-between gap-2 bg-white dark:bg-slate-800 rounded-xl px-3 py-2 border border-slate-200 dark:border-slate-700">
                           <span className="font-mono font-black text-purple-700 dark:text-purple-300">{d.noDokBcPengeluaran}</span>
-                          <span className="text-xs font-bold text-slate-500">{d.kodeBc || '-'}</span>
+                          <span className="text-xs font-bold text-slate-500">Kode BC: {d.kodeBc || '-'}</span>
                           <span className="text-xs font-semibold text-slate-500">{d.tanggalDokBc ? new Date(d.tanggalDokBc).toLocaleDateString('id-ID') : '-'}</span>
                         </div>
                       ))}
@@ -1513,6 +1525,98 @@ export const TraceabilityExtendedView = () => {
     );
   };
 
+  const renderInvoiceResult = (res: InvoiceTraceResult) => {
+    const h = res.invoice;
+    return (
+      <div className="space-y-8">
+        {/* Header Invoice + rantai MAJU (BC Pengeluaran) */}
+        <div className="bg-white dark:bg-slate-800 rounded-3xl border-2 border-slate-200 dark:border-slate-700 p-6 md:p-8 shadow-md">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-6 pb-6 border-b-2 border-slate-100 dark:border-slate-700/50">
+            <div className="flex items-center gap-5">
+              <div className="w-16 h-16 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-600/30 flex items-center justify-center shrink-0">
+                <FileText size={32} />
+              </div>
+              <div>
+                <div className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-1 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-lg inline-block shadow-sm">
+                  Invoice
+                </div>
+                <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight mt-1 font-mono">{h.invoice}</h2>
+                {h.tanggalInvoice && (
+                  <div className="text-sm font-bold text-slate-500 mt-1">{new Date(h.tanggalInvoice).toLocaleDateString('id-ID')}</div>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 text-sm bg-slate-50 dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm min-w-[240px]">
+              <div className="text-[10px] font-black text-purple-500 uppercase tracking-widest mb-1 flex items-center gap-2"><FileText size={13} /> Dokumen BC Pengeluaran</div>
+              {res.dokumenBcPengeluaran.length === 0 ? (
+                <div className="text-sm font-semibold text-slate-400">Belum ada BC pengeluaran</div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {res.dokumenBcPengeluaran.map((d, i) => (
+                    <span key={i} className="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 px-3 py-1.5 rounded-lg text-xs font-bold text-purple-700 dark:text-purple-300">
+                      <span className="font-mono font-black">{d.noDokBcPengeluaran}</span>{d.kodeBc ? ` · Kode ${d.kodeBc}` : ''}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Item finished goods pada invoice ini */}
+          <div>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+                <Package size={18} />
+              </div>
+              Item Finished Goods
+            </h3>
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-900/50 text-left text-xs font-black text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3">Item</th>
+                    <th className="px-4 py-3">Deskripsi</th>
+                    <th className="px-4 py-3">Surat Jalan</th>
+                    <th className="px-4 py-3">BC Pengeluaran</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                  {res.items.map((it, i) => (
+                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                      <td className="px-4 py-3 font-mono font-bold text-slate-800 dark:text-slate-200">{it.item}</td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{it.descItem}</td>
+                      <td className="px-4 py-3 font-mono font-bold text-blue-600 dark:text-blue-400">{it.suratJalan}</td>
+                      <td className="px-4 py-3 font-mono text-purple-600 dark:text-purple-400">{it.noDokBcPengeluaran || '-'}{it.kodeBc ? ` · Kode ${it.kodeBc}` : ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Rincian tiap Surat Jalan → material → BC penerimaan (rantai MUNDUR) */}
+        {res.suratJalanList.map((sj, i) => (
+          <div key={i} className="space-y-3">
+            <div className="flex items-center gap-3 px-1">
+              <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+                <Truck size={18} />
+              </div>
+              <h3 className="text-lg font-black text-slate-800 dark:text-slate-200">Surat Jalan: <span className="font-mono text-blue-600 dark:text-blue-400">{sj.suratJalan}</span></h3>
+            </div>
+            {sj.detail ? (
+              <SuratJalanLegacyResultView data={sj.detail} />
+            ) : (
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 text-sm font-bold text-amber-700 dark:text-amber-400">
+                Detail material untuk surat jalan ini tidak dapat dimuat dari sistem produksi.
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const renderBcResult = (res: BcTraceResult) => (
     <div className="bg-white dark:bg-slate-800 rounded-3xl border-2 border-slate-200 dark:border-slate-700 p-6 md:p-8 shadow-md">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 pb-6 border-b-2 border-slate-100 dark:border-slate-700/50">
@@ -1521,8 +1625,14 @@ export const TraceabilityExtendedView = () => {
             <FileText size={32} />
           </div>
           <div>
-            <div className="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-1 bg-amber-50 dark:bg-amber-900/30 px-3 py-1 rounded-lg inline-block shadow-sm">Dokumen Bea Cukai</div>
+            <div className="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-1 bg-amber-50 dark:bg-amber-900/30 px-3 py-1 rounded-lg inline-block shadow-sm">Dokumen Bea Cukai (Pemasukan)</div>
             <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight mt-1">{res.bcDocument}</h2>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <span className="text-xs font-black text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-lg">Kode BC: {res.bcKode || '-'}</span>
+              {res.bcTanggal && (
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{new Date(res.bcTanggal).toLocaleDateString('id-ID')}</span>
+              )}
+            </div>
           </div>
         </div>
 {res.bcEl && (
@@ -1613,7 +1723,7 @@ export const TraceabilityExtendedView = () => {
                     )}
                     {(ship.outChain.dokumenBcPengeluaran ?? []).map((d, idx) => (
                       <span key={idx} className="bg-purple-100 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 px-3 py-1.5 rounded-lg text-xs font-bold text-purple-800 dark:text-purple-300">
-                        BC Keluar: <span className="font-mono font-black">{d.noDokBcPengeluaran}</span>
+                        BC Keluar: <span className="font-mono font-black">{d.noDokBcPengeluaran}</span>{d.kodeBc ? <span className="ml-1 font-semibold text-purple-500">· Kode {d.kodeBc}</span> : null}
                       </span>
                     ))}
                   </div>
@@ -1695,6 +1805,7 @@ export const TraceabilityExtendedView = () => {
                   <option value="bc-document" className="font-bold">Berdasarkan Dokumen BC Pemasukan</option>
                   <option value="bc-pengeluaran" className="font-bold">Berdasarkan Dokumen BC Pengeluaran</option>
                   <option value="surat-jalan" className="font-bold">Berdasarkan Surat Jalan</option>
+                  <option value="invoice" className="font-bold">Berdasarkan Invoice</option>
                   <option value="op" className="font-bold">Berdasarkan OP Number</option>
                 </select>
                 <div className="absolute inset-y-0 right-0 flex items-center pr-5 pointer-events-none text-slate-400">
@@ -1738,7 +1849,7 @@ export const TraceabilityExtendedView = () => {
             {searchType !== 'bc-document' && (
               <div className="w-full md:flex-1">
                 <label className={labelClassName}>
-                  {searchType === 'op' ? 'Nomor OP' : searchType === 'bc-pengeluaran' ? 'Nomor Dokumen BC Pengeluaran' : 'Nomor Surat Jalan'}
+                  {searchType === 'op' ? 'Nomor OP' : searchType === 'bc-pengeluaran' ? 'Nomor Dokumen BC Pengeluaran' : searchType === 'invoice' ? 'Nomor Invoice' : 'Nomor Surat Jalan'}
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 flex items-center pl-5 pointer-events-none text-slate-400">
@@ -1748,7 +1859,7 @@ export const TraceabilityExtendedView = () => {
                     type="text"
                     className={`${inputClassName} pl-14`}
                     placeholder={
-                      searchType === 'op' ? 'Contoh: K1YH260001' : searchType === 'bc-pengeluaran' ? 'Contoh: 008932' : 'Contoh: 26009010'
+                      searchType === 'op' ? 'Contoh: K1YH260001' : searchType === 'bc-pengeluaran' ? 'Contoh: 008932' : searchType === 'invoice' ? 'Contoh: 26000570' : 'Contoh: 26009010'
                     }
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
@@ -1805,6 +1916,7 @@ export const TraceabilityExtendedView = () => {
               )}
               {searchType === 'bc-document' && renderBcResult(result as BcTraceResult)}
               {searchType === 'bc-pengeluaran' && renderBcPengeluaranResult(result as BcPengeluaranTraceResult)}
+              {searchType === 'invoice' && renderInvoiceResult(result as InvoiceTraceResult)}
               {searchType === 'op' && renderOpResult(result as OpTraceResult)}
             </div>
           )}
@@ -1816,7 +1928,7 @@ export const TraceabilityExtendedView = () => {
               </div>
               <h3 className="text-2xl font-black text-slate-800 dark:text-slate-100 mb-3 tracking-tight">Mulai Penelusuran</h3>
               <p className="text-base font-bold text-slate-500 dark:text-slate-400 max-w-lg mx-auto leading-relaxed">
-                Ketik nomor OP, Surat Jalan, atau Dokumen BC pada kolom pencarian di atas untuk melihat alur detail produksi dari hulu ke hilir dengan visualisasi yang jelas.
+                Ketik nomor OP, Surat Jalan, Invoice, atau Dokumen BC pada kolom pencarian di atas untuk melihat alur detail produksi dari hulu ke hilir dengan visualisasi yang jelas.
               </p>
             </div>
           )}

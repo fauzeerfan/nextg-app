@@ -32,6 +32,12 @@ async traceByBcPengeluaran(@Param('noDok') noDok: string) {
   return this.service.traceByBcPengeluaran(noDok);
 }
 
+// BARU: tracing berdasarkan INVOICE (surat jalan -> invoice -> BC keluar), end-to-end
+@Get('invoice/:invoice')
+async traceByInvoice(@Param('invoice') invoice: string) {
+  return this.service.traceByInvoice(invoice);
+}
+
   @Get('surat-jalan-material/:suratJalan')
   async getSuratJalanMaterial(@Param('suratJalan') suratJalan: string) {
     return this.service.getSuratJalanMaterialDetails(suratJalan);

@@ -356,6 +356,120 @@ export class TraceabilityExtendedService {
     return { bcPengeluaran: header, items, suratJalanList };
   }
 
+  // ===== TRACE BY INVOICE =====
+  // Invoice berada di antara Surat Jalan dan Dokumen BC Pengeluaran
+  // (Surat Jalan -> Invoice -> BC Pengeluaran). Tidak ada endpoint khusus invoice,
+  // namun endpoint POST tracebysuratjalan mengembalikan field "invoice" per surat jalan,
+  // sehingga invoice bisa ditelusuri dengan memindai surat jalan (batch) lalu memfilter
+  // baris yang invoice-nya cocok. Pola ini sama dengan pencarian "Berdasarkan Dokumen BC Pemasukan".
+  async traceByInvoice(invoice: string): Promise<any> {
+    if (!invoice || !invoice.trim()) throw new BadRequestException('Nomor invoice wajib diisi');
+    const target = invoice.trim();
+
+    // 1. Ambil seluruh shipment + item_fg (untuk membentuk body POST tracebysuratjalan).
+    const shipments = await this.prisma.shipment.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { items: { include: { op: { include: { parent: true } } } } },
+    });
+
+    // 2. Bangun pasangan unik { surat_jalan, item_fg }.
+    const pairs: { surat_jalan: string; item_fg: string }[] = [];
+    const seenPair = new Set<string>();
+    for (const s of shipments) {
+      const fgs = new Set<string>();
+      for (const it of s.items) {
+        const fg = it.op.itemNumberFG || it.op.parent?.itemNumberFG || s.fgNumber;
+        if (fg) fgs.add(fg);
+      }
+      if (fgs.size === 0 && s.fgNumber) fgs.add(s.fgNumber);
+      for (const fg of fgs) {
+        const key = `${s.suratJalan}|${fg}`;
+        if (!seenPair.has(key)) {
+          seenPair.add(key);
+          pairs.push({ surat_jalan: s.suratJalan, item_fg: fg });
+        }
+      }
+    }
+
+    if (pairs.length === 0) {
+      throw new NotFoundException(
+        `Belum ada surat jalan pada sistem, sehingga invoice ${target} belum dapat ditelusuri.`,
+      );
+    }
+
+    // 3. POST tracebysuratjalan secara BATCH (chunk) -> kumpulkan baris yang berisi invoice.
+    const chunkSize = 40;
+    const rows: any[] = [];
+    for (let i = 0; i < pairs.length; i += chunkSize) {
+      const chunk = pairs.slice(i, i + chunkSize);
+      try {
+        const res = await firstValueFrom(
+          this.httpService.post(`${this.externalBase}/tracebysuratjalan`, chunk).pipe(timeout(15000)),
+        );
+        const data = Array.isArray(res.data) ? res.data : res.data ? [res.data] : [];
+        rows.push(...data);
+      } catch (e) {
+        this.logger.warn(
+          `traceByInvoice: batch ${i} gagal: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
+
+    // 4. Filter baris dengan invoice cocok.
+    const matched = rows.filter((r) => String(r.invoice ?? '') === target);
+    if (matched.length === 0) {
+      throw new NotFoundException(
+        `Invoice ${target} tidak ditemukan pada surat jalan mana pun. Pastikan nomor invoice benar.`,
+      );
+    }
+
+    // 5. Header invoice.
+    const first = matched[0];
+    const header = {
+      invoice: first.invoice ?? target,
+      tanggalInvoice: first.tanggal_invoice ?? null,
+    };
+
+    // 6. Dokumen BC Pengeluaran unik (rantai MAJU) — dedupe per no_dok_bc.
+    const bcSeen = new Set<string>();
+    const dokumenBcPengeluaran: any[] = [];
+    for (const r of matched) {
+      const k = String(r.no_dok_bc ?? '');
+      if (k && !bcSeen.has(k)) {
+        bcSeen.add(k);
+        dokumenBcPengeluaran.push({
+          noDokBcPengeluaran: r.no_dok_bc,
+          kodeBc: r.dok_bc ?? null,
+          tanggalDokBc: r.tanggal_dok_bc ?? null,
+        });
+      }
+    }
+
+    // 7. Item finished goods pada invoice ini (per baris).
+    const items = matched.map((r) => ({
+      item: r.item,
+      descItem: r.desc_item,
+      suratJalan: String(r.surat_jalan ?? ''),
+      noDokBcPengeluaran: r.no_dok_bc ?? null,
+      kodeBc: r.dok_bc ?? null,
+    }));
+
+    // 8. Surat jalan unik + detail lengkap (rantai MUNDUR: material + OP + BC penerimaan).
+    const sjSet = [...new Set(matched.map((r) => String(r.surat_jalan ?? '')).filter(Boolean))];
+    const suratJalanList: any[] = [];
+    for (const sj of sjSet) {
+      let detail: any = null;
+      try {
+        detail = await this.getSuratJalanMaterialDetails(sj);
+      } catch {
+        detail = null;
+      }
+      suratJalanList.push({ suratJalan: sj, detail });
+    }
+
+    return { invoice: header, dokumenBcPengeluaran, items, suratJalanList };
+  }
+
   /**
    * Normalize BC document number by removing leading zeros
    * Example: "018463" -> "18463"
@@ -1034,7 +1148,11 @@ export class TraceabilityExtendedService {
     }
 
     // 4. Cari material dengan dokumen BC cocok; kumpulkan per OP.
+    // Sekaligus kumpulkan Kode BC & tanggal dokumen yang dicari (identitas dokumen BC pemasukan).
     const matchedOpMaterials = new Map<string, { materialName: string; bcDocuments: BcDocument[] }[]>();
+    const bcKodeSet = new Set<string>();
+    let bcTanggal: string | null = null;
+    let bcNomorElFound: string | null = null;
     for (const entry of externalEntries) {
       if (!entry) continue;
       const ops: string[] = Array.isArray(entry.list_op_number) ? entry.list_op_number : [];
@@ -1048,6 +1166,11 @@ export class TraceabilityExtendedService {
           return (searchDoc && docNum === searchDoc) || (searchEl && docEl === searchEl);
         });
         if (matchedDocs.length > 0) {
+          for (const md of matchedDocs) {
+            if (md.kode_bc) bcKodeSet.add(String(md.kode_bc));
+            if (!bcTanggal && md.tanggal_dokumen_bc) bcTanggal = md.tanggal_dokumen_bc;
+            if (!bcNomorElFound && md.nomor_el != null) bcNomorElFound = String(md.nomor_el);
+          }
           matchedMats.push({ materialName: m.material?.Art_name ?? '', bcDocuments: matchedDocs });
         }
       }
@@ -1106,7 +1229,9 @@ export class TraceabilityExtendedService {
 
     return {
       bcDocument: bcNomorDokumen || '',
-      bcEl: bcNomorEl || null,
+      bcEl: bcNomorEl || bcNomorElFound || null,
+      bcKode: Array.from(bcKodeSet).join(', ') || null, // Kode BC dokumen pemasukan (mis. "40") — dari API
+      bcTanggal, // tanggal dokumen BC pemasukan — dari API
       relatedShipments: relatedShipmentsWithOut,
     };
   }
